@@ -83,6 +83,7 @@ export default function BookingsTab({
   const [isBookingsSelectionMode, setIsBookingsSelectionMode] = useState(false);
   const [selectedBookings, setSelectedBookings] = useState<string[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date>(new Date());
   const [fleet, setFleet] = useState<any[]>([]);
   const [extras, setExtras] = useState<any[]>([]);
   const [tours, setTours] = useState<any[]>([]);
@@ -109,6 +110,7 @@ export default function BookingsTab({
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setBookings(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setLastSyncedAt(new Date());
     });
 
     const unsubscribeUsers = onSnapshot(query(collection(db, 'users'), limit(500)), (snapshot) => {
@@ -148,9 +150,44 @@ export default function BookingsTab({
 
   const drivers = useMemo(() => allUsers.filter(u => u.role === 'driver'), [allUsers]);
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
+    if (!user || !userProfile) return;
     setIsRefreshing(true);
-    setTimeout(() => setIsRefreshing(false), 1000);
+    try {
+      const q = isAdmin
+        ? query(collection(db, 'bookings'), orderBy('createdAt', 'desc'), limit(500))
+        : isDriver
+          ? query(collection(db, 'bookings'), where('driverId', '==', user.uid), orderBy('createdAt', 'desc'), limit(500))
+          : query(collection(db, 'bookings'), where('userId', '==', user.uid), orderBy('createdAt', 'desc'), limit(500));
+
+      const [bookingsSnap, usersSnap, fleetSnap, extrasSnap, toursSnap, offersSnap, settingsSnap] = await Promise.all([
+        getDocs(q),
+        getDocs(query(collection(db, 'users'), limit(500))),
+        getDocs(collection(db, 'fleet')),
+        getDocs(collection(db, 'extras')),
+        getDocs(collection(db, 'tours')),
+        getDocs(collection(db, 'offers')),
+        getDoc(doc(db, 'settings', 'system'))
+      ]);
+
+      setBookings(bookingsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setAllUsers(usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setFleet(fleetSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setExtras(extrasSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setTours(toursSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setOffers(offersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      if (settingsSnap.exists()) {
+        setSystemSettings(settingsSnap.data());
+      }
+
+      setLastSyncedAt(new Date());
+      showDashboardNotice('success', 'Database synchronized successfully.', 'Live Sync Completed');
+    } catch (err) {
+      console.error('Manual sync failed:', err);
+      showDashboardNotice('error', 'Failed to sync with the server. Please try again.', 'Sync Error');
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   const clearFilters = () => {
@@ -283,10 +320,10 @@ export default function BookingsTab({
 
   const updateBookingCancelledStatus = async (bookingId: string, reason: string) => {
     try {
-      const updateData = { 
-        status: 'cancelled', 
-        cancellationReason: reason, 
-        updatedAt: serverTimestamp() 
+      const updateData = {
+        status: 'cancelled',
+        cancellationReason: reason,
+        updatedAt: serverTimestamp()
       };
       await updateDoc(doc(db, 'bookings', bookingId), updateData);
       showDashboardNotice('success', 'Booking has been officially cancelled.');
@@ -295,10 +332,10 @@ export default function BookingsTab({
       try {
         const bookingSnap = await getDoc(doc(db, 'bookings', bookingId));
         if (bookingSnap.exists()) {
-          const bookingData = { 
-            id: bookingId, 
-            ...bookingSnap.data(), 
-            ...updateData 
+          const bookingData = {
+            id: bookingId,
+            ...bookingSnap.data(),
+            ...updateData
           };
           const eventName = 'status_cancelled';
           await Promise.all([
@@ -434,197 +471,6 @@ export default function BookingsTab({
     return () => clearInterval(interval);
   }, [bookings, systemSettings, consolidatedUsers]);
 
-  // Ensure necessary custom SMS and email templates occupy Firestore
-  useEffect(() => {
-    const ensureCustomTemplatesAndAlerts = async () => {
-      try {
-        // 1. Email Template for booking_feedback
-        const fbEmailQuery = query(collection(db, 'email-templates'), where('event', '==', 'booking_feedback'));
-        const fbEmailSnap = await getDocs(fbEmailQuery);
-        if (fbEmailSnap.empty) {
-          await addDoc(collection(db, 'email-templates'), {
-            name: 'Feedback Submitted',
-            event: 'booking_feedback',
-            subject: 'New Feedback Submitted: Booking #{id}',
-            recipients: ['admin'],
-            active: true,
-            content: `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<style>
-  body { font-family: sans-serif; background-color: #f4f4f5; margin: 0; padding: 0; color: #111; }
-  .wrapper { padding: 40px 20px; background-color: #f4f4f5; }
-  .container { max-width: 650px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.08); border: 1px solid #e4e4e7; }
-  .header { background-color: #09090b; padding: 40px; text-align: center; border-bottom: 4px solid #dab866; }
-  .logo { font-size: 28px; font-weight: 800; color: #dab866; text-decoration: none; text-transform: uppercase; letter-spacing: 4px; }
-  .content { padding: 45px; }
-  .content-text { color: #3f3f46; line-height: 1.7; font-size: 15px; margin-bottom: 30px; }
-  .booking-card { background-color: #ffffff; border: 1px solid #e4e4e7; border-radius: 12px; padding: 25px; margin-bottom: 30px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
-  .section-title { font-size: 12px; text-transform: uppercase; letter-spacing: 2px; color: #dab866; font-weight: 700; margin-bottom: 15px; border-bottom: 1px solid #f4f4f5; padding-bottom: 8px; }
-</style>
-</head>
-<body>
-  <div class="wrapper">
-    <div class="container">
-      <div class="header"><span class="logo">MERLUX</span></div>
-      <div class="content">
-        <h1 style="font-size: 24px; color: #09090b; margin-top: 0;">Feedback Submitted</h1>
-        <p class="content-text">Hello Admin,</p>
-        <p class="content-text">A customer has submitted feedback for booking reference <strong>#{id}</strong>.</p>
-        <div class="booking-card" style="border-left: 4px solid #dab866;">
-          <div class="section-title">Customer Feedback</div>
-          <p style="font-size: 18px; font-weight: bold; color: #dab866; margin: 5px 0;">Rating: {rating} / 5 Stars</p>
-          <p class="content-text" style="font-style: italic; margin-top: 10px;">"{feedback}"</p>
-        </div>
-        <div class="booking-card">
-          <div class="section-title">Trip Information</div>
-          <p style="font-size: 14px; color: #18181b; margin: 5px 0;"><strong>Customer:</strong> {customerName}</p>
-          <p style="font-size: 14px; color: #18181b; margin: 5px 0;"><strong>Date:</strong> {date} at {time}</p>
-          <p style="font-size: 14px; color: #18181b; margin: 5px 0;"><strong>Route:</strong> {pickup} to {dropoff}</p>
-        </div>
-      </div>
-    </div>
-  </div>
-</body>
-</html>`,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp()
-          });
-        }
-
-        // 2. 14 Days alert templates
-        const a14eQuery = query(collection(db, 'email-templates'), where('event', '==', 'pending_ride_alert_14d'));
-        const a14eSnap = await getDocs(a14eQuery);
-        if (a14eSnap.empty) {
-          await addDoc(collection(db, 'email-templates'), {
-            name: 'Pending Ride Alert (14 Days)',
-            event: 'pending_ride_alert_14d',
-            subject: 'Pending Ride Action Required (14 Days) - Booking #{id}',
-            recipients: ['admin'],
-            active: true,
-            content: `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<style>
-  body { font-family: sans-serif; background-color: #f4f4f5; margin: 0; padding: 0; color: #111; }
-  .wrapper { padding: 40px 20px; background-color: #f4f4f5; }
-  .container { max-width: 650px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e4e4e7; }
-  .header { background-color: #09090b; padding: 40px; text-align: center; border-bottom: 4px solid #dab866; }
-  .logo { font-size: 28px; font-weight: 800; color: #dab866; text-decoration: none; text-transform: uppercase; letter-spacing: 4px; }
-  .content { padding: 45px; }
-  .content-text { color: #3f3f46; line-height: 1.7; font-size: 15px; margin-bottom: 30px; }
-  .booking-card { background-color: #0000000a; border: 1px solid #dab86640; border-radius: 12px; padding: 25px; margin-bottom: 30px; }
-</style>
-</head>
-<body>
-  <div class="wrapper">
-    <div class="container">
-      <div class="header"><span class="logo">MERLUX</span></div>
-      <div class="content">
-        <h1 style="font-size: 22px; color: #09090b; margin-top: 0;">Pending Chauffeur Assignment Reminder</h1>
-        <p class="content-text">Hello Admin,</p>
-        <p class="content-text">This is a reminder that the booking <strong>#{id}</strong> (for <strong>{customerName}</strong>) scheduled in 14 days is still in <strong>pending</strong> status.</p>
-        <div class="booking-card">
-          <p style="font-size: 14px; color: #18181b; margin: 5px 0;"><strong>Date:</strong> {date} at {time}</p>
-          <p style="font-size: 14px; color: #18181b; margin: 5px 0;"><strong>Route:</strong> {pickup} to {dropoff}</p>
-          <p style="font-size: 14px; color: #18181b; margin: 5px 0;"><strong>Price:</strong> \${price}</p>
-        </div>
-        <p class="content-text">Please review and assign an appropriate chauffeur at your earliest convenience.</p>
-      </div>
-    </div>
-  </div>
-</body>
-</html>`,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp()
-          });
-        }
-
-        const a14sQuery = query(collection(db, 'sms-templates'), where('event', '==', 'pending_ride_alert_14d'));
-        const a14sSnap = await getDocs(a14sQuery);
-        if (a14sSnap.empty) {
-          await addDoc(collection(db, 'sms-templates'), {
-            name: 'Pending Ride Alert (14 Days)',
-            event: 'pending_ride_alert_14d',
-            recipients: ['admin'],
-            active: true,
-            content: 'Alert: Pending ride #{bookingId} ({customerName}) scheduled in 14 days. Date: {date} {time}. Assign chauffeur ASAP.',
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp()
-          });
-        }
-
-        // 3. 7 Days alert templates
-        const a7eQuery = query(collection(db, 'email-templates'), where('event', '==', 'pending_ride_alert_7d'));
-        const a7eSnap = await getDocs(a7eQuery);
-        if (a7eSnap.empty) {
-          await addDoc(collection(db, 'email-templates'), {
-            name: 'Pending Ride Alert (7 Days)',
-            event: 'pending_ride_alert_7d',
-            subject: 'CRITICAL: Pending Ride Action Required (7 Days) - Booking #{id}',
-            recipients: ['admin'],
-            active: true,
-            content: `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<style>
-  body { font-family: sans-serif; background-color: #f4f4f5; margin: 0; padding: 0; color: #111; }
-  .wrapper { padding: 40px 20px; background-color: #f4f4f5; }
-  .container { max-width: 650px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e4e4e7; }
-  .header { background-color: #09090b; padding: 40px; text-align: center; border-bottom: 4px solid #ef4444; }
-  .logo { font-size: 28px; font-weight: 800; color: #ef4444; text-decoration: none; text-transform: uppercase; letter-spacing: 4px; }
-  .content { padding: 45px; }
-  .content-text { color: #3f3f46; line-height: 1.7; font-size: 15px; margin-bottom: 30px; }
-  .booking-card { background-color: #fef2f2; border: 1px solid #fca5a5; border-radius: 12px; padding: 25px; margin-bottom: 30px; }
-</style>
-</head>
-<body>
-  <div class="wrapper">
-    <div class="container">
-      <div class="header"><span class="logo">MERLUX CRITICAL</span></div>
-      <div class="content">
-        <h1 style="font-size: 22px; color: #ef4444; margin-top: 0;">CRITICAL: Chauffeur Assignment Required (7 Days Only)</h1>
-        <p class="content-text">Hello Admin,</p>
-        <p class="content-text" style="color: #b91c1c; font-weight: bold;">Only 7 days remain to assign a chauffeur for this ride!</p>
-        <div class="booking-card">
-          <p style="font-size: 14px; color: #18181b; margin: 5px 0;"><strong>Date:</strong> {date} at {time}</p>
-          <p style="font-size: 14px; color: #18181b; margin: 5px 0;"><strong>Route:</strong> {pickup} to {dropoff}</p>
-        </div>
-        <p class="content-text">Immediate action is required to ensure we deliver the absolute premium level of experience expected.</p>
-      </div>
-    </div>
-  </div>
-</body>
-</html>`,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp()
-          });
-        }
-
-        const a7sQuery = query(collection(db, 'sms-templates'), where('event', '==', 'pending_ride_alert_7d'));
-        const a7sSnap = await getDocs(a7sQuery);
-        if (a7sSnap.empty) {
-          await addDoc(collection(db, 'sms-templates'), {
-            name: 'Pending Ride Alert (7 Days)',
-            event: 'pending_ride_alert_7d',
-            recipients: ['admin'],
-            active: true,
-            content: 'CRITICAL: Pending ride #{bookingId} ({customerName}) is only 7 days away! Assign chauffeur immediately.',
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp()
-          });
-        }
-      } catch (err) {
-        console.error('Error auto-seeding templates:', err);
-      }
-    };
-
-    ensureCustomTemplatesAndAlerts();
-  }, []);
-
   // Background check for:
   // 1. Auto-cancelling passed bookings
   // 2. Proactive 14-day and 7-day notifications for pending bookings
@@ -649,10 +495,10 @@ export default function BookingsTab({
                 updatedAt: serverTimestamp()
               });
 
-              const updatedBookingData = { 
-                ...booking, 
-                status: 'cancelled', 
-                cancellationReason: 'Booking Pickup date passed' 
+              const updatedBookingData = {
+                ...booking,
+                status: 'cancelled',
+                cancellationReason: 'Booking Pickup date passed'
               };
 
               await Promise.all([
@@ -716,10 +562,10 @@ export default function BookingsTab({
   const handleUpdateBooking = async (id: string, data: any) => {
     try {
       const { id: _id, createdAt, updatedAt, ...rest } = data;
-      
+
       const existingBooking = bookings.find(b => b.id === id);
       const isNewlyCancelled = rest.status === 'cancelled' && existingBooking?.status !== 'cancelled';
-      
+
       if (rest.status === 'cancelled' && !rest.cancellationReason) {
         rest.cancellationReason = 'Cancelled by Administrator';
       }
@@ -733,14 +579,14 @@ export default function BookingsTab({
         try {
           const bookingSnap = await getDoc(doc(db, 'bookings', id));
           if (bookingSnap.exists()) {
-            const bookingData = { 
-              id, 
-              ...bookingSnap.data(), 
+            const bookingData = {
+              id,
+              ...bookingSnap.data(),
               ...rest,
               // Use formatted cancellationReason or a good fallback
               cancellationReason: rest.cancellationReason || 'Cancelled by Administrator'
             };
-            
+
             // Dispatch SMS and Email alerts with cancellation details
             await Promise.all([
               smsService.notify('status_cancelled', bookingData),
@@ -775,13 +621,13 @@ export default function BookingsTab({
       try {
         const bookingSnap = await getDoc(doc(db, 'bookings', id));
         if (bookingSnap.exists()) {
-          const bookingData = { 
-            id, 
-            ...bookingSnap.data(), 
-            rating, 
-            feedback: comment, 
-            ratingValue: rating, 
-            ratingComment: comment 
+          const bookingData = {
+            id,
+            ...bookingSnap.data(),
+            rating,
+            feedback: comment,
+            ratingValue: rating,
+            ratingComment: comment
           };
           await emailService.notify('booking_feedback', bookingData);
         }
@@ -933,8 +779,31 @@ export default function BookingsTab({
       <div className="flex flex-col gap-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h2 className="text-2xl font-display text-gold">Bookings</h2>
-            <p className="text-white/40 text-[10px] uppercase tracking-widest font-bold">Manage and track all rides</p>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <h2 className="text-2xl font-display text-gold">Bookings</h2>
+              <div className="flex items-center gap-2 bg-white/5 border border-white/10 px-2 py-1 rounded-full text-[10px] font-bold text-white/50">
+                <span className="inline-block w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                <span>Live Sync : <span className="text-white/80">{format(lastSyncedAt, 'dd-MM-yyyy HH:mm:ss')}</span></span>
+                <span className="text-white/10">|</span>
+                <button
+                  type="button"
+                  onClick={handleRefresh}
+                  disabled={isRefreshing}
+                  className="text-gold hover:text-white transition-all underline outline-none cursor-pointer font-bold uppercase tracking-wider text-[10px] disabled:opacity-50 inline-flex items-center gap-1"
+                >
+                  {isRefreshing ? (
+                    <>
+                      <RefreshCw size={12} className="animate-spin" />
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw size={12} />
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+            <p className="text-white/40 text-[10px] uppercase tracking-widest font-bold mt-1">Manage and track all rides</p>
           </div>
         </div>
         <div className="flex flex-col xl:flex-row xl:items-center gap-4 w-full">

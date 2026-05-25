@@ -58,6 +58,10 @@ const FAQPage: React.FC = () => {
   const schemaData = {
     "@context": "https://schema.org",
     "@type": "FAQPage",
+    "mainEntityOfPage": {
+      "@type": "WebPage",
+      "@id": typeof window !== 'undefined' ? window.location.href : ''
+    },
     "mainEntity": faqs.map(faq => ({
       "@type": "Question",
       "name": faq.question,

@@ -70,9 +70,9 @@ const ManagementTab: React.FC<any> = (allProps) => {
   };
 
   const subTabs = [
-    { id: 'seo', label: 'SEO & Content', icon: Globe },
+    { id: 'seo', label: 'CMS', icon: Globe },
     { id: 'settings', label: 'Settings', icon: Settings },
-    { id: 'offers-tours', label: 'Offers/Tours', icon: Tag },
+    { id: 'offers-tours', label: 'Products', icon: Tag },
     { id: 'floatui', label: 'FloatUI', icon: MessageCircle },
     { id: 'media', label: 'Media', icon: ImageIcon },
   ];

@@ -19,7 +19,7 @@ const SeoTab: React.FC<SeoTabProps> = (props) => {
   const [seoActiveTab, setSeoActiveTab] = useState<'global' | 'pages' | 'blogs' | 'faq'>('global');
 
   const tabs = [
-    { id: 'global', label: 'Global SEO', icon: Globe },
+    { id: 'global', label: 'SEO', icon: Globe },
     { id: 'pages', label: 'Pages', icon: FileText },
     { id: 'blogs', label: 'Blogs', icon: BookOpen },
     { id: 'faq', label: 'FAQ', icon: HelpCircle },

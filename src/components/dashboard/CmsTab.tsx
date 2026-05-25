@@ -467,51 +467,6 @@ const CmsTab: React.FC<CmsTabProps> = ({
               </div>
             </div>
           </div>
-
-          {/* Analytics & Schema */}
-          <div className="glass p-8 rounded-3xl border border-white/5 space-y-6 lg:col-span-2">
-            <h4 className="text-sm font-bold text-gold uppercase tracking-widest flex items-center gap-2">
-              <BarChart3 size={16} /> Analytics & Schema
-            </h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-1 block">Google Analytics ID</label>
-                <input
-                  type="text"
-                  value={systemSettings?.seo?.googleAnalyticsId || ''}
-                  onChange={(e) => setSystemSettings({ ...systemSettings, seo: { ...(systemSettings?.seo || {}), googleAnalyticsId: e.target.value } })}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-gold transition-all"
-                  placeholder="G-XXXXXXXXXX"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-1 block">Search Console ID</label>
-                <input
-                  type="text"
-                  value={systemSettings?.seo?.searchConsoleId || ''}
-                  onChange={(e) => setSystemSettings({ ...systemSettings, seo: { ...(systemSettings?.seo || {}), searchConsoleId: e.target.value } })}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-gold transition-all"
-                  placeholder="verification-code"
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-1 block">Organization Schema (JSON-LD)</label>
-                <textarea
-                  value={systemSettings?.seo?.organizationSchema ? JSON.stringify(systemSettings.seo.organizationSchema, null, 2) : ''}
-                  onChange={(e) => {
-                    try {
-                      const schema = JSON.parse(e.target.value);
-                      setSystemSettings({ ...systemSettings, seo: { ...(systemSettings?.seo || {}), organizationSchema: schema } });
-                    } catch (err) {
-                      // Allow typing invalid JSON temporarily
-                    }
-                  }}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-gold transition-all h-48 font-mono"
-                  placeholder='{ "@context": "https://schema.org", "@type": "Organization", ... }'
-                />
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 
