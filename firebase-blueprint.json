@@ -1,0 +1,533 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user of the Merlux Chauffeur platform.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "The UID from Firebase Auth." },
+        "name": { "type": "string", "description": "Full name of the user." },
+        "email": { "type": "string", "format": "email", "description": "Email address." },
+        "phone": { "type": "string", "description": "Contact phone number." },
+        "address": { "type": "string", "description": "User address (optional)." },
+        "role": { "type": "string", "enum": ["customer", "driver", "admin"], "description": "User role." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of account creation." }
+      },
+      "required": ["id", "name", "email", "role"]
+    },
+    "Booking": {
+      "title": "Booking",
+      "description": "A chauffeur service reservation.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Auto-generated document ID." },
+        "userId": { "type": "string", "description": "Reference to the user who booked." },
+        "serviceType": { "type": "string", "enum": ["airport", "corporate", "wedding", "tour", "hourly", "offer"], "description": "Type of service." },
+        "pickup": { "type": "string", "description": "Pickup address." },
+        "dropoff": { "type": "string", "description": "Dropoff address (optional for hourly)." },
+        "date": { "type": "string", "format": "date", "description": "Booking date." },
+        "time": { "type": "string", "description": "Booking time." },
+        "isReturn": { "type": "boolean", "description": "If it is a return trip." },
+        "returnDate": { "type": "string", "format": "date", "description": "Return date." },
+        "returnTime": { "type": "string", "description": "Return time." },
+        "waypoints": { "type": "array", "items": { "type": "string" }, "description": "Intermediate stops." },
+        "hourlyHours": { "type": "integer", "description": "Number of hours for hourly service." },
+        "purpose": { "type": "string", "description": "Purpose of the trip." },
+        "vehicleId": { "type": "string", "description": "ID of the selected vehicle." },
+        "vehicleType": { "type": "string", "description": "Human readable vehicle type." },
+        "packageId": { "type": "string", "description": "ID of the package (if offer)." },
+        "packageTitle": { "type": "string", "description": "Title of the package (if offer)." },
+        "type": { "type": "string", "description": "Secondary booking type classification." },
+        "passengers": { "type": "integer", "description": "Number of passengers." },
+        "bags": { "type": "integer", "description": "Number of bags." },
+        "distance": { "type": "string", "description": "Distance of the trip." },
+        "duration": { "type": "string", "description": "Duration of the trip." },
+        "status": { "type": "string", "enum": ["pending", "confirmed", "in-progress", "completed", "cancelled"], "description": "Current status." },
+        "basePrice": { "type": "number", "description": "Base price of vehicle." },
+        "kmPrice": { "type": "number", "description": "Price per km/hour." },
+        "taxAmount": { "type": "number", "description": "Tax amount." },
+        "discountAmount": { "type": "number", "description": "Discount amount." },
+        "couponCode": { "type": "string", "description": "Applied coupon code." },
+        "netPrice": { "type": "number", "description": "Price before tax and discount." },
+        "grossPrice": { "type": "number", "description": "Final price." },
+        "price": { "type": "number", "description": "Total price (legacy field)." },
+        "paymentStatus": { "type": "string", "enum": ["unpaid", "paid", "refunded"], "description": "Payment status." },
+        "paymentMethod": { "type": "string", "enum": ["card", "cash"], "description": "Payment method." },
+        "driverId": { "type": "string", "description": "Assigned driver ID." },
+        "rating": { "type": "integer", "description": "Customer rating (1-5)." },
+        "ratingComment": { "type": "string", "description": "Customer feedback." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp." }
+      },
+      "required": ["serviceType", "pickup", "date", "time", "vehicleId", "grossPrice", "status", "userId"]
+    },
+    "Coupon": {
+      "title": "Coupon",
+      "description": "Discount coupon code.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "type": { "type": "string", "enum": ["percentage", "fixed"] },
+        "value": { "type": "number" },
+        "minBookingAmount": { "type": "number" },
+        "maxDiscount": { "type": "number" },
+        "startDate": { "type": "string", "format": "date" },
+        "endDate": { "type": "string", "format": "date" },
+        "usageLimit": { "type": "integer" },
+        "usedCount": { "type": "integer" },
+        "active": { "type": "boolean" },
+        "serviceIds": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["code", "type", "value", "active"]
+    },
+    "SystemSettings": {
+      "title": "SystemSettings",
+      "description": "Global application configuration.",
+      "type": "object",
+      "properties": {
+        "basePrice": { "type": "number", "description": "Base price for any ride." },
+        "kmPrice": { "type": "number", "description": "Price per kilometer." },
+        "taxPercentage": { "type": "number", "description": "Tax percentage to apply." },
+        "contact": {
+          "type": "object",
+          "properties": {
+            "address": { "type": "string" },
+            "phone": { "type": "string" },
+            "email": { "type": "string" },
+            "bookingEmail": { "type": "string" },
+            "lat": { "type": "string", "description": "Latitude for map pinpointing." },
+            "lng": { "type": "string", "description": "Longitude for map pinpointing." }
+          }
+        },
+        "seo": {
+          "type": "object",
+          "properties": {
+            "siteName": { "type": "string" },
+            "defaultTitle": { "type": "string" },
+            "titleTemplate": { "type": "string" },
+            "defaultDescription": { "type": "string" },
+            "defaultKeywords": { "type": "array", "items": { "type": "string" } },
+            "ogImage": { "type": "string" },
+            "twitterHandle": { "type": "string" },
+            "googleAnalyticsId": { "type": "string" },
+            "searchConsoleId": { "type": "string" },
+            "organizationSchema": { "type": "object" },
+            "globalCmsCss": { "type": "string", "description": "Global CSS applied to all CMS pages and blogs." },
+            "isGlobalCssActive": { "type": "boolean", "description": "Toggle to activate/deactivate global CMS CSS." }
+          }
+        },
+        "services": { 
+          "type": "array", 
+          "items": { 
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "desc": { "type": "string" },
+              "icon": { "type": "string" }
+            }
+          }, 
+          "description": "Available service types." 
+        }
+      }
+    },
+    "Vehicle": {
+      "title": "Vehicle",
+      "description": "A vehicle in the fleet.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "model": { "type": "string" },
+        "type": { "type": "string", "enum": ["sedan", "suv", "van", "limo"] },
+        "pax": { "type": "integer" },
+        "bags": { "type": "integer" },
+        "price": { "type": "number" },
+        "img": { "type": "string" },
+        "features": { "type": "array", "items": { "type": "string" }, "description": "Key features of the vehicle." },
+        "bestFor": { "type": "array", "items": { "type": "string" }, "description": "Recommended use cases." },
+        "excerpt": { "type": "string", "description": "Short description of the vehicle." }
+      },
+      "required": ["name", "model", "type", "pax", "bags", "price", "img"]
+    },
+    "Extra": {
+      "title": "Extra",
+      "description": "Additional service option.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "price": { "type": "number" },
+        "icon": { "type": "string" },
+        "description": { "type": "string" }
+      },
+      "required": ["name", "price"]
+    },
+    "Page": {
+      "title": "Page",
+      "description": "A dynamic SEO-optimized page.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "slug": { "type": "string" },
+        "category": { "type": "string", "description": "Page category (Services, Suburbs, etc.)" },
+        "excerpt": { "type": "string", "description": "Short summary of the page." },
+        "content": { "type": "string" },
+        "metaTitle": { "type": "string" },
+        "metaDescription": { "type": "string" },
+        "keywords": { "type": "array", "items": { "type": "string" } },
+        "canonicalUrl": { "type": "string" },
+        "ogImage": { "type": "string" },
+        "featuredImage": { "type": "string" },
+        "featuredImageAlt": { "type": "string" },
+        "schema": { "type": "object" },
+        "noindex": { "type": "boolean" },
+        "includeInSitemap": { "type": "boolean" },
+        "customCss": { "type": "string", "description": "Custom CSS for this individual page." },
+        "isCustomCssActive": { "type": "boolean", "description": "Toggle to activate/deactivate individual custom CSS." },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "slug", "content"]
+    },
+    "Blog": {
+      "title": "Blog",
+      "description": "A blog post.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "slug": { "type": "string" },
+        "category": { "type": "string", "description": "Blog category." },
+        "excerpt": { "type": "string", "description": "Short summary for listings." },
+        "content": { "type": "string" },
+        "featuredImage": { "type": "string" },
+        "featuredImageAlt": { "type": "string" },
+        "readTime": { "type": "string", "description": "Reading time (e.g. 5 min read)" },
+        "author": { "type": "string", "description": "Author name." },
+        "metaTitle": { "type": "string" },
+        "metaDescription": { "type": "string" },
+        "keywords": { "type": "array", "items": { "type": "string" } },
+        "customCss": { "type": "string", "description": "Custom CSS for this individual blog post." },
+        "isCustomCssActive": { "type": "boolean", "description": "Toggle to activate/deactivate individual custom CSS." },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "slug", "content"]
+    },
+    "Comment": {
+      "title": "Comment",
+      "description": "A comment on a blog post or page.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "targetId": { "type": "string", "description": "ID of the blog post or page." },
+        "targetType": { "type": "string", "enum": ["blog", "page"] },
+        "content": { "type": "string" },
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorAvatar": { "type": "string" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["targetId", "targetType", "content", "authorId", "authorName"]
+    },
+    "Offer": {
+      "title": "Offer",
+      "description": "A special deal or promotional offer.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "image": { "type": "string" },
+        "price": { "type": "number" },
+        "originalPrice": { "type": "number" },
+        "active": { "type": "boolean" },
+        "slug": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "description", "price", "active"]
+    },
+    "Tour": {
+      "title": "Tour",
+      "description": "A curated sightseeing tour or excursion.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "slug": { "type": "string" },
+        "featuredImage": { "type": "string", "format": "uri" },
+        "gallery": { "type": "array", "items": { "type": "string", "format": "uri" } },
+        "active": { "type": "boolean" },
+        "availability": {
+          "type": "object",
+          "properties": {
+            "startDate": { "type": "string", "format": "date" },
+            "endDate": { "type": "string", "format": "date" }
+          }
+        },
+        "startPlace": { "type": "string" },
+        "duration": { "type": "string" },
+        "maxPeople": { "type": "integer" },
+        "ageRange": { "type": "string" },
+        "shortDescription": { "type": "string" },
+        "fullDescription": { "type": "string" },
+        "inclusions": { "type": "array", "items": { "type": "string" } },
+        "exclusions": { "type": "array", "items": { "type": "string" } },
+        "activities": { "type": "array", "items": { "type": "string" } },
+        "placesToVisit": { "type": "array", "items": { "type": "string" } },
+        "fleets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "image": { "type": "string", "format": "uri" },
+              "passengers": { "type": "integer" },
+              "luggage": { "type": "string" },
+              "standardPrice": { "type": "number" },
+              "salePrice": { "type": "number" },
+              "additionalInfo": { "type": "string" }
+            }
+          }
+        },
+        "extras": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "description": { "type": "string" },
+              "price": { "type": "number" },
+              "availableCount": { "type": "integer" }
+            }
+          }
+        },
+        "itinerary": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "image": { "type": "string", "format": "uri" },
+              "details": { "type": "string", "description": "HTML content for the itinerary step." },
+              "order": { "type": "integer" }
+            }
+          }
+        },
+        "faqs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "question": { "type": "string" },
+              "answer": { "type": "string" }
+            }
+          }
+        },
+        "promoTag": { "type": "string", "description": "e.g., Popular, Trending, Deal" },
+        "customerNote": { "type": "string" },
+        "category": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "slug", "active", "shortDescription"]
+    },
+    "Media": {
+      "title": "Media",
+      "description": "Information about a file uploaded to Firebase Storage.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "url": { "type": "string", "format": "uri" },
+        "size": { "type": "integer" },
+        "type": { "type": "string" },
+        "alt": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "caption": { "type": "string" },
+        "usedIn": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "url", "size", "type"]
+    },
+    "FAQ": {
+      "title": "FAQ",
+      "description": "A frequently asked question.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "question": { "type": "string" },
+        "answer": { "type": "string" },
+        "category": { "type": "string" },
+        "order": { "type": "integer" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["question", "answer"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "A user notification.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string", "description": "The user ID receiving the notification." },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string", "enum": ["bookingCreated", "bookingUpdated", "newUser", "system"] },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "message", "type", "read", "createdAt"]
+    },
+    "SMSTemplate": {
+      "title": "SMSTemplate",
+      "description": "A template for SMS notifications.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "description": "Template name/event (e.g. bookingConfirmation)" },
+        "content": { "type": "string", "description": "Message content with placeholders like {name}, {bookingId}." },
+        "recipients": { 
+          "type": "array", 
+          "items": { "type": "string" },
+          "description": "Who should receive this notification (customer, admin, etc)."
+        },
+        "active": { "type": "boolean" }
+      },
+      "required": ["name", "content", "recipients", "active"]
+    },
+    "SMSSettings": {
+      "title": "SMSSettings",
+      "description": "Twilio configuration and global SMS toggles.",
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "adminPhone": { "type": "string", "description": "Phone number to receive admin alerts." }
+      }
+    },
+    "EmailTemplate": {
+      "title": "EmailTemplate",
+      "description": "A template for Email notifications.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "description": "Template name/event" },
+        "subject": { "type": "string", "description": "Email subject" },
+        "content": { "type": "string", "description": "HTML content" },
+        "recipients": { 
+          "type": "array", 
+          "items": { "type": "string" }
+        },
+        "active": { "type": "boolean" }
+      },
+      "required": ["name", "subject", "content", "recipients", "active"]
+    },
+    "EmailSettings": {
+      "title": "EmailSettings",
+      "description": "SendGrid configuration and global Email toggles.",
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "adminEmail": { "type": "string", "description": "Email to receive admin alerts." }
+      }
+    },
+    "Message": {
+      "title": "Message",
+      "description": "An inquiry message from the contact form.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "subject": { "type": "string" },
+        "message": { "type": "string" },
+        "status": { "type": "string", "enum": ["new", "read", "replied", "archived"] },
+        "type": { "type": "string", "enum": ["inquiry", "feedback", "corporate"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "email", "subject", "message", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles."
+    },
+    "/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Inquiry messages."
+    },
+    "/bookings/{bookingId}": {
+      "schema": "Booking",
+      "description": "Service reservations."
+    },
+    "/settings/system": {
+      "schema": "SystemSettings",
+      "description": "Global system settings."
+    },
+    "/fleet/{vehicleId}": {
+      "schema": "Vehicle",
+      "description": "Fleet vehicles."
+    },
+    "/extras/{extraId}": {
+      "schema": "Extra",
+      "description": "Additional service options."
+    },
+    "/coupons/{couponId}": {
+      "schema": "Coupon",
+      "description": "Discount coupons."
+    },
+    "/pages/{pageId}": {
+      "schema": "Page",
+      "description": "Dynamic pages."
+    },
+    "/blogs/{blogId}": {
+      "schema": "Blog",
+      "description": "Blog posts."
+    },
+    "/offers/{offerId}": {
+      "schema": "Offer",
+      "description": "Special offers."
+    },
+    "/tours/{tourId}": {
+      "schema": "Tour",
+      "description": "Sightseeing tours."
+    },
+    "/media/{mediaId}": {
+      "schema": "Media",
+      "description": "Media uploaded to Firebase Storage."
+    },
+    "/faqs/{faqId}": {
+      "schema": "FAQ",
+      "description": "Frequently asked questions."
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "User notifications."
+    },
+    "/comments/{commentId}": {
+      "schema": "Comment",
+      "description": "Comments on articles and pages."
+    },
+    "/settings/sms": {
+      "schema": "SMSSettings",
+      "description": "SMS global configuration."
+    },
+    "/sms-templates/{templateId}": {
+      "schema": "SMSTemplate",
+      "description": "SMS message templates."
+    },
+    "/settings/email": {
+      "schema": "EmailSettings",
+      "description": "Email global configuration."
+    },
+    "/email-templates/{templateId}": {
+      "schema": "EmailTemplate",
+      "description": "Email message templates."
+    }
+  }
+}
