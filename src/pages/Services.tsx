@@ -119,6 +119,39 @@ export default function Services() {
             )}
           </div>
         )}
+
+        {/* CTA Section */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="mt-32 bg-[#0A0A0A] border border-gold/15 rounded-[3rem] p-12 md:p-24 text-center relative overflow-hidden"
+        >
+          <div className="absolute top-0 left-0 w-full h-full opacity-20 pointer-events-none text-gold/20">
+            <div className="absolute top-[-50%] right-[-20%] w-[100%] h-[200%] bg-current blur-[120px] rounded-full -rotate-45" />
+          </div>
+          <div className="relative z-10 max-w-2xl mx-auto">
+            <span className="uppercase tracking-[0.3em] text-[10px] font-bold mb-4 block text-gold">Elite Transport</span>
+            <h2 className="text-4xl md:text-6xl font-display mb-8 leading-tight text-white">Experience <span className="text-gold italic">Pure Luxury</span></h2>
+            <p className="text-white/50 mb-10 text-lg leading-relaxed text-balance">
+              From bespoke corporate travel to specialized regional excursions, our fleet and chauffeurs are at your service for any requirement.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-6 justify-center">
+              <Link 
+                to="/booking" 
+                className="bg-gold text-black px-12 py-5 rounded-2xl font-bold uppercase tracking-widest text-[10px] hover:bg-white transition-all shadow-2xl shadow-gold/20"
+              >
+                Start Your Booking
+              </Link>
+              <Link 
+                to="/offers" 
+                className="bg-white/5 backdrop-blur-md border border-white/10 text-white px-12 py-5 rounded-2xl font-bold uppercase tracking-widest text-[10px] hover:bg-gold hover:text-black transition-all"
+              >
+                Explore Offers
+              </Link>
+            </div>
+          </div>
+        </motion.div>
       </div>
     </div>
   );

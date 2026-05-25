@@ -913,117 +913,7 @@ export default function BookingsTab({
                   </div>
 
 
-                  {selectedBookings.length > 0 && (
-                    <div className="flex items-center gap-2 mr-2 animate-in fade-in zoom-in duration-200">
-                      <span className="text-[10px] uppercase tracking-widest font-bold text-gold px-2 shrink-0">
-                        {selectedBookings.length} Selected
-                      </span>
-
-                      {isAdmin && (
-                        <>
-                          <button
-                            onClick={() => executeBulkUpdateBookingsStatus(selectedBookings, 'pending')}
-                            className="p-2 bg-yellow-500/10 text-yellow-500 rounded-lg hover:bg-yellow-500 hover:text-white transition-all"
-                            title="Mark as Pending"
-                          >
-                            <Clock size={16} />
-                          </button>
-                          <button
-                            onClick={() => executeBulkUpdateBookingsStatus(selectedBookings, 'confirmed')}
-                            className="p-2 bg-blue-500/10 text-blue-400 rounded-lg hover:bg-blue-500 hover:text-white transition-all"
-                            title="Mark as Confirmed"
-                          >
-                            <CheckCircle size={16} />
-                          </button>
-                          <button
-                            onClick={() => executeBulkUpdateBookingsStatus(selectedBookings, 'cancelled')}
-                            className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all"
-                            title="Mark as Cancelled"
-                          >
-                            <XCircle size={16} />
-                          </button>
-                          <div className="relative">
-                            <button
-                              onClick={() => setShowDriverBulkAssign(!showDriverBulkAssign)}
-                              className="p-2 bg-purple-500/10 text-purple-400 rounded-lg hover:bg-purple-500 hover:text-white transition-all"
-                            >
-                              <Truck size={16} />
-                            </button>
-                            {showDriverBulkAssign && (
-                              <div className="absolute right-0 top-full mt-2 w-48 bg-black/90 p-2 rounded-xl border border-white/10 shadow-xl z-20 flex flex-col gap-1 max-h-[300px] overflow-y-auto custom-scrollbar">
-                                <div className="text-[8px] uppercase tracking-widest text-white/40 px-2 py-1 font-bold mb-1">Assign Driver To Selection</div>
-                                <button
-                                  onClick={() => { executeBulkAssignDriver(selectedBookings, null); setShowDriverBulkAssign(false); }}
-                                  className="text-left px-3 py-2 text-xs text-white/40 hover:bg-white/10 hover:text-white rounded-lg transition-colors truncate italic"
-                                >
-                                  None (Unassign)
-                                </button>
-                                {drivers.map((driver, dIdx) => {
-                                  const stats = driverStats[driver.id] || { avgRating: '0', completedCount: 0, rejectedCount: 0 };
-                                  return (
-                                    <button
-                                      key={`${driver.id}-${dIdx}`}
-                                      onClick={() => { executeBulkAssignDriver(selectedBookings, driver.id); setShowDriverBulkAssign(false); }}
-                                      className="text-left px-3 py-2 text-xs text-white/70 hover:bg-white/10 hover:text-white rounded-lg transition-colors truncate mt-1"
-                                    >
-                                      {driver.name} ({stats.avgRating}★, {stats.completedCount}✓, {stats.rejectedCount}✗)
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </div>
-                          <button
-                            onClick={() => setConfirmDelete({ type: 'bulk-bookings', ids: selectedBookings })}
-                            className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all ml-1"
-                            title="Delete Selected"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </>
-                      )}
-
-                      {isDriver && !isAdmin && (
-                        <>
-                          <button
-                            onClick={() => executeBulkUpdateBookingsStatus(selectedBookings, 'accepted')}
-                            className="p-2 bg-green-500/10 text-green-500 rounded-lg hover:bg-green-500 hover:text-white transition-all"
-                            title="Accept Bookings"
-                          >
-                            <CheckCircle size={16} />
-                          </button>
-                          <button
-                            onClick={() => executeBulkUpdateBookingsStatus(selectedBookings, 'rejected')}
-                            className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all"
-                            title="Reject Bookings"
-                          >
-                            <X size={16} />
-                          </button>
-                          <button
-                            onClick={() => executeBulkUpdateBookingsStatus(selectedBookings, 'completed')}
-                            className="p-2 bg-gold/10 text-gold rounded-lg hover:bg-gold hover:text-black transition-all"
-                            title="Mark as Completed"
-                          >
-                            <CheckSquare size={16} />
-                          </button>
-                        </>
-                      )}
-
-                      {!isAdmin && !isDriver && (
-                        <>
-                          <button
-                            onClick={() => executeBulkUpdateBookingsStatus(selectedBookings, 'cancelled')}
-                            className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all"
-                            title="Cancel Select Bookings"
-                          >
-                            <XCircle size={16} />
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Time range buttons */}
+                  {/* Bulk Management handles in floating bottom bar */}
                   <div className="flex bg-white/5 p-1 rounded-xl border border-white/5 h-9 overflow-x-auto custom-scrollbar max-w-full xl:w-auto">
                     {[
                       { label: 'All', value: 'all' },
@@ -3329,6 +3219,114 @@ export default function BookingsTab({
                 </button>
               </div>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Floating Bulk Management Bar */}
+      <AnimatePresence>
+        {selectedBookings.length > 0 && (
+          <motion.div
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] w-[95%] max-w-2xl"
+          >
+            <div className="glass border border-gold/30 shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gold/10 flex items-center justify-center border border-gold/20">
+                  <span className="text-gold font-display font-bold">{selectedBookings.length}</span>
+                </div>
+                <div>
+                  <h4 className="text-[10px] uppercase tracking-[0.2em] font-black text-gold">Bulk Management</h4>
+                  <p className="text-[9px] text-white/40 uppercase tracking-widest font-bold">Manage {selectedBookings.length} selected rides</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {isAdmin && (
+                  <div className="flex items-center gap-1.5 px-3 border-x border-white/10">
+                    <button
+                      onClick={() => executeBulkUpdateBookingsStatus(selectedBookings, 'pending')}
+                      className="p-2 bg-yellow-500/10 text-yellow-500 rounded-lg hover:bg-yellow-500 hover:text-white transition-all"
+                      title="Pending"
+                    ><Clock size={16} /></button>
+                    <button
+                      onClick={() => executeBulkUpdateBookingsStatus(selectedBookings, 'confirmed')}
+                      className="p-2 bg-blue-500/10 text-blue-400 rounded-lg hover:bg-blue-500 hover:text-white transition-all"
+                      title="Confirm"
+                    ><CheckCircle size={16} /></button>
+                    <button
+                      onClick={() => executeBulkUpdateBookingsStatus(selectedBookings, 'cancelled')}
+                      className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all"
+                      title="Cancel"
+                    ><XCircle size={16} /></button>
+                    
+                    <div className="relative">
+                      <button
+                        onClick={() => setShowDriverBulkAssign(!showDriverBulkAssign)}
+                        className="p-2 bg-purple-500/10 text-purple-400 rounded-lg hover:bg-purple-500 hover:text-white transition-all"
+                        title="Assign Driver"
+                      ><Truck size={16} /></button>
+                      
+                      {showDriverBulkAssign && (
+                        <div className="absolute bottom-full right-0 mb-3 w-56 bg-black/95 p-3 rounded-2xl border border-gold/30 shadow-2xl z-[110] flex flex-col gap-2 max-h-[300px] overflow-y-auto custom-scrollbar backdrop-blur-xl">
+                          <div className="text-[8px] uppercase tracking-[0.2em] text-gold px-2 py-1 font-bold border-b border-white/5 mb-1">Assign Chauffeur</div>
+                          <button
+                            onClick={() => { executeBulkAssignDriver(selectedBookings, null); setShowDriverBulkAssign(false); }}
+                            className="text-left px-3 py-2 text-[10px] uppercase tracking-widest font-black text-white/40 hover:bg-white/10 hover:text-white rounded-xl transition-all"
+                          >None (Unassign)</button>
+                          {drivers.map((driver, idx) => {
+                            const stats = driverStats[driver.id] || { avgRating: '0', completedCount: 0, rejectedCount: 0 };
+                            return (
+                              <button
+                                key={`float-driver-${driver.id}-${idx}`}
+                                onClick={() => { executeBulkAssignDriver(selectedBookings, driver.id); setShowDriverBulkAssign(false); }}
+                                className="text-left px-3 py-2 text-[10px] uppercase font-bold text-white/70 hover:bg-gold/10 hover:text-gold rounded-xl transition-all flex items-center justify-between"
+                              >
+                                <span>{driver.name}</span>
+                                <span className="text-[8px] opacity-50">{stats.avgRating}★</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {isDriver && !isAdmin && (
+                  <div className="flex items-center gap-1.5 px-3 border-x border-white/10">
+                    <button
+                      onClick={() => executeBulkUpdateBookingsStatus(selectedBookings, 'accepted')}
+                      className="p-2 bg-green-500/10 text-green-500 rounded-lg hover:bg-green-500 hover:text-white transition-all"
+                    ><CheckCircle size={16} /></button>
+                    <button
+                      onClick={() => executeBulkUpdateBookingsStatus(selectedBookings, 'completed')}
+                      className="p-2 bg-gold/10 text-gold rounded-lg hover:bg-gold hover:text-black transition-all"
+                    ><CheckSquare size={16} /></button>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2 pl-2">
+                  {isAdmin && (
+                    <button
+                      onClick={() => setConfirmDelete({ type: 'bulk-bookings', ids: selectedBookings })}
+                      className="p-2 bg-red-500 border border-red-500/50 text-white rounded-lg hover:bg-white hover:text-red-500 transition-all shadow-lg shadow-red-500/20"
+                    ><Trash2 size={16} /></button>
+                  )}
+                  <button
+                    onClick={() => {
+                      setSelectedBookings([]);
+                      setIsBookingsSelectionMode(false);
+                    }}
+                    className="p-2 text-white/40 hover:text-white transition-all"
+                    title="Deselect All"
+                  ><XSquare size={16} /></button>
+                </div>
+              </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

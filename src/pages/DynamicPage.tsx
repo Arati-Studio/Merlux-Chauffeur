@@ -31,7 +31,7 @@ export default function DynamicPage() {
       try {
         const q = query(collection(db, 'pages'), where('slug', '==', slug), limit(1));
         const snap = await getDocs(q);
-        
+
         if (!snap.empty) {
           const docSnap = snap.docs[0];
           const data = docSnap.data();
@@ -47,7 +47,7 @@ export default function DynamicPage() {
           );
           const relatedSnap = await getDocs(relatedQ);
           setRelatedPages(relatedSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-          
+
           window.scrollTo(0, 0);
 
           // Global CMS CSS Injection
@@ -60,7 +60,7 @@ export default function DynamicPage() {
               document.head.appendChild(globalStyleTag);
             }
             // Scope CSS to content area
-            const scopedGlobal = settings.seo.globalCmsCss.replace(/([^\r\n,{}]+)(?=[^{}]*{)/g, (m: string) => 
+            const scopedGlobal = settings.seo.globalCmsCss.replace(/([^\r\n,{}]+)(?=[^{}]*{)/g, (m: string) =>
               m.split(',').map(s => s.trim() ? `.cms-rendered-content ${s.trim()}` : s).join(', ')
             );
             globalStyleTag.innerHTML = scopedGlobal;
@@ -78,7 +78,7 @@ export default function DynamicPage() {
               document.head.appendChild(styleTag);
             }
             // Scope CSS to content area
-            const scopedIndividual = data.customCss.replace(/([^\r\n,{}]+)(?=[^{}]*{)/g, (m: string) => 
+            const scopedIndividual = data.customCss.replace(/([^\r\n,{}]+)(?=[^{}]*{)/g, (m: string) =>
               m.split(',').map(s => s.trim() ? `.cms-rendered-content ${s.trim()}` : s).join(', ')
             );
             styleTag.innerHTML = scopedIndividual;
@@ -103,7 +103,7 @@ export default function DynamicPage() {
       const styleId = `page-css-${slug}`;
       const styleTag = document.getElementById(styleId);
       if (styleTag) styleTag.remove();
-      
+
       // Global CSS cleanup
       const globalStyleId = 'global-cms-css';
       const globalStyleTag = document.getElementById(globalStyleId);
@@ -122,7 +122,7 @@ export default function DynamicPage() {
   if (error || !pageData) {
     return (
       <div className="min-h-screen bg-black pt-32 px-6 text-center">
-        <SEO 
+        <SEO
           title="Page Not Found"
           robots="noindex, nofollow"
         />
@@ -137,7 +137,7 @@ export default function DynamicPage() {
 
   return (
     <div className="bg-black min-h-screen pb-24">
-      <SEO 
+      <SEO
         title={pageData.metaTitle || pageData.title}
         description={pageData.metaDescription || generateDescriptionFromContent(pageData.content)}
         keywords={Array.isArray(pageData.keywords) ? pageData.keywords.join(', ') : pageData.keywords}
@@ -156,31 +156,24 @@ export default function DynamicPage() {
       />
       {/* Featured Image Hero */}
       <section className="relative h-[70vh] w-full overflow-hidden">
-        <img 
-          src={pageData.featuredImage || pageData.ogImage || 'https://picsum.photos/seed/luxury/1920/1080'} 
-          alt={pageData.title} 
+        <img
+          src={pageData.featuredImage || pageData.ogImage || 'https://picsum.photos/seed/luxury/1920/1080'}
+          alt={pageData.title}
           className="w-full h-full object-cover"
           referrerPolicy="no-referrer"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
-        
+
         {/* Navigation Over Image */}
         <AnimatePresence>
           {notice && (
-            <FormNotice 
+            <FormNotice
               type={notice.type}
               message={notice.message}
               onClose={() => setNotice(null)}
             />
           )}
         </AnimatePresence>
-        <div className="absolute top-32 left-0 right-0 z-10">
-          <div className="max-w-7xl mx-auto px-6">
-            <Link to="/" className="inline-flex items-center gap-2 text-gold text-[10px] uppercase tracking-widest font-bold hover:gap-4 transition-all">
-              <ArrowLeft size={14} /> Back to Home
-            </Link>
-          </div>
-        </div>
 
         {/* Heading Over Image (Bottom Left) */}
         <div className="absolute bottom-16 left-0 right-0 z-10">
@@ -191,14 +184,23 @@ export default function DynamicPage() {
               transition={{ duration: 0.8 }}
               className="max-w-4xl"
             >
+              {/* Button directly above heading */}
+              <div className="inline-flex bg-black/40 backdrop-blur-sm px-4 py-2 rounded-full mb-5">
+                <Link
+                  to="/services"
+                  className="inline-flex items-center gap-2 text-gold text-[10px] uppercase tracking-widest font-bold hover:gap-4 transition-all"
+                >
+                  <ArrowLeft size={14} /> Back to Services
+                </Link>
+              </div>
+              <h1 className="text-4xl md:text-7xl font-display leading-tight">
+                {pageData.title}
+              </h1>
               {pageData.category && (
                 <span className="bg-gold text-black px-3 py-1 rounded-full text-[10px] uppercase tracking-widest font-bold mb-6 inline-block">
                   {pageData.category}
                 </span>
               )}
-              <h1 className="text-4xl md:text-7xl font-display leading-tight">
-                {pageData.title}
-              </h1>
             </motion.div>
           </div>
         </div>
@@ -207,7 +209,7 @@ export default function DynamicPage() {
       <article className="max-w-7xl mx-auto px-6 pt-20">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-16">
           <div className="lg:col-span-8">
-            <div 
+            <div
               className="cms-rendered-content prose prose-invert prose-gold max-w-none prose-p:text-white/70 prose-p:leading-relaxed prose-p:text-lg prose-headings:font-display prose-headings:text-white prose-li:text-white/70"
               dangerouslySetInnerHTML={{ __html: pageData.content }}
             />
@@ -217,12 +219,12 @@ export default function DynamicPage() {
               <p className="text-[10px] uppercase text-white/40 font-bold">End of Experience</p>
               <div className="flex items-center gap-4">
                 <span className="text-[10px] uppercase text-gold font-bold tracking-widest">Share this page</span>
-                <button 
+                <button
                   onClick={() => {
                     if (navigator.share) {
                       navigator.share({ title: pageData.title, url: window.location.href })
                         .then(() => showNotice('success', 'Page shared successfully.'))
-                        .catch(() => {});
+                        .catch(() => { });
                     } else {
                       navigator.clipboard.writeText(window.location.href);
                       showNotice('success', 'Link copied to clipboard.');
@@ -254,8 +256,8 @@ export default function DynamicPage() {
                         <img src={r.featuredImage || r.ogImage} alt={r.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
                         <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-all" />
                         <div className="absolute bottom-6 left-6 right-6">
-                           <span className="text-gold text-[8px] uppercase tracking-widest font-bold mb-2 block">{r.category}</span>
-                           <h4 className="text-lg font-display leading-tight">{r.title}</h4>
+                          <span className="text-gold text-[8px] uppercase tracking-widest font-bold mb-2 block">{r.category}</span>
+                          <h4 className="text-lg font-display leading-tight">{r.title}</h4>
                         </div>
                       </div>
                     </Link>

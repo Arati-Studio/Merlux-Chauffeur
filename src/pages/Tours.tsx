@@ -1010,36 +1010,32 @@ export default function Tours() {
 
             {!showFullDetails && step === 1 && (
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mt-16 glass p-8 md:p-12 rounded-[2rem] border border-gold/20 relative overflow-hidden group"
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                className="mt-24 bg-gold rounded-[3rem] p-12 md:p-20 text-black text-center relative overflow-hidden shadow-2xl"
               >
-                <div className="absolute top-0 right-0 p-4 opacity-10 blur-[2px] transition-all duration-700 group-hover:scale-110 group-hover:opacity-20 group-hover:blur-none">
-                  <BadgePercent size={200} className="text-gold" />
+                <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
+                  <div className="absolute top-[-50%] left-[-20%] w-[100%] h-[200%] bg-white blur-[120px] rounded-full rotate-45" />
                 </div>
-                <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
-                  <div>
-                    <span className="text-[10px] uppercase tracking-widest text-gold font-bold mb-2 block">Offer Airport Ride</span>
-                    <h3 className="text-2xl md:text-4xl font-display mb-3 leading-tight">Premium Melbourne Airport Transfers</h3>
-                    <p className="text-white/60 text-xs md:text-sm leading-relaxed max-w-lg">
-                      Enjoy smooth and reliable airport transfers with Merlux Chauffeur. Travel in luxury with professional chauffeurs, comfortable premium vehicles, and punctual pickup and drop-off service across Melbourne.
-                    </p>
-                  </div>
-                  <div className="flex flex-col sm:flex-row gap-4 lg:justify-end">
-                    <Link
-                      to="/booking"
-                      className="relative overflow-hidden group/btn flex items-center justify-center gap-2 px-8 py-3 rounded-full border-2 border-gold bg-gold text-black font-bold uppercase tracking-widest text-[11px] transition-all duration-300 hover:bg-transparent hover:text-gold"
+                <div className="relative z-10 max-w-2xl mx-auto">
+                  <span className="uppercase tracking-[0.3em] text-[10px] font-bold mb-4 block">Elevated Travel</span>
+                  <h2 className="text-4xl md:text-6xl font-display mb-8 leading-tight">Reserve Your <span className="italic">Luxury Ride</span></h2>
+                  <p className="text-black/70 mb-10 text-lg leading-relaxed text-balance">
+                    Whether it's a specialized regional tour or a premium point-to-point transfer, we guarantee an unparalleled travel experience.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                    <Link 
+                      to="/booking" 
+                      className="bg-black text-white px-12 py-5 rounded-2xl font-bold uppercase tracking-widest text-[10px] hover:bg-white hover:text-black transition-all shadow-2xl"
                     >
-                      <span className="relative z-10 flex items-center gap-2">
-                        Book Your Journey
-                        <ArrowRight size={16} className="group-hover/btn:translate-x-1 transition-transform" />
-                      </span>
+                      Book A Journey
                     </Link>
-                    <Link
-                      to="/offers"
-                      className="flex items-center justify-center gap-2 px-8 py-3 rounded-full border-2 border-white/20 bg-black/50 text-white/60 font-bold uppercase tracking-widest text-[11px] transition-all duration-300 hover:border-white hover:text-white"
+                    <Link 
+                      to="/offers" 
+                      className="bg-white/20 backdrop-blur-md border border-black/10 text-black px-12 py-5 rounded-2xl font-bold uppercase tracking-widest text-[10px] hover:bg-black hover:text-white transition-all font-display"
                     >
-                      Explore Offers
+                      View Special Offers
                     </Link>
                   </div>
                 </div>

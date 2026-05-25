@@ -183,28 +183,32 @@ export default function Blog() {
         )}
       </section>
 
-      {/* Newsletter Section */}
+      {/* CTA Section */}
       <section className="max-w-7xl mx-auto px-6 mt-32">
-        <div className="bg-gold rounded-[3rem] p-12 md:p-20 text-black text-center relative overflow-hidden">
+        <div className="bg-gradient-to-br from-[#1a1506] via-[#2a1f04] to-[#1a1506] border border-gold/25 rounded-[3rem] p-6 md:p-10 text-black text-center relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
             <div className="absolute top-[-50%] left-[-20%] w-[100%] h-[200%] bg-white blur-[120px] rounded-full rotate-45" />
           </div>
           <div className="relative z-10 max-w-2xl mx-auto">
-            <span className="uppercase tracking-[0.3em] text-[10px] font-bold mb-4 block">Stay Updated</span>
-            <h2 className="text-4xl md:text-6xl font-display mb-8">Join the <span className="italic">Inner Circle</span></h2>
-            <p className="text-black/70 mb-10 text-lg leading-relaxed">
-              Subscribe to our newsletter for exclusive travel tips, regional insights, and special offers.
+            <span className="uppercase tracking-[0.3em] text-[10px] font-bold mb-4 block text-gold">Ready to Experience?</span>
+            <h2 className="text-4xl md:text-6xl font-display mb-8 text-gold">Reserve Your <span className="text-white italic">Luxury Ride</span></h2>
+            <p className="text-white/70 mb-10 text-lg leading-relaxed text-balance ">
+              Explore our curated selection of exclusive offers and bespoke regional tours. Your premium journey begins here.
             </p>
-            <form className="flex flex-col sm:flex-row gap-4 max-w-md mx-auto">
-              <input
-                type="email"
-                placeholder="Your Email Address"
-                className="flex-grow bg-white/20 border border-black/10 rounded-2xl px-6 py-4 text-sm focus:border-black outline-none transition-all placeholder:text-black/40"
-              />
-              <button className="bg-black text-white px-8 py-4 rounded-2xl font-bold uppercase tracking-widest text-[10px] hover:bg-white hover:text-black transition-all">
-                Subscribe
-              </button>
-            </form>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Link 
+                to="/offers" 
+                className="bg-gold-dark text-white px-12 py-5 rounded-2xl font-bold uppercase tracking-widest text-[10px] hover:bg-white hover:text-black transition-all shadow-2xl"
+              >
+                Explore Offers
+              </Link>
+              <Link 
+                to="/tours" 
+                className="bg-white backdrop-blur-md border border-black/10 text-black px-12 py-5 rounded-2xl font-bold uppercase tracking-widest text-[10px] hover:bg-gold hover:text-white transition-all"
+              >
+                View All Tours
+              </Link>
+            </div>
           </div>
         </div>
       </section>
