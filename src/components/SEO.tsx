@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useLocation } from 'react-router-dom';
 import { SEO_CONFIG, type SEOProps, generateCanonicalUrl } from '../lib/seo';
+import { collection, query, where, limit, onSnapshot } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 
 const SEO: React.FC<SEOProps> = ({
   title,
@@ -16,18 +18,65 @@ const SEO: React.FC<SEOProps> = ({
   schema,
 }) => {
   const { pathname } = useLocation();
-  
-  const seoTitle = title 
-    ? SEO_CONFIG.titleTemplate.replace('%s', title) 
+  const [dbSeo, setDbSeo] = useState<{
+    metaTitle?: string;
+    metaDescription?: string;
+    keywords?: string[];
+    noindex?: boolean;
+    structuredData?: any;
+  } | null>(null);
+
+  useEffect(() => {
+    const pathParts = pathname.split('/').filter(Boolean);
+    let slug = 'home';
+    if (pathParts.length > 0) {
+      slug = pathParts.join('/');
+    }
+
+    const q = query(
+      collection(db, 'metadata'),
+      where('slug', '==', slug),
+      limit(1)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (!snapshot.empty) {
+        const docData = snapshot.docs[0].data();
+        setDbSeo({
+          metaTitle: docData.metaTitle || '',
+          metaDescription: docData.metaDescription || '',
+          keywords: docData.keywords || [],
+          noindex: docData.noindex || false,
+          structuredData: docData.structuredData || null
+        });
+      } else {
+        setDbSeo(null);
+      }
+    }, (error) => {
+      console.warn('SEO dynamic loading suspended:', error);
+    });
+
+    return () => unsubscribe();
+  }, [pathname]);
+
+  const finalTitle = dbSeo?.metaTitle || title;
+  const finalDescription = dbSeo?.metaDescription || description;
+  const finalKeywords = (dbSeo?.keywords && dbSeo.keywords.length > 0)
+    ? dbSeo.keywords.join(', ')
+    : (Array.isArray(keywords) ? keywords.join(', ') : keywords);
+  const finalNoindex = dbSeo?.noindex !== undefined ? dbSeo.noindex : noindex;
+  const finalStructuredData = dbSeo?.structuredData || schema || structuredData;
+
+  const seoTitle = finalTitle 
+    ? SEO_CONFIG.titleTemplate.replace('%s', finalTitle) 
     : SEO_CONFIG.defaultTitle;
     
-  const seoDescription = description || SEO_CONFIG.defaultDescription;
-  const seoKeywords = keywords || SEO_CONFIG.defaultKeywords;
+  const seoDescription = finalDescription || SEO_CONFIG.defaultDescription;
+  const seoKeywords = finalKeywords || SEO_CONFIG.defaultKeywords;
   const seoCanonical = canonical || generateCanonicalUrl(pathname);
   const seoImage = ogImage || `${SEO_CONFIG.siteUrl}${SEO_CONFIG.defaultOGImage}`;
   
-  const finalStructuredData = schema || structuredData;
-  const finalRobots = robots || (noindex ? "noindex, nofollow" : "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1");
+  const finalRobots = robots || (finalNoindex ? "noindex, nofollow" : "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1");
   
   return (
     <Helmet>

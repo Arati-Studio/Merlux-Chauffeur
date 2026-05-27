@@ -22,6 +22,7 @@ export default function Offers() {
   const [step, setStep] = useState(1);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'stripe'>('stripe');
+  const [priceAddons, setPriceAddons] = useState<any[]>([]);
   const [notice, setNotice] = useState<{ type: NoticeType; message: string; title?: string } | null>(null);
 
   const showNotice = (type: NoticeType, message: string, title?: string) => {
@@ -157,7 +158,18 @@ export default function Offers() {
       setOffers(parsedOffers);
       setIsLoading(false);
     });
-    return () => unsubscribe();
+
+    const addonsQ = query(collection(db, 'price-addons'), where('active', '==', true));
+    const unsubscribeAddons = onSnapshot(addonsQ, (snapshot) => {
+      setPriceAddons(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (err) => {
+      console.warn("Price addons loading suspended:", err);
+    });
+
+    return () => {
+      unsubscribe();
+      unsubscribeAddons();
+    };
   }, []);
 
   // Deep Linking Effect
@@ -339,6 +351,54 @@ export default function Offers() {
     return result;
   }, [offers, searchQuery, tagFilter, discountFilter, priceSort]);
 
+  const calculateOfferPriceBreakdown = () => {
+    if (!selectedFleet) return { base: 0, subtotal: 0, appliedAddons: [], total: 0, addonTotal: 0 };
+    
+    let base = Number(selectedFleet.salePrice || selectedFleet.price || 0);
+
+    if (details.returnRide) {
+      base *= 2;
+    }
+
+    const subtotal = base;
+    
+    // Apply Add-ons
+    let addonTotal = 0;
+    const appliedAddons: any[] = [];
+    (priceAddons || []).forEach((addon) => {
+      if (!addon.active) return;
+      
+      const baseValue = base; 
+
+      let value = 0;
+      if (addon.type === 'percentage') {
+        value = baseValue * (addon.value / 100);
+      } else {
+        value = addon.value;
+      }
+
+      addonTotal += value;
+      appliedAddons.push({
+        id: addon.id,
+        name: addon.name,
+        value: value,
+        type: addon.type,
+        target: addon.target
+      });
+    });
+
+    return {
+      base,
+      subtotal,
+      appliedAddons,
+      addonTotal,
+      total: subtotal + addonTotal
+    };
+  };
+
+  const bookingPricing = calculateOfferPriceBreakdown();
+  const totalPrice = bookingPricing.total;
+
   return (
     <>
       <SEO 
@@ -385,7 +445,7 @@ export default function Offers() {
                 { id: 3, label: 'Details', icon: User },
                 { id: 4, label: 'Summary', icon: FileText }
               ].map((s, idx, arr) => (
-                <div key={s.id} className="flex items-center gap-2 shrink-0">
+                <div key={`offer-step-${s.id}`} className="flex items-center gap-2 shrink-0">
                   <div
                     className={cn(
                       "flex flex-row items-center gap-1 sm:gap-2 transition-all duration-300 justify-center",
@@ -432,15 +492,15 @@ export default function Offers() {
                     )}
                   </div>
 
-                  {/* Connector line */}
-                  {idx < arr.length - 1 && (
-                    <div
-                      className={cn(
-                        "w-6 h-[1px] mx-1 shrink-0 hidden sm:block", // hide on mobile
-                        step > s.id ? "bg-gold/30" : "bg-white/5"
-                      )}
-                    />
-                  )}
+                            {idx < arr.length - 1 && (
+                              <div
+                                key={`connector-${s.id}-${idx}`}
+                                className={cn(
+                                  "w-6 h-[1px] mx-1 shrink-0 hidden sm:block", // hide on mobile
+                                  step > s.id ? "bg-gold/30" : "bg-white/5"
+                                )}
+                              />
+                            )}
                 </div>
               ))}
             </div>
@@ -493,8 +553,8 @@ export default function Offers() {
                             className="bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-gold/50 transition-all custom-select appearance-none cursor-pointer w-full sm:w-40"
                           >
                             <option value="all">All Packages</option>
-                            {allTags.map(tag => (
-                              <option key={tag} value={tag}>{tag}</option>
+                            {allTags.map((tag, tIdx) => (
+                              <option key={`offer-tag-${tag}-${tIdx}`} value={tag}>{tag}</option>
                             ))}
                           </select>
                         </div>
@@ -1145,9 +1205,6 @@ export default function Offers() {
                             onClick={async () => {
                               setIsLoading(true);
                               try {
-                                const basePrice = Number(selectedFleet.salePrice || selectedPackage.price || 0);
-                                const finalPrice = details.returnRide ? basePrice * 2 : basePrice;
-
                                 const bookingData: any = {
                                   customerName: details.name,
                                   customerEmail: details.email?.toLowerCase(),
@@ -1163,7 +1220,14 @@ export default function Offers() {
                                   packageId: selectedPackage.id,
                                   packageTitle: selectedPackage.title,
                                   vehicleType: selectedFleet.type,
-                                  price: finalPrice,
+                                  price: totalPrice,
+                                  priceBreakdown: {
+                                    base: bookingPricing.base,
+                                    subtotal: bookingPricing.subtotal,
+                                    appliedAddons: bookingPricing.appliedAddons,
+                                    addonTotal: bookingPricing.addonTotal,
+                                    total: bookingPricing.total
+                                  },
                                   status: 'pending',
                                   type: 'offer',
                                   paymentStatus: 'unpaid',
@@ -1222,7 +1286,7 @@ export default function Offers() {
                             disabled={isLoading}
                             className="w-full bg-gold text-black py-8 rounded-[2rem] font-black uppercase tracking-[0.5em] text-sm hover:bg-white transition-all shadow-[0_30px_60px_rgba(212,175,55,0.15)] flex items-center justify-center gap-6"
                           >
-                            {isLoading ? 'Processing Luxury Asset...' : `Finalize & Secure Ride — $${selectedFleet.salePrice}`}
+                            {isLoading ? 'Processing Luxury Asset...' : `Finalize & Secure Ride — $${totalPrice}`}
                             <ArrowRight size={22} />
                           </button>
                         </div>
@@ -1336,16 +1400,30 @@ export default function Offers() {
                         )}
 
                         {/* Total Section */}
-                        <div className="mt-12 pt-8 border-t border-gold/20">
-                          <div className="flex items-center justify-between mb-4">
-                            <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-white/30">Premium total</span>
-                            <div className="h-[1px] flex-1 bg-white/5 mx-4" />
-                            <span className="text-2xl font-display text-white">
-                              ${((Number(selectedFleet?.salePrice || selectedPackage?.price || 0)) * (details.returnRide ? 2 : 1)).toFixed(2)}
+                        <div className="mt-12 pt-8 border-t border-gold/20 flex flex-col gap-4">
+                          <div className="space-y-2">
+                             <div className="flex items-center justify-between text-white/50">
+                               <span className="text-[10px] font-bold uppercase tracking-widest italic">Base Package</span>
+                               <span className="text-xs font-bold font-mono">${bookingPricing.subtotal.toFixed(2)}</span>
+                             </div>
+                             
+                             {bookingPricing.appliedAddons.map((addon: any, aIdx: number) => (
+                               <div key={`offer-summary-addon-${addon.id}-${aIdx}`} className="flex items-center justify-between text-gold/60">
+                                 <span className="text-[10px] font-bold uppercase tracking-widest italic">{addon.name}</span>
+                                 <span className="text-xs font-bold font-mono">+${addon.value.toFixed(2)}</span>
+                               </div>
+                             ))}
+                          </div>
+
+                          <div className="flex items-center justify-between mb-4 mt-2">
+                            <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-gold">Final Total</span>
+                            <div className="h-[1px] flex-1 bg-gold/10 mx-4" />
+                            <span className="text-3xl font-display text-white">
+                              ${totalPrice.toFixed(2)}
                             </span>
                           </div>
-                          <p className="text-[9px] text-white/20 italic text-right leading-none lowercase tracking-tight">exclusive airport fees & taxes included.</p>
                         </div>
+                          <p className="text-[9px] text-white/20 italic text-right leading-none lowercase tracking-tight">exclusive airport fees & taxes included.</p>
                       </>
                     ) : (
                       <div className="py-20 flex flex-col items-center justify-center text-center space-y-4">

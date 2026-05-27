@@ -225,6 +225,7 @@ export default function Booking() {
   const [settings, setSettings] = useState<any>(null);
   const [coupons, setCoupons] = useState<any[]>([]);
   const [extras, setExtras] = useState<any[]>([]);
+  const [priceAddons, setPriceAddons] = useState<any[]>([]);
   const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
   const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
@@ -478,7 +479,40 @@ export default function Booking() {
         stripeFees = (netPrice + tax) * (feePercent / 100);
       }
 
-      const total = Number((netPrice + tax + stripeFees).toFixed(2));
+      const totalBeforeAddons = Number((netPrice + tax + stripeFees).toFixed(2));
+
+      // Applied Add-ons logic
+      let addonTotal = 0;
+      const appliedAddons: any[] = [];
+      (priceAddons || []).forEach((addon) => {
+        if (!addon.active) return;
+
+        let baseValue = 0;
+        if (addon.target === "gross") baseValue = subtotal;
+        else if (addon.target === "net") baseValue = netPrice;
+        else if (addon.target === "total") baseValue = totalBeforeAddons;
+
+        let value = 0;
+        if (addon.type === "percentage") {
+          value = baseValue * (addon.value / 100);
+        } else {
+          value = addon.value;
+        }
+
+        const impact = addon.operation === "addition" ? value : -value;
+        addonTotal += impact;
+        appliedAddons.push({
+          id: addon.id,
+          name: addon.name,
+          impact: Number(impact.toFixed(2)),
+          target: addon.target,
+          type: addon.type,
+          value: addon.value,
+          operation: addon.operation,
+        });
+      });
+
+      const finalTotal = Number((totalBeforeAddons + addonTotal).toFixed(2));
 
       return {
         base: Number(baseFare.toFixed(2)),
@@ -491,7 +525,9 @@ export default function Booking() {
         stripe: Number(stripeFees.toFixed(2)),
         net: Number(netPrice.toFixed(2)),
         gross: Number(subtotal.toFixed(2)),
-        total: total,
+        total: finalTotal,
+        addonTotal: Number(addonTotal.toFixed(2)),
+        appliedAddons: appliedAddons,
         rangeCalcs: rangeCalcs,
       };
     },
@@ -507,6 +543,7 @@ export default function Booking() {
       formData.waypoints,
       appliedCoupon,
       paymentMethod,
+      priceAddons,
     ],
   );
 
@@ -661,10 +698,25 @@ export default function Booking() {
       }
     };
 
+    const fetchPriceAddons = async () => {
+      const path = "price-addons";
+      try {
+        const addonsSnap = await getDocs(
+          query(collection(db, path), where("active", "==", true)),
+        );
+        setPriceAddons(
+          addonsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
+        );
+      } catch (err) {
+        handleFirestoreError(err, OperationType.LIST, path);
+      }
+    };
+
     fetchFleet();
     fetchSettings();
     fetchCoupons();
     fetchExtras();
+    fetchPriceAddons();
   }, []);
 
   useEffect(() => {
@@ -2550,11 +2602,11 @@ export default function Booking() {
                                 Extras
                               </p>
                               <div className="space-y-1">
-                                {formData.selectedExtras.map((id) => {
+                                {formData.selectedExtras.map((id, seIdx) => {
                                   const extra = extras.find((e) => e.id === id);
                                   return (
                                     <p
-                                      key={id}
+                                      key={`sel-extra-${id}-${seIdx}`}
                                       className="text-[10px] text-white truncate"
                                     >
                                       {extra?.name}
@@ -3581,6 +3633,19 @@ export default function Booking() {
                                           </span>
                                         </div>
                                       )}
+                                    {details.appliedAddons && details.appliedAddons.length > 0 && (
+                                      <div className="space-y-1">
+                                        {details.appliedAddons.map((addon: any, aIdx: number) => (
+                                          <div key={`addon-cust-${addon.id || aIdx}-${aIdx}`} className="flex justify-between text-[10px] uppercase tracking-widest text-gold/60">
+                                            <span>{addon.name}</span>
+                                            <span>
+                                              {addon.impact > 0 ? '+' : '-'}${Math.abs(addon.impact).toFixed(2)}
+                                            </span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+
                                     {settings?.showTotalPrice !== false && (
                                       <div className="flex justify-between pt-4 pb-4 border-t border-b border-white/10">
                                         <span className="text-white font-bold">

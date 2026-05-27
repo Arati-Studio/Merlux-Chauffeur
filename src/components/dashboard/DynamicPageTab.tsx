@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { 
-  Globe, Plus, Power, Eye, Code2, Copy, Edit2, Trash2, X, CheckCircle, Loader2, Save, Ban
+  Globe, Plus, Power, Eye, Code2, Copy, Edit2, Trash2, X, CheckCircle, Loader2, Save, Ban, Info
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { db, handleFirestoreError, OperationType } from '../../lib/firebase';
@@ -484,7 +484,21 @@ const DynamicPageTab: React.FC<DynamicPageTabProps> = ({
                 </div>
 
                 <div className="p-6 bg-white/5 rounded-2xl border border-white/10 space-y-4">
-                  <h4 className="text-sm font-bold text-gold uppercase tracking-widest">SEO Settings</h4>
+                  <div className="flex items-center gap-2 pb-2 border-b border-white/5">
+                    <Info size={16} className="text-gold" />
+                    <h4 className="text-xs font-black text-gold uppercase tracking-[0.2em]">Centralized SEO Settings</h4>
+                  </div>
+
+                  <div className="bg-gold/5 border border-gold/15 rounded-xl p-4.5 space-y-2 text-left mb-4">
+                    <p className="text-[10px] text-gold font-bold uppercase tracking-wider">
+                      Managed Globally via Index Console
+                    </p>
+                    <p className="text-[10px] text-white/50 leading-relaxed font-sans">
+                      To prevent SEO conflict and data drift, all Meta titles, descriptions, focus keywords, indexing permissions (noindex), and JSON-LD Rich Schema Markups are centrally maintained under the **SEO → Index Console** tab of your primary dashboard.
+                    </p>
+                  </div>
+
+                  {false && (<>
 
                   <div>
                     <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-1 block">Meta Title</label>
@@ -518,7 +532,10 @@ const DynamicPageTab: React.FC<DynamicPageTabProps> = ({
                     />
                   </div>
 
-                  <div className="flex gap-6">
+                  </>)}
+
+                  <div className="flex flex-wrap gap-6 pt-1">
+                    {false && (
                     <label className="flex items-center gap-3 cursor-pointer group">
                       <div className={cn("w-5 h-5 rounded border flex items-center justify-center transition-all", editingPage?.noindex ? "bg-red-500 border-red-500" : "border-white/20 group-hover:border-gold")}>
                         <input
@@ -531,6 +548,7 @@ const DynamicPageTab: React.FC<DynamicPageTabProps> = ({
                       </div>
                       <span className="text-xs font-bold uppercase tracking-widest text-white/60">No Index</span>
                     </label>
+                    )}
 
                     <label className="flex items-center gap-3 cursor-pointer group">
                       <div className={cn("w-5 h-5 rounded border flex items-center justify-center transition-all", editingPage?.includeInSitemap ? "bg-gold border-gold" : "border-white/20 group-hover:border-gold")}>

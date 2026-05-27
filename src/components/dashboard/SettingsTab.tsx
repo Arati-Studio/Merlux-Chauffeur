@@ -23,6 +23,7 @@ const ALL_COLLECTIONS = [
   { id: 'blogs', label: 'Blog Posts' },
   { id: 'offers', label: 'Special Offers' },
   { id: 'tours', label: 'Tours' },
+  { id: 'metadata', label: 'SEO Meta & JSON-LD' },
   { id: 'media', label: 'Media Library' },
   { id: 'faqs', label: 'FAQs' },
   { id: 'comments', label: 'Comments' },
@@ -31,7 +32,8 @@ const ALL_COLLECTIONS = [
   { id: 'sms-templates', label: 'SMS Templates' },
   { id: 'email-templates', label: 'Email Templates' },
   { id: 'smsTemplates', label: 'SMS Templates (Legacy)' },
-  { id: 'emailTemplates', label: 'Email Templates (Legacy)' }
+  { id: 'emailTemplates', label: 'Email Templates (Legacy)' },
+  { id: 'price-addons', label: 'Price Add-ons' }
 ];
 
 interface SettingsTabProps {
@@ -48,6 +50,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
   const [fleet, setFleet] = useState<any[]>([]);
   const [extras, setExtras] = useState<any[]>([]);
   const [coupons, setCoupons] = useState<any[]>([]);
+  const [priceAddons, setPriceAddons] = useState<any[]>([]);
   const [systemSettings, setSystemSettings] = useState<any>(null);
   const [smsSettings, setSmsSettings] = useState<any>(null);
   const [emailSettings, setEmailSettings] = useState<any>(null);
@@ -69,6 +72,13 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
     const couponsQ = query(collection(db, 'coupons'), orderBy('createdAt', 'desc'));
     const unsubscribeCoupons = onSnapshot(couponsQ, (snapshot) => {
       setCoupons(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    const priceAddonsQ = query(collection(db, 'price-addons'), orderBy('name', 'asc'));
+    const unsubscribePriceAddons = onSnapshot(priceAddonsQ, (snapshot) => {
+      setPriceAddons(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (err) => {
+      handleFirestoreError(err, OperationType.LIST, 'price-addons');
     });
 
     const unsubscribeSys = onSnapshot(doc(db, 'settings', 'system'), (snap) => {
@@ -97,6 +107,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
       unsubscribeFleet();
       unsubscribeExtras();
       unsubscribeCoupons();
+      unsubscribePriceAddons();
       unsubscribeSys();
       unsubscribeSms();
       unsubscribeEmail();
@@ -144,6 +155,11 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
   const [couponsSearchQuery, setCouponsSearchQuery] = useState('');
   const [editingCoupon, setEditingCoupon] = useState<any>(null);
   const [showCouponModal, setShowCouponModal] = useState(false);
+
+  const [priceAddonsSearchQuery, setPriceAddonsSearchQuery] = useState('');
+  const [editingPriceAddon, setEditingPriceAddon] = useState<any>(null);
+  const [showPriceAddonModal, setShowPriceAddonModal] = useState(false);
+  const [isSavingPriceAddon, setIsSavingPriceAddon] = useState(false);
 
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [isSavingSmsSettings, setIsSavingSmsSettings] = useState(false);
@@ -933,6 +949,43 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
     });
   };
 
+  const handleUpdatePriceAddon = async (id: string | null, data: any) => {
+    setIsSavingPriceAddon(true);
+    try {
+      if (!id || id === 'new') {
+        const newRef = doc(collection(db, 'price-addons'));
+        await setDoc(newRef, { ...data, id: newRef.id, createdAt: serverTimestamp() });
+      } else {
+        await updateDoc(doc(db, 'price-addons', id), { ...data, updatedAt: serverTimestamp() });
+      }
+      setShowPriceAddonModal(false);
+      setEditingPriceAddon(null);
+      showDashboardNotice('success', 'Price add-on updated.');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, 'price-addons');
+    } finally {
+      setIsSavingPriceAddon(false);
+    }
+  };
+
+  const handleDeletePriceAddon = (id: string) => {
+    const addon = priceAddons.find(a => a.id === id);
+    setConfirmDelete({
+      type: 'price-addons',
+      id,
+      title: 'Delete Price Add-on',
+      message: `Are you sure you want to delete the add-on: ${addon?.name || 'this item'}?`,
+      onConfirm: async () => {
+        try {
+          await deleteDoc(doc(db, 'price-addons', id));
+          showDashboardNotice('success', 'Price add-on deleted.');
+        } catch (err) {
+          handleFirestoreError(err, OperationType.DELETE, `price-addons/${id}`);
+        }
+      }
+    });
+  };
+
   const handleUpdateSettings = async (settings: any) => {
     setIsSavingSettings(true);
     try {
@@ -1408,6 +1461,120 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
                 >
                   <Trash2 size={14} />
                   <span className="text-[12px] font-bold uppercase tracking-widest">Delete</span>
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <hr className="border-white/10 my-6" />
+
+      {/* Price Add-ons Management */}
+      <div className="space-y-8">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 w-full">
+          <div>
+            <h3 className="text-xl sm:text-2xl font-display text-gold">Price Add-ons</h3>
+            <p className="text-white/40 text-[10px] uppercase tracking-widest font-bold">
+              Custom taxes, surcharges or fees
+            </p>
+          </div>
+
+          <div className="flex flex-row items-center gap-2 w-full md:w-auto">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20" size={14} />
+              <input
+                type="text"
+                placeholder="Search add-ons..."
+                value={priceAddonsSearchQuery}
+                onChange={(e) => setPriceAddonsSearchQuery(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-10 py-2 text-xs text-white outline-none focus:border-gold transition-all"
+              />
+              {priceAddonsSearchQuery && (
+                <button
+                  onClick={() => setPriceAddonsSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/20 hover:text-white"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+
+            <button
+              onClick={() => {
+                setEditingPriceAddon({
+                  name: '',
+                  type: 'percentage',
+                  value: 0,
+                  operation: 'addition',
+                  target: 'gross',
+                  active: true,
+                });
+                setShowPriceAddonModal(true);
+              }}
+              className="btn-primary px-6 py-2 flex items-center justify-center gap-2 shrink-0"
+            >
+              <Plus size={18} />
+              <span className="hidden md:inline text-xs font-bold uppercase tracking-widest">
+                Add Add-on
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {(priceAddons || []).filter(a =>
+            a.name?.toLowerCase().includes((priceAddonsSearchQuery || '').toLowerCase())
+          ).map((addon, idx) => (
+            <div key={`setting-addon-${addon.id || 'new'}-${addon.name || 'unnamed'}-${idx}`} className="glass p-6 rounded-2xl border border-white/5 hover:border-gold/30 transition-all group relative overflow-hidden">
+              <div className={cn(
+                "absolute top-0 right-0 text-white text-[8px] font-bold uppercase tracking-widest px-3 py-1 rounded-bl-xl",
+                addon.active ? "bg-green-600" : "bg-red-500"
+              )}>
+                {addon.active ? "Active" : "Inactive"}
+              </div>
+              <div className="flex justify-between items-start mb-4 mt-2">
+                <div>
+                  <h4 className="text-xl font-bold font-display text-gold mb-1">{addon.name}</h4>
+                  <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold">
+                    Target: {addon.target}
+                  </p>
+                </div>
+                <div className="bg-gold/10 p-1.5 rounded-lg flex flex-col items-center">
+                  <p className="text-[10px] uppercase font-bold text-gold">
+                    {addon.operation === 'addition' ? '+' : '-'} {addon.type === 'percentage' ? `${addon.value}%` : `$${addon.value}`}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    const { id, ...addonData } = addon;
+                    setEditingPriceAddon({ ...addonData, name: addon.name + ' (Copy)' });
+                    setShowPriceAddonModal(true);
+                  }}
+                  className="p-2 bg-white/5 text-gold rounded-xl hover:bg-gold hover:text-black transition-all"
+                  title="Duplicate"
+                >
+                  <Copy size={14} />
+                </button>
+                <button
+                  onClick={() => {
+                    setEditingPriceAddon(addon);
+                    setShowPriceAddonModal(true);
+                  }}
+                  className="flex-1 py-2 bg-blue-500/10 text-blue-500 rounded-xl hover:bg-blue-500/50 hover:text-white text-[12px] font-bold transition-all flex items-center justify-center gap-1"
+                >
+                  <Pencil size={14} /> Edit
+                </button>
+
+                <button
+                  onClick={() => handleDeletePriceAddon(addon.id)}
+                  className="flex-1 py-2 bg-red-500/10 text-red-500 rounded-xl hover:bg-red-500/50 hover:text-white transition-all font-bold flex items-center justify-center gap-1"
+                >
+                  <Trash2 size={14} />
+                  <span className="text-[12px] font-bold uppercase tracking-widest text-red-500 group-hover:text-white">Delete</span>
                 </button>
               </div>
             </div>
@@ -3183,6 +3350,173 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
                     className="border border-white/5 flex-1 bg-gold text-black py-3 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-white transition-all"
                   >
                     {editingCoupon?.id && editingCoupon.id !== 'new' ? "Save Changes" : "Create Coupon"}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {showPriceAddonModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[100] flex items-center justify-center p-6"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              className="w-full max-w-md glass p-8 rounded-3xl border border-gold/20 max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-display text-gold">
+                  {editingPriceAddon?.id ? "Edit Price Add-on" : "Add Price Add-on"}
+                </h3>
+
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2 cursor-pointer">
+                    <span
+                      className={cn(
+                        "text-[10px] uppercase tracking-widest font-bold transition-colors",
+                        editingPriceAddon?.active ? "text-green-400" : "text-red-400"
+                      )}
+                    >
+                      {editingPriceAddon?.active ? "Active" : "Inactive"}
+                    </span>
+                    <button
+                      onClick={() =>
+                        setEditingPriceAddon({ ...editingPriceAddon, active: !editingPriceAddon.active })
+                      }
+                      className={cn(
+                        "w-12 h-6 rounded-full transition-all relative",
+                        editingPriceAddon?.active ? "bg-green-500" : "bg-red-500/40"
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          "absolute top-1 w-4 h-4 rounded-full bg-white transition-all",
+                          editingPriceAddon?.active ? "right-1" : "left-1"
+                        )}
+                      />
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={() => setShowPriceAddonModal(false)}
+                    className="text-white/40 hover:text-white transition-colors"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-1 block">
+                    Add-on Name
+                  </label>
+                  <input
+                    type="text"
+                    value={editingPriceAddon?.name || ""}
+                    onChange={(e) =>
+                      setEditingPriceAddon({
+                        ...editingPriceAddon,
+                        name: e.target.value,
+                      })
+                    }
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-gold transition-all"
+                    placeholder="Fuel Surcharge"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-1 block">
+                      Value
+                    </label>
+                    <input
+                      type="number"
+                      value={editingPriceAddon?.value || 0}
+                      onChange={(e) =>
+                        setEditingPriceAddon({
+                          ...editingPriceAddon,
+                          value: parseFloat(e.target.value),
+                        })
+                      }
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-gold transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-1 block">
+                      Value Type
+                    </label>
+                    <select
+                      value={editingPriceAddon?.type || "percentage"}
+                      onChange={(e) =>
+                        setEditingPriceAddon({ ...editingPriceAddon, type: e.target.value })
+                      }
+                      className="custom-select w-full py-3 text-sm"
+                    >
+                      <option value="percentage">% Percentage</option>
+                      <option value="fixed">$ Fixed Amount</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-1 block">
+                      Operation
+                    </label>
+                    <select
+                      value={editingPriceAddon?.operation || "addition"}
+                      onChange={(e) =>
+                        setEditingPriceAddon({ ...editingPriceAddon, operation: e.target.value })
+                      }
+                      className="custom-select w-full py-3 text-sm"
+                    >
+                      <option value="addition">Addition (+)</option>
+                      <option value="subtraction">Subtraction (-)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-1 block">
+                      Target Price Base
+                    </label>
+                    <select
+                      value={editingPriceAddon?.target || "gross"}
+                      onChange={(e) =>
+                        setEditingPriceAddon({ ...editingPriceAddon, target: e.target.value })
+                      }
+                      className="custom-select w-full py-3 text-sm"
+                    >
+                      <option value="gross">Gross Price (Base)</option>
+                      <option value="net">Net Price (Post-Discount)</option>
+                      <option value="total">Total Price (Final)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="pt-4 flex gap-4">
+                  <button
+                    onClick={() => setShowPriceAddonModal(false)}
+                    className="flex-1 py-3 text-xs font-bold uppercase border border-white/20 rounded-xl text-white/70 hover:text-white hover:border-white/40 transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (editingPriceAddon.id && editingPriceAddon.id !== 'new') {
+                        handleUpdatePriceAddon(editingPriceAddon.id, editingPriceAddon);
+                      } else {
+                        handleUpdatePriceAddon('new', editingPriceAddon);
+                      }
+                    }}
+                    disabled={isSavingPriceAddon}
+                    className="border border-white/5 flex-1 bg-gold text-black py-3 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-white transition-all disabled:opacity-50"
+                  >
+                    {isSavingPriceAddon ? <Loader2 size={16} className="animate-spin m-auto" /> : (editingPriceAddon?.id ? "Save Changes" : "Create Add-on")}
                   </button>
                 </div>
               </div>

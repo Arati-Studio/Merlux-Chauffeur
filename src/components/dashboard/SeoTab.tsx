@@ -8,6 +8,7 @@ import BlogTab from './BlogTab';
 import DynamicPageTab from './DynamicPageTab';
 import FaqTab from './FaqTab';
 import CmsTab from './CmsTab';
+import IndexTab from './MetaTab';
 
 interface SeoTabProps {
   isAdmin: boolean;
@@ -16,10 +17,11 @@ interface SeoTabProps {
 }
 
 const SeoTab: React.FC<SeoTabProps> = (props) => {
-  const [seoActiveTab, setSeoActiveTab] = useState<'global' | 'pages' | 'blogs' | 'faq'>('global');
+  const [seoActiveTab, setSeoActiveTab] = useState<'global' | 'pages' | 'blogs' | 'faq' | 'meta'>('global');
 
   const tabs = [
     { id: 'global', label: 'SEO', icon: Globe },
+    { id: 'meta', label: 'Metadata', icon: Search },
     { id: 'pages', label: 'Pages', icon: FileText },
     { id: 'blogs', label: 'Blogs', icon: BookOpen },
     { id: 'faq', label: 'FAQ', icon: HelpCircle },
@@ -29,7 +31,7 @@ const SeoTab: React.FC<SeoTabProps> = (props) => {
     <div className="space-y-8">
       <div className="flex flex-col gap-4">
         {/* Inner Navigation */}
-        <div className="flex w-full items-center gap-1 bg-white/5 p-1.5 rounded-2xl border border-white/5 overflow-x-auto no-scrollbar">
+        <div className="flex w-full items-center justify-between bg-white/5 p-1.5 rounded-2xl border border-white/5">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -55,6 +57,12 @@ const SeoTab: React.FC<SeoTabProps> = (props) => {
           />
         )}
         
+        {seoActiveTab === 'meta' && (
+          <IndexTab 
+            showDashboardNotice={props.showDashboardNotice} 
+          />
+        )}
+
         {seoActiveTab === 'pages' && (
           <DynamicPageTab 
             isAdmin={props.isAdmin}

@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, getDocs, orderBy, query } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, orderBy, query, where } from 'firebase/firestore';
 import dotenv from 'dotenv';
 
 // Load environment variables
@@ -51,46 +51,64 @@ const STATIC_ROUTES = [
 async function generateSitemap() {
   console.log('🚀 Starting Sitemap Generation using Client SDK...');
   
-  const pages = [...STATIC_ROUTES];
+  const pageSet = new Set<string>(STATIC_ROUTES);
 
   try {
+    // Helper to add page to Set
+    const addPage = (page: string) => {
+      // Clean up potential double slashes
+      const cleanPage = page.replace(/\/+/g, '/');
+      pageSet.add(cleanPage);
+    };
+
     // 1. Fetch Blog Posts
-    const blogsSnap = await getDocs(collection(db, 'blogs'));
+    const blogsSnap = await getDocs(query(collection(db, 'blogs'), where('active', '==', true)));
     blogsSnap.forEach(doc => {
       const data = doc.data();
-      const slug = data.slug || doc.id;
-      pages.push(`/blog/${slug}`);
+      if (!data.noindex) {
+        const slug = data.slug || doc.id;
+        addPage(`/blog/${slug}`);
+      }
     });
-    console.log(`✅ Loaded ${blogsSnap.size} blog posts`);
+    console.log(`✅ Loaded ${blogsSnap.size} active blog posts`);
 
-    // 2. Fetch Offers
-    const offersSnap = await getDocs(collection(db, 'offers'));
+    // 2. Fetch Offers (Active only)
+    const offersSnap = await getDocs(query(collection(db, 'offers'), where('active', '==', true)));
     offersSnap.forEach(doc => {
       const data = doc.data();
-      const slug = data.slug || doc.id;
-      pages.push(`/offers/${slug}`);
+      if (!data.noindex) {
+        const slug = data.slug || doc.id;
+        addPage(`/offers/${slug}`);
+      }
     });
-    console.log(`✅ Loaded ${offersSnap.size} offers`);
+    console.log(`✅ Loaded ${offersSnap.size} active offers`);
 
-    // 3. Fetch Tours
-    const toursSnap = await getDocs(collection(db, 'tours'));
+    // 3. Fetch Tours (Active only)
+    const toursSnap = await getDocs(query(collection(db, 'tours'), where('active', '==', true)));
     toursSnap.forEach(doc => {
       const data = doc.data();
-      const slug = data.slug || doc.id;
-      pages.push(`/tours/${slug}`);
+      if (!data.noindex) {
+        const slug = data.slug || doc.id;
+        addPage(`/tours/${slug}`);
+      }
     });
-    console.log(`✅ Loaded ${toursSnap.size} tours`);
+    console.log(`✅ Loaded ${toursSnap.size} active tours`);
 
     // 4. Fetch Dynamic Pages
     const dynamicSnap = await getDocs(collection(db, 'pages'));
     dynamicSnap.forEach(doc => {
       const data = doc.data();
-      const slug = data.slug || doc.id;
-      if (slug !== 'home') {
-        pages.push(`/${slug}`);
+      if (!data.noindex) {
+        const slug = data.slug || doc.id;
+        if (slug !== 'home') {
+          addPage(`/${slug}`);
+        }
       }
     });
     console.log(`✅ Loaded ${dynamicSnap.size} dynamic pages`);
+
+    // Convert Set back to array
+    const pages = Array.from(pageSet);
 
     // Build XML
     const sitemapXml = `<?xml version="1.0" encoding="UTF-8"?>

@@ -1,5 +1,22 @@
 {
   "entities": {
+    "PriceAddon": {
+      "title": "Price Add-on",
+      "description": "Custom surcharge, tax, or fee based on gross, net or total price.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["percentage", "fixed"] },
+        "value": { "type": "number" },
+        "operation": { "type": "string", "enum": ["addition", "subtraction"] },
+        "target": { "type": "string", "enum": ["gross", "net", "total"] },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "type", "value", "operation", "target", "active"]
+    },
     "User": {
       "title": "User",
       "description": "A user of the Merlux Chauffeur platform.",
@@ -528,6 +545,10 @@
     "/email-templates/{templateId}": {
       "schema": "EmailTemplate",
       "description": "Email message templates."
+    },
+    "/price-addons/{addonId}": {
+      "schema": "PriceAddon",
+      "description": "Custom price surcharges and fees."
     }
   }
 }

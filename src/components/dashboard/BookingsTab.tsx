@@ -2648,6 +2648,23 @@ export default function BookingsTab({
                               <span className="text-sm text-white font-bold">${(viewingBooking.priceBreakdown.tax || 0).toFixed(2)}</span>
                             </div>
                           )}
+
+                          {viewingBooking.priceBreakdown.appliedAddons && viewingBooking.priceBreakdown.appliedAddons.length > 0 && (
+                            <div className="pt-2 border-t border-white/5 space-y-1">
+                              {viewingBooking.priceBreakdown.appliedAddons.map((addon: any, aIdx: number) => (
+                                <div key={`addon-view-modal-${addon.id || 'na'}-${addon.name || 'unnamed'}-${aIdx}`} className="flex justify-between items-center text-gold/60">
+                                  <span className="text-[10px] uppercase tracking-widest font-bold">
+                                    {addon.name} 
+                                    <span className="text-[8px] opacity-40 ml-1">({addon.target})</span>
+                                  </span>
+                                  <span className="text-xs font-bold">
+                                    {addon.impact > 0 ? '+' : '-'}${Math.abs(addon.impact).toFixed(2)}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
                           <div className="pt-3 border-t border-white/10 flex justify-between items-center">
                             <span className="text-sm text-gold uppercase tracking-widest font-bold">Total Price</span>
                             <span className="text-xl font-display text-gold">${(Number(viewingBooking.price) || 0).toFixed(2)}</span>

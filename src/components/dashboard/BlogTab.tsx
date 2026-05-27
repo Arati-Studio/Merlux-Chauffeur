@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
-  Globe, Plus, Power, Eye, Code2, Copy, Edit2, Trash, X, Save, CheckCircle, Loader2, Ban
+  Globe, Plus, Power, Eye, Code2, Copy, Edit2, Trash, X, Save, CheckCircle, Loader2, Ban, Info
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { db, handleFirestoreError, OperationType } from '../../lib/firebase';
@@ -469,55 +469,22 @@ const BlogTab: React.FC<BlogTabProps> = ({
                   </div>
                 </div>
 
-                <div className="p-6 bg-white/5 rounded-2xl border border-white/10 space-y-4">
-                  <h4 className="text-sm font-bold text-gold uppercase tracking-widest">SEO Settings</h4>
-
-                  <div>
-                    <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-1 block">Meta Title</label>
-                    <input
-                      type="text"
-                      value={editingBlog?.metaTitle || ''}
-                      onChange={(e) => setEditingBlog({ ...editingBlog, metaTitle: e.target.value })}
-                      className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-gold transition-all"
-                      placeholder="SEO Title for Google"
-                    />
+                <div className="p-6 bg-white/5 rounded-2xl border border-white/10 space-y-5">
+                  <div className="flex items-center gap-2 pb-2 border-b border-white/5">
+                    <Info size={16} className="text-gold" />
+                    <h4 className="text-xs font-black text-gold uppercase tracking-[0.2em]">Centralized SEO Settings</h4>
                   </div>
 
-                  <div>
-                    <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-1 block">Meta Description</label>
-                    <textarea
-                      value={editingBlog?.metaDescription || ''}
-                      onChange={(e) => setEditingBlog({ ...editingBlog, metaDescription: e.target.value })}
-                      className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-gold transition-all h-24"
-                      placeholder="SEO description for search results..."
-                    />
+                  <div className="bg-gold/5 border border-gold/15 rounded-xl p-4.5 space-y-2 text-left">
+                    <p className="text-[10px] text-gold font-bold uppercase tracking-wider">
+                      Managed Globally via Index Console
+                    </p>
+                    <p className="text-[10px] text-white/50 leading-relaxed font-sans">
+                      To prevent SEO conflict and data drift, all Meta titles, descriptions, focus keywords, indexing permissions (noindex), and JSON-LD Rich Schema Markups are centrally maintained under the **SEO → Index Console** tab of your primary dashboard.
+                    </p>
                   </div>
 
-                  <div>
-                    <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-1 block">Keywords (comma separated)</label>
-                    <input
-                      type="text"
-                      value={editingBlog?.keywords || ''}
-                      onChange={(e) => setEditingBlog({ ...editingBlog, keywords: e.target.value })}
-                      className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-gold transition-all"
-                      placeholder="chauffeur, airport, melbourne"
-                    />
-                  </div>
-
-                  <div className="flex gap-6">
-                    <label className="flex items-center gap-3 cursor-pointer group">
-                      <div className={cn("w-5 h-5 rounded border flex items-center justify-center transition-all", editingBlog?.noindex ? "bg-red-500 border-red-500" : "border-white/20 group-hover:border-gold")}>
-                        <input
-                          type="checkbox"
-                          className="hidden"
-                          checked={editingBlog?.noindex || false}
-                          onChange={(e) => setEditingBlog({ ...editingBlog, noindex: e.target.checked })}
-                        />
-                        {editingBlog?.noindex && <CheckCircle size={14} className="text-white" />}
-                      </div>
-                      <span className="text-xs font-bold uppercase tracking-widest text-white/60">No Index</span>
-                    </label>
-
+                  <div className="flex flex-wrap gap-6 pt-1">
                     <label className="flex items-center gap-3 cursor-pointer group">
                       <div className={cn("w-5 h-5 rounded border flex items-center justify-center transition-all", editingBlog?.includeInSitemap ? "bg-gold border-gold" : "border-white/20 group-hover:border-gold")}>
                         <input
