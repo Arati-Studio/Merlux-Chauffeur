@@ -7,7 +7,7 @@ import {
   Map as MapIcon, UserCheck, Users, CircleArrowOutUpRight
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import { cn } from '../lib/utils';
+import { cn, formatDate } from '../lib/utils';
 import { useSettings } from '../lib/SettingsContext';
 import { collection, getDocs, query, limit, orderBy, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -693,7 +693,7 @@ export default function Home() {
                       <div className="bg-black/65 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 flex items-center gap-2">
                         <Calendar size={11} className="text-gold" />
                         <p className="text-gold text-[9px] uppercase tracking-widest font-bold">
-                          {blog.createdAt?.toDate ? blog.createdAt.toDate().toLocaleDateString() : blog.date}
+                          {formatDate(blog.createdAt || blog.date)}
                         </p>
                       </div>
                       <div className="bg-black/65 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 flex items-center gap-2">

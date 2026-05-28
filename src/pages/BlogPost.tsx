@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Calendar, User, ArrowLeft, Clock, Share2, Loader2, ArrowRight, Map, Gift, Shield } from 'lucide-react';
 import { useSettings } from '../lib/SettingsContext';
 import { generateDescriptionFromContent } from '../lib/seo';
+import { formatDate } from '../lib/utils';
 import Comments from '../components/Comments';
 import { FormNotice, NoticeType } from '../components/FormNotice';
 import SEO from '../components/SEO';
@@ -151,7 +152,7 @@ export default function BlogPost() {
     );
   }
 
-  const articleDate = post.date || (post.createdAt?.toDate ? post.createdAt.toDate().toLocaleDateString() : (post.createdAt?.seconds ? new Date(post.createdAt.seconds * 1000).toLocaleDateString() : ''));
+  const articleDate = formatDate(post.createdAt || post.date);
 
   return (
     <div className="bg-black min-h-screen pb-24">

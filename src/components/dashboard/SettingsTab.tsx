@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import {
   Search, X, Plus, Users, Copy, Trash2, Luggage, Save, Loader2, Sparkles, Upload, Code2, Eye,
   Cog, List, MessageSquare, Send, Mail, Download, FileUp, AlertCircle, FileJson, CheckCircle2, Check, Pencil,
-  LayoutGrid, ChevronDown
+  LayoutGrid, ChevronDown, Car, Percent
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { FormNotice } from '../FormNotice';
@@ -183,6 +183,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
   const [smsTemplateToDelete, setSmsTemplateToDelete] = useState<string | null>(null);
   const [emailTemplateToDelete, setEmailTemplateToDelete] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [activeSubSection, setActiveSubSection] = useState<'fleet' | 'extras' | 'coupons' | 'booking' | 'sms' | 'email' | 'backup'>('fleet');
 
   // Handlers
   const handleExportData = async () => {
@@ -1105,8 +1106,112 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
   };
   return (
     <div className="space-y-8">
-      {/* Fleet Management */}
-      <div className="space-y-8">
+      {/* Top Inline Header Navigation */}
+      <div className="glass p-2 rounded-lg px-4 border border-white/5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="text-left animate-in fade-in duration-300">
+          <h3 className="text-lg font-display text-gold flex items-center gap-2">
+            {activeSubSection === 'fleet' && (
+              <>
+                <Car size={18} className="text-gold" />
+                <span>Fleet Management</span>
+              </>
+            )}
+            {activeSubSection === 'extras' && (
+              <>
+                <Luggage size={18} className="text-gold" />
+                <span>Extras Management</span>
+              </>
+            )}
+            {activeSubSection === 'coupons' && (
+              <>
+                <Percent size={18} className="text-gold" />
+                <span>Coupons & Fees</span>
+              </>
+            )}
+            {activeSubSection === 'booking' && (
+              <>
+                <Cog size={18} className="text-gold" />
+                <span>Booking Configuration</span>
+              </>
+            )}
+            {activeSubSection === 'sms' && (
+              <>
+                <MessageSquare size={18} className="text-gold" />
+                <span>SMS Notifications</span>
+              </>
+            )}
+            {activeSubSection === 'email' && (
+              <>
+                <Mail size={18} className="text-gold" />
+                <span>Email Notifications</span>
+              </>
+            )}
+            {activeSubSection === 'backup' && (
+              <>
+                <FileJson size={18} className="text-gold" />
+                <span>Backup & Recovery</span>
+              </>
+            )}
+          </h3>
+          <p className="text-[10px] text-white/40 uppercase tracking-widest mt-1">
+            {activeSubSection === 'fleet' && 'Manage luxury fleet & vehicle categories'}
+            {activeSubSection === 'extras' && 'Chauffeur trip upgrades, child seats & premium additions'}
+            {activeSubSection === 'coupons' && 'Promotional codes & dynamic price extras'}
+            {activeSubSection === 'booking' && 'Core billing parameters, hourly ranges & security rules'}
+            {activeSubSection === 'sms' && 'Configure Twilio text notifications & SMS templates'}
+            {activeSubSection === 'email' && 'Configure SMTP email notifications & newsletter templates'}
+            {activeSubSection === 'backup' && 'Backend Firebase dataset snapshot export & restore'}
+          </p>
+        </div>
+
+        {/* Navigation Toggles (Icon Only) */}
+        <div className="flex flex-wrap items-center gap-1.5 bg-black/30 p-1.5 rounded-2xl border border-white/5 self-start sm:self-auto shrink-0 w-full sm:w-auto">
+          {[
+            { id: 'fleet', label: 'Fleet Management', icon: Car },
+            { id: 'extras', label: 'Extras Management', icon: Luggage },
+            { id: 'coupons', label: 'Coupons & Fees', icon: Percent },
+            { id: 'booking', label: 'Booking Config', icon: Cog },
+            { id: 'sms', label: 'SMS Alerts', icon: MessageSquare },
+            { id: 'email', label: 'Email Alerts', icon: Mail },
+            { id: 'backup', label: 'Backup & Recovery', icon: FileJson },
+          ].map((tab) => {
+            const IconComponent = tab.icon;
+            const isActive = activeSubSection === tab.id;
+            return (
+              <button
+                key={`subtab-btn-${tab.id}`}
+                onClick={() => setActiveSubSection(tab.id as any)}
+                className={cn(
+                  "p-2.5 rounded-xl transition-all relative group flex-1 sm:flex-initial flex justify-center items-center",
+                  isActive
+                    ? "bg-gold text-black shadow-lg shadow-gold/20"
+                    : "text-white/40 hover:text-white hover:bg-white/5"
+                )}
+                title={tab.label}
+              >
+                <IconComponent size={14} />
+                <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max px-2.5 py-1 rounded bg-black border border-white/10 text-[8px] font-bold uppercase tracking-widest text-white transition-opacity duration-150 opacity-0 group-hover:opacity-100 z-50 shadow-md">
+                  {tab.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="w-full">
+        <AnimatePresence mode="wait">
+          {activeSubSection === 'fleet' && (
+            <motion.div
+              key="fleet"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.25, ease: "easeInOut" }}
+              className="space-y-8"
+            >
+              {/* Fleet Management */}
+              <div className="space-y-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 w-full">
           <div>
             <h3 className="text-xl sm:text-2xl font-display text-gold">Fleet Management</h3>
@@ -1157,7 +1262,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
             v.plateNo?.toLowerCase().includes((fleetSearchQuery || '').toLowerCase()) ||
             (v.price || v.basePrice)?.toString().includes(fleetSearchQuery || '')
           ).map((v, idx) => (
-            <div key={v.id || `fleet-${idx}`} className="glass rounded-2xl overflow-hidden border border-white/5 group hover:border-gold/30 transition-all">
+            <div key={`fleet-item-${v.id || 'none'}-${idx}`} className="glass rounded-2xl overflow-hidden border border-white/5 group hover:border-gold/30 transition-all">
               <div className="h-48 relative overflow-hidden">
                 <img src={v.img || 'https://picsum.photos/seed/car/800/400'} alt={v.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black to-transparent" />
@@ -1220,11 +1325,20 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
           ))}
         </div>
       </div>
+            </motion.div>
+          )}
 
-      <hr className="border-white/10 my-6" />
-
-      {/* Extras Management */}
-      <div className="space-y-8">
+          {activeSubSection === 'extras' && (
+            <motion.div
+              key="extras"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.25, ease: "easeInOut" }}
+              className="space-y-8"
+            >
+              {/* Extras Management */}
+              <div className="space-y-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 w-full">
           <div>
             <h3 className="text-xl sm:text-2xl font-display text-gold">Extras Management</h3>
@@ -1273,7 +1387,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
             e.name?.toLowerCase().includes((extrasSearchQuery || '').toLowerCase()) ||
             (e.price || e.value)?.toString().includes(extrasSearchQuery || '')
           ).map((e, idx) => (
-            <div key={e.id || `extra-${idx}`} className="glass p-6 rounded-2xl border border-white/5 hover:border-gold/30 transition-all group relative overflow-hidden">
+            <div key={`extra-item-${e.id || 'none'}-${idx}`} className="glass p-6 rounded-2xl border border-white/5 hover:border-gold/30 transition-all group relative overflow-hidden">
               <div className={cn(
                 "absolute top-0 right-0 text-white text-[8px] font-bold uppercase tracking-widest px-3 py-1 rounded-bl-xl",
                 e.active ? "bg-green-600" : "bg-red-500"
@@ -1324,11 +1438,20 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
           ))}
         </div>
       </div>
+            </motion.div>
+          )}
 
-      <hr className="border-white/10 my-6" />
-
-      {/* Coupon Management */}
-      <div className="space-y-8">
+          {activeSubSection === 'coupons' && (
+            <motion.div
+              key="coupons"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.25, ease: "easeInOut" }}
+              className="space-y-8"
+            >
+              {/* Coupon Management */}
+              <div className="space-y-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 w-full">
           <div>
             <h3 className="text-xl sm:text-2xl font-display text-gold">Coupon Management</h3>
@@ -1387,7 +1510,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
             c.code?.toLowerCase().includes((couponsSearchQuery || '').toLowerCase()) ||
             c.value?.toString().includes(couponsSearchQuery || '')
           ).map((c, idx) => (
-            <div key={c.id || `coupon-${idx}`} className="glass p-6 rounded-2xl border border-white/5 hover:border-gold/30 transition-all group relative overflow-hidden">
+            <div key={`coupon-item-${c.id || 'none'}-${idx}`} className="glass p-6 rounded-2xl border border-white/5 hover:border-gold/30 transition-all group relative overflow-hidden">
               <div className={cn(
                 "absolute top-0 right-0 text-white text-[8px] font-bold uppercase tracking-widest px-3 py-1 rounded-bl-xl",
                 c.active ? "bg-green-600" : "bg-red-500"
@@ -1422,7 +1545,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
                     <div className="flex flex-wrap gap-1 justify-end">
                       {(c.serviceIds as string[] || []).map((service: string, sIdx: number) => (
                         <span
-                          key={`${c.id || idx}-${service}-${sIdx}`}
+                          key={`coupon-service-${c.id || idx}-${service}-${sIdx}`}
                           className="text-[9px] bg-white/10 text-white/80 px-1.5 py-1 rounded-lg"
                         >
                           {service.charAt(0).toUpperCase() + service.slice(1).toLowerCase()}
@@ -1581,11 +1704,20 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
           ))}
         </div>
       </div>
+            </motion.div>
+          )}
 
-      <hr className="border-white/10 my-6" />
-
-      {/* Booking Configuration */}
-      <div className="glass p-6 md:p-8 rounded-3xl border border-white/5 w-full">
+          {activeSubSection === 'booking' && (
+            <motion.div
+              key="booking"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.25, ease: "easeInOut" }}
+              className="space-y-8"
+            >
+              {/* Booking Configuration */}
+              <div className="glass p-6 md:p-8 rounded-3xl border border-white/5 w-full">
         <div className="flex items-center justify-between mb-8">
           <div>
             <h3 className="text-xl font-display text-gold">
@@ -2095,11 +2227,20 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
           </div>
         </div>
       </div>
+            </motion.div>
+          )}
 
-      <hr className="border-white/10 my-6" />
-
-      {/* SMS Section */}
-      <div className="space-y-8">
+          {activeSubSection === 'sms' && (
+            <motion.div
+              key="sms"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.25, ease: "easeInOut" }}
+              className="space-y-8"
+            >
+              {/* SMS Section */}
+              <div className="space-y-8">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h3 className="text-xl sm:text-2xl font-display text-gold underline decoration-gold/20 underline-offset-8">SMS Notifications</h3>
@@ -2205,7 +2346,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {(smsTemplates || []).map((template, idx) => (
-                  <div key={template.id || `sms-tmpl-${idx}`} className="glass p-6 rounded-3xl border border-white/5 hover:border-gold/30 transition-all group relative overflow-hidden flex flex-col h-full">
+                  <div key={`sms-tmpl-item-${template.id || 'none'}-${idx}`} className="glass p-6 rounded-3xl border border-white/5 hover:border-gold/30 transition-all group relative overflow-hidden flex flex-col h-full">
                     <div className="absolute top-4 right-4">
                       <div className={cn(
                         "w-1.5 h-1.5 rounded-full",
@@ -2268,11 +2409,20 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
           </div>
         </div>
       </div>
+            </motion.div>
+          )}
 
-      <hr className="border-white/10 my-6" />
-
-      {/* Email Section */}
-      <div className="space-y-8">
+          {activeSubSection === 'email' && (
+            <motion.div
+              key="email"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.25, ease: "easeInOut" }}
+              className="space-y-8"
+            >
+              {/* Email Section */}
+              <div className="space-y-8">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h3 className="text-xl sm:text-2xl font-display text-gold underline decoration-gold/20 underline-offset-8">Email Notifications</h3>
@@ -2379,7 +2529,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {(emailTemplates || []).map((template, idx) => (
-                  <div key={template.id || `email-tmpl-${idx}`} className="glass p-6 rounded-3xl border border-white/5 hover:border-gold/30 transition-all group relative overflow-hidden flex flex-col h-full">
+                  <div key={`email-tmpl-item-${template.id || 'none'}-${idx}`} className="glass p-6 rounded-3xl border border-white/5 hover:border-gold/30 transition-all group relative overflow-hidden flex flex-col h-full">
                     <div className="absolute top-4 right-4">
                       <div className={cn(
                         "w-1.5 h-1.5 rounded-full",
@@ -2448,11 +2598,20 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
           </div>
         </div>
       </div>
+            </motion.div>
+          )}
 
-      <hr className="border-white/10 my-6" />
-
-      {/* System Backup & Recovery */}
-      <div className="space-y-8">
+          {activeSubSection === 'backup' && (
+            <motion.div
+              key="backup"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.25, ease: "easeInOut" }}
+              className="space-y-8"
+            >
+              {/* System Backup & Recovery */}
+              <div className="space-y-8">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 px-1">
           <div>
             <h3 className="text-xl sm:text-2xl font-display text-gold">
@@ -2502,7 +2661,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-3">
                   {(ALL_COLLECTIONS || []).map((col: any) => (
                     <label 
-                      key={col.id} 
+                      key={`backup-collection-${col.id}`} 
                       className={cn(
                         "flex items-center justify-between p-4 bg-white/[0.02] border border-white/5 rounded-2xl cursor-pointer hover:bg-gold/5 transition-all group/item",
                         (selectedCollectionsForExport || []).includes(col.id) ? "border-gold/30 bg-gold/[0.03]" : ""
@@ -2678,11 +2837,16 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
           </div>
         </div>
       </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
       <AnimatePresence>
         {/* Extra Modal */}
         {showExtraModal && (
           <motion.div
+            key="extra-modal"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -2816,6 +2980,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
         {/* Vehicle Modal */}
         {showVehicleModal && (
           <motion.div
+            key="vehicle-modal"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -3136,6 +3301,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
         {/* Coupon Modal */}
         {showCouponModal && (
           <motion.div
+            key="coupon-modal"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -3359,6 +3525,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
 
         {showPriceAddonModal && (
           <motion.div
+            key="price-addon-modal"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -3525,7 +3692,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
         )}
 
         {showSmsTemplateModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4">
+          <div key="sms-template-modal" className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -3736,7 +3903,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
         )}
 
         {showEmailTemplateModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4">
+          <div key="email-template-modal" className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -4003,6 +4170,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
 
                   {showImportConfirm && (
             <motion.div
+              key="import-confirm-modal"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -4047,6 +4215,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
           )}
 
         <ConfirmationModal
+          key="delete-sms-template-conf"
           isOpen={smsTemplateToDelete !== null}
           onClose={() => setSmsTemplateToDelete(null)}
           onConfirm={() => {
@@ -4062,6 +4231,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
         />
 
         <ConfirmationModal
+          key="delete-email-template-conf"
           isOpen={emailTemplateToDelete !== null}
           onClose={() => setEmailTemplateToDelete(null)}
           onConfirm={() => {

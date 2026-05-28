@@ -1352,7 +1352,7 @@ const OffersToursTab: React.FC<OffersToursTabProps> = ({
                                 className="w-12 bg-white/5 border border-white/10 rounded-lg flex items-center justify-center text-[8px] custom-select"
                               >
                                 <option value="">+</option>
-                                {fleet.map(v => <option key={v.id} value={v.name}>{v.name}</option>)}
+                                {fleet.map((v, i) => <option key={`${v.id || 'vehicle'}-${v.name || 'unnamed'}-${i}`} value={v.name}>{v.name}</option>)}
                               </select>
                             </div>
                           </div>
@@ -1798,7 +1798,7 @@ const OffersToursTab: React.FC<OffersToursTabProps> = ({
                                       className="w-12 bg-white/5 border border-white/10 rounded-lg flex items-center justify-center text-[8px] custom-select"
                                     >
                                       <option value="">+</option>
-                                      {fleet.map(v => <option key={v.id} value={v.name}>{v.name}</option>)}
+                                      {fleet.map((v, i) => <option key={`${v.id || 'vehicle'}-${v.name || 'unnamed'}-${i}`} value={v.name}>{v.name}</option>)}
                                     </select>
                                   </div>
                                 </div>
@@ -1898,32 +1898,35 @@ const OffersToursTab: React.FC<OffersToursTabProps> = ({
                       </div>
 
                       <div className="space-y-6 relative before:absolute before:left-8 before:top-0 before:bottom-0 before:w-px before:bg-gradient-to-b before:from-gold/50 before:via-gold/10 before:to-transparent">
-                        {(editingTour.itinerary || []).sort((a: any, b: any) => (a.order || 0) - (b.order || 0)).map((step: any, idx: number) => (
-                          <div key={step.id || idx} className="relative pl-16 group/step">
-                            <div className="absolute left-6 top-1 w-4 h-4 rounded-full bg-gold/20 border-2 border-gold flex items-center justify-center z-10">
-                              <div className="w-1.5 h-1.5 rounded-full bg-gold" />
-                            </div>
-                            <div className="bg-white/5 border border-white/5 rounded-2xl p-6 hover:border-gold/20 transition-all">
-                              <div className="flex justify-between items-start mb-4">
-                                <div className="flex-1">
-                                  <input type="text" value={step.name} onChange={(e) => { const n = [...editingTour.itinerary]; n[idx].name = e.target.value; setEditingTour({ ...editingTour, itinerary: n }); }} className="w-full bg-transparent border-b border-white/10 text-sm font-bold py-1 focus:border-gold outline-none mb-4" placeholder="Day Title or Step Name" />
-                                  <textarea value={step.details} onChange={(e) => { const n = [...editingTour.itinerary]; n[idx].details = e.target.value; setEditingTour({ ...editingTour, itinerary: n }); }} className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-xs h-32 resize-none outline-none focus:border-gold" placeholder="Experience details (HTML supported)..." />
+                        {[...(editingTour.itinerary || [])].sort((a: any, b: any) => (a.order || 0) - (b.order || 0)).map((step: any, idx: number) => {
+                          const origIdx = (editingTour.itinerary || []).findIndex((item: any) => item.id === step.id);
+                          return (
+                            <div key={step.id || `itinerary-${idx}`} className="relative pl-16 group/step">
+                              <div className="absolute left-6 top-1 w-4 h-4 rounded-full bg-gold/20 border-2 border-gold flex items-center justify-center z-10">
+                                <div className="w-1.5 h-1.5 rounded-full bg-gold" />
+                              </div>
+                              <div className="bg-white/5 border border-white/5 rounded-2xl p-6 hover:border-gold/20 transition-all">
+                                <div className="flex justify-between items-start mb-4">
+                                  <div className="flex-1">
+                                    <input type="text" value={step.name} onChange={(e) => { const n = [...editingTour.itinerary]; if (origIdx !== -1) { n[origIdx].name = e.target.value; setEditingTour({ ...editingTour, itinerary: n }); } }} className="w-full bg-transparent border-b border-white/10 text-sm font-bold py-1 focus:border-gold outline-none mb-4" placeholder="Day Title or Step Name" />
+                                    <textarea value={step.details} onChange={(e) => { const n = [...editingTour.itinerary]; if (origIdx !== -1) { n[origIdx].details = e.target.value; setEditingTour({ ...editingTour, itinerary: n }); } }} className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-xs h-32 resize-none outline-none focus:border-gold" placeholder="Experience details (HTML supported)..." />
+                                  </div>
+                                  <div className="flex flex-col gap-2 ml-6">
+                                    <button onClick={() => { const n = [...editingTour.itinerary]; if (origIdx !== -1) { n.splice(origIdx + 1, 0, { ...step, id: Date.now().toString(36), order: String(Number(step.order) + 1) }); setEditingTour({ ...editingTour, itinerary: n }); } }} className="text-white/20 hover:text-gold"><Copy size={16} /></button>
+                                    <button onClick={() => { if (origIdx !== -1) { setEditingTour({ ...editingTour, itinerary: editingTour.itinerary.filter((_: any, i: any) => i !== origIdx) }); } }} className="text-white/20 hover:text-red-500"><Trash2 size={16} /></button>
+                                    <input type="number" value={step.order} onChange={(e) => { const n = [...editingTour.itinerary]; if (origIdx !== -1) { n[origIdx].order = e.target.value; setEditingTour({ ...editingTour, itinerary: n }); } }} className="w-10 bg-black/50 border border-white/10 rounded h-10 flex items-center justify-center text-[10px] text-center font-bold" />
+                                  </div>
                                 </div>
-                                <div className="flex flex-col gap-2 ml-6">
-                                  <button onClick={() => { const n = [...editingTour.itinerary]; n.splice(idx + 1, 0, { ...step, id: Date.now().toString(36), order: String(Number(step.order) + 1) }); setEditingTour({ ...editingTour, itinerary: n }); }} className="text-white/20 hover:text-gold"><Copy size={16} /></button>
-                                  <button onClick={() => setEditingTour({ ...editingTour, itinerary: editingTour.itinerary.filter((_: any, i: any) => i !== idx) })} className="text-white/20 hover:text-red-500"><Trash2 size={16} /></button>
-                                  <input type="number" value={step.order} onChange={(e) => { const n = [...editingTour.itinerary]; n[idx].order = e.target.value; setEditingTour({ ...editingTour, itinerary: n }); }} className="w-10 bg-black/50 border border-white/10 rounded h-10 flex items-center justify-center text-[10px] text-center font-bold" />
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div>
+                                    <label className="text-[8px] uppercase tracking-widest font-bold text-white/30 mb-2 block">Step Image URL (Optional)</label>
+                                    <input type="text" value={step.image || ''} onChange={(e) => { const n = [...editingTour.itinerary]; if (origIdx !== -1) { n[origIdx].image = e.target.value; setEditingTour({ ...editingTour, itinerary: n }); } }} className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-[10px] font-mono text-white/30" placeholder="https://..." />
+                                  </div>
                                 </div>
                               </div>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                  <label className="text-[8px] uppercase tracking-widest font-bold text-white/30 mb-2 block">Step Image URL (Optional)</label>
-                                  <input type="text" value={step.image || ''} onChange={(e) => { const n = [...editingTour.itinerary]; n[idx].image = e.target.value; setEditingTour({ ...editingTour, itinerary: n }); }} className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-[10px] font-mono text-white/30" placeholder="https://..." />
-                                </div>
-                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}

@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { db } from '../lib/firebase';
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 import SEO from '../components/SEO';
+import { formatDate } from '../lib/utils';
 
 const CATEGORIES = ["All", "Travel Tips", "Business", "Weddings", "Tours", "Industry", "Safety"];
 
@@ -156,7 +157,7 @@ export default function Blog() {
                   <div className="flex items-center gap-4 text-[10px] uppercase tracking-widest text-white/40 font-bold mb-4">
                     <span className="flex items-center gap-1">
                       <Calendar size={12} />
-                      {post.dateTime || (post.createdAt?.toDate ? post.createdAt.toDate().toLocaleDateString() : (post.date || new Date(post.createdAt).toLocaleDateString()))}
+                      {formatDate(post.createdAt || post.date || post.dateTime)}
                     </span>
                     <span className="flex items-center gap-1"><Clock size={12} /> {post.readTime || post.readingTime || '5 min read'}</span>
                   </div>

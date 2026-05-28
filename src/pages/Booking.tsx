@@ -5,11 +5,13 @@ import {
   Calendar,
   BadgePercent,
   Clock,
+  Timer,
   Car,
   HandHeart,
   Gem,
   Cake,
   User,
+  ChevronsLeft,
   ChevronRight,
   ChevronLeft,
   CheckCircle,
@@ -1393,8 +1395,7 @@ export default function Booking() {
       />
       <div ref={mainScrollRef} className="pt-20 pb-24 min-h-screen bg-[#050505] overflow-y-auto custom-scrollbar">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="text-center mb-12">
-            <Logo className="justify-center mb-8" />
+          <div className="text-center mb-6">
             <span className="text-gold uppercase tracking-[0.3em] text-xs font-bold mb-4 block">
               Reservation
             </span>
@@ -1403,28 +1404,33 @@ export default function Booking() {
             </h1>
 
             {/* Progress Bar */}
-            <div className="flex items-center justify-center gap-4 md:gap-8 mt-12">
-              {steps.map((s) => (
-                <div key={s.id} className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-center gap-y-4 gap-x-4 md:gap-x-8 mt-12 bg-white/[0.02] border border-white/5 py-4 px-6 md:px-10 rounded-full w-fit mx-auto backdrop-blur-sm">
+              {steps.map((s, idx) => (
+                <div key={s.id} className="flex items-center gap-2 md:gap-3 group">
                   <div
                     className={cn(
-                      "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all",
+                      "w-7 h-7 md:w-9 md:h-9 rounded-full flex items-center justify-center text-[10px] md:text-xs font-black transition-all duration-500",
                       step >= s.id
-                        ? "bg-gold text-black"
-                        : "bg-white/10 text-white/40",
+                        ? "bg-gold text-black shadow-[0_0_15px_rgba(212,175,55,0.3)] ring-4 ring-gold/10"
+                        : "bg-white/5 text-white/20 border border-white/10",
                     )}
                   >
-                    {step > s.id ? <CheckCircle size={16} /> : s.id}
+                    {step > s.id ? <CheckCircle size={14} className="md:size-18" /> : s.id}
                   </div>
                   <span
                     className={cn(
-                      "hidden md:block text-xs uppercase tracking-widest font-bold",
+                      "text-[9px] md:text-xs uppercase tracking-[0.2em] font-black transition-colors duration-500",
                       step >= s.id ? "text-gold" : "text-white/20",
                     )}
                   >
                     {s.name}
                   </span>
-                  {s.id !== 4 && <div className="w-4 md:w-8 h-px bg-white/10" />}
+                  {idx !== steps.length - 1 && (
+                    <div className={cn(
+                      "w-3 md:w-6 h-[1px] transition-colors duration-500",
+                      step > s.id ? "bg-gold/40" : "bg-white/10"
+                    )} />
+                  )}
                 </div>
               ))}
             </div>
@@ -1435,37 +1441,69 @@ export default function Booking() {
               {step === 1 && (
                 <motion.div
                   key="step1"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  className="glass p-4 rounded-lg md:p-12 grid grid-cols-1 md:grid-cols-2 gap-4"
+                  initial={{ opacity: 0, scale: 0.98, y: 10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.98, y: -10 }}
+                  className="space-y-8"
                 >
-                  {serviceTypes.map((type) => (
-                    <button
-                      key={type.id}
-                      onClick={() => {
-                        updateForm("serviceType", type.id);
-                        nextStep();
-                      }}
-                      className={cn(
-                        "flex items-center gap-6 p-6 border rounded-lg transition-all text-left group",
-                        formData.serviceType === type.id
-                          ? "border-gold bg-gold/5"
-                          : "border-white/10 hover:border-gold/50 bg-white/5",
-                      )}
-                    >
-                      <div className="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center group-hover:bg-gold transition-colors">
-                        <type.icon
-                          className="text-gold group-hover:text-black"
-                          size={24}
-                        />
-                      </div>
-                      <div>
-                        <h3 className="font-display text-xl mb-1">{type.name}</h3>
-                        <p className="text-white/40 text-xs">{type.desc}</p>
-                      </div>
-                    </button>
-                  ))}
+                  <div className="text-center md:text-left mb-10">
+                    <h2 className="text-2xl md:text-3xl font-display text-white mb-2">Select Service Class</h2>
+                    <p className="text-white/40 text-sm max-w-lg">Experience the pinnacle of chauffeured travel. Select your required service to proceed with your reservation.</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                    {serviceTypes.map((type, idx) => (
+                      <motion.button
+                        key={type.id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: idx * 0.05 }}
+                        onClick={() => {
+                          updateForm("serviceType", type.id);
+                          nextStep();
+                        }}
+                        className={cn(
+                          "relative group flex flex-col items-start p-6 md:p-8 rounded-2xl md:rounded-3xl transition-all duration-500 overflow-hidden text-left h-full",
+                          formData.serviceType === type.id
+                            ? "bg-gold/10 border-gold shadow-[0_0_40px_rgba(212,175,55,0.15)]"
+                            : "bg-white/[0.03] border-white/5 hover:bg-white/[0.07] hover:border-white/20 active:scale-[0.98]",
+                          "border"
+                        )}
+                      >
+                        {/* Background Ornament */}
+                        <div className="absolute -right-4 -bottom-4 opacity-[0.03] group-hover:opacity-[0.07] transition-opacity duration-500 transform group-hover:scale-110 group-hover:-rotate-12">
+                          <type.icon size={120} />
+                        </div>
+
+                        {/* Icon Container */}
+                        <div className={cn(
+                          "w-14 h-14 md:w-16 md:h-16 rounded-2xl flex items-center justify-center mb-6 transition-all duration-500",
+                          formData.serviceType === type.id
+                            ? "bg-gold text-black shadow-[0_0_20px_rgba(212,175,55,0.4)]"
+                            : "bg-white/5 text-gold group-hover:bg-gold/10 group-hover:scale-110"
+                        )}>
+                          <type.icon className="size-6 md:size-8" />
+                        </div>
+
+                        <div className="relative z-10">
+                          <div className="flex items-center justify-between mb-2">
+                            <h3 className="font-display text-xl md:text-2xl text-white group-hover:text-gold transition-colors">{type.name}</h3>
+                            <ChevronRight className={cn(
+                              "w-5 h-5 transition-transform duration-300",
+                              formData.serviceType === type.id ? "text-gold rotate-0 opacity-100" : "text-white/20 -translate-x-2 opacity-0 group-hover:translate-x-0 group-hover:opacity-100"
+                            )} />
+                          </div>
+                          <p className="text-white/40 text-[13px] leading-relaxed group-hover:text-white/60 transition-colors">{type.desc}</p>
+                        </div>
+
+                        {/* Top Accent Line */}
+                        <div className={cn(
+                          "absolute top-0 left-0 w-2 h-full transition-all duration-500",
+                          formData.serviceType === type.id ? "bg-gold scale-y-100" : "bg-gold/0 scale-y-0"
+                        )} />
+                      </motion.button>
+                    ))}
+                  </div>
                 </motion.div>
               )}
 
@@ -1475,20 +1513,24 @@ export default function Booking() {
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
-                  className="glass p-4 rounded-lg md:p-12 grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch"
+                  className="glass p-6 rounded-2xl md:p-10 lg:p-12 grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-14 items-stretch overflow-hidden border border-gold/10 shadow-[0_0_50px_rgba(212,175,55,0.05)]"
                 >
-                  <div className="space-y-6 h-full flex flex-col justify-between">
-                    <div className="grid grid-cols-1 gap-6">
-                      <div className="space-y-2">
-                        <label className="text-xs uppercase tracking-widest text-gold font-bold">
-                          Pickup Location <span className="text-red-500">*</span>
-                        </label>
-                        <div className="relative">
+                  <div className="space-y-8 h-full flex flex-col justify-between overflow-y-auto custom-scrollbar pr-2">
+                    <div className="grid grid-cols-1 gap-8">
+                      {/* Pickup Location */}
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <label className="text-[11px] uppercase tracking-[0.2em] text-gold font-bold flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-gold"></span>
+                            Pickup Location <span className="text-red-500">*</span>
+                          </label>
+                        </div>
+                        <div className="relative group/input">
                           <MapPin
-                            className="absolute left-4 top-1/2 -translate-y-1/2 text-gold/50"
-                            size={18}
+                            className="absolute left-4 top-1/2 -translate-y-1/2 text-gold/40 group-focus-within/input:text-gold transition-colors"
+                            size={20}
                           />
-                          <div className="relative group">
+                          <div className="relative">
                             <Autocomplete
                               onLoad={(autocomplete) => {
                                 autocomplete.addListener("place_changed", () => {
@@ -1523,8 +1565,8 @@ export default function Booking() {
                               <input
                                 ref={pickupInputRef}
                                 type="text"
-                                placeholder="Enter address or airport"
-                                className="w-full bg-white/5 border border-white/10 rounded-lg py-4 pl-12 pr-12 focus:border-gold outline-none transition-all"
+                                placeholder="Enter airport or address"
+                                className="w-full bg-white/5 border border-white/10 rounded-xl py-5 pl-14 pr-14 focus:border-gold/50 focus:bg-white/[0.08] outline-none transition-all text-base placeholder:text-white/20"
                                 value={formData.pickup}
                                 onChange={(e) => {
                                   updateForm("pickup", e.target.value);
@@ -1541,10 +1583,10 @@ export default function Booking() {
                                 e.preventDefault();
                                 setActiveDropdown(activeDropdown === "pickup" ? null : "pickup");
                               }}
-                              className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-gold transition-colors p-2"
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-white/20 hover:text-gold transition-all p-2.5 rounded-full hover:bg-gold/5"
                               title="Location options"
                             >
-                              <LocateFixed size={18} />
+                              <LocateFixed size={20} />
                             </button>
 
                             {/* Dropdown Options */}
@@ -1554,7 +1596,7 @@ export default function Booking() {
                                   initial={{ opacity: 0, scale: 0.95, y: 10 }}
                                   animate={{ opacity: 1, scale: 1, y: 0 }}
                                   exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                                  className="absolute left-0 right-0 top-full mt-2 bg-[#0A0A0A] border border-gold/20 rounded-xl overflow-hidden z-[100] shadow-2xl"
+                                  className="absolute left-0 right-0 top-full mt-3 bg-[#0D0D0D] border border-gold/20 rounded-2xl overflow-hidden z-[100] shadow-[0_20px_50px_rgba(0,0,0,0.5)] backdrop-blur-xl"
                                 >
                                   <button
                                     type="button"
@@ -1562,14 +1604,14 @@ export default function Booking() {
                                       handleGeolocation('pickup');
                                       setActiveDropdown(null);
                                     }}
-                                    className="w-full flex items-center gap-4 p-4 hover:bg-gold/5 transition-colors border-b border-white/5 group/opt"
+                                    className="w-full flex items-center gap-4 p-5 hover:bg-gold/10 transition-all border-b border-white/5 group/opt"
                                   >
-                                    <div className="w-8 h-8 rounded-full bg-gold/10 flex items-center justify-center group-hover/opt:bg-gold/20">
-                                      <LocateFixed size={16} className="text-gold" />
+                                    <div className="w-10 h-10 rounded-full bg-gold/10 flex items-center justify-center group-hover/opt:bg-gold group-hover/opt:text-black transition-all">
+                                      <LocateFixed size={18} className="text-gold group-hover/opt:text-black" />
                                     </div>
                                     <div className="text-left">
-                                      <p className="text-sm font-bold">Use GPS Location</p>
-                                      <p className="text-[10px] text-white/40 uppercase tracking-widest">Fetch current location</p>
+                                      <p className="text-[13px] font-bold tracking-wide uppercase">Use GPS Location</p>
+                                      <p className="text-[10px] text-white/30 uppercase tracking-[0.1em] mt-0.5">Detect current position</p>
                                     </div>
                                   </button>
                                   <button
@@ -1579,14 +1621,14 @@ export default function Booking() {
                                       setActiveDropdown(null);
                                       showNotice('info', 'Click anywhere on the map to set pickup location', 'Map Selection');
                                     }}
-                                    className="w-full flex items-center gap-4 p-4 hover:bg-gold/5 transition-colors border-b border-white/5 group/opt"
+                                    className="w-full flex items-center gap-4 p-5 hover:bg-gold/10 transition-all border-b border-white/5 group/opt"
                                   >
-                                    <div className="w-8 h-8 rounded-full bg-gold/10 flex items-center justify-center group-hover/opt:bg-gold/20">
-                                      <Map size={16} className="text-gold" />
+                                    <div className="w-10 h-10 rounded-full bg-gold/10 flex items-center justify-center group-hover/opt:bg-gold group-hover/opt:text-black transition-all">
+                                      <Map size={18} className="text-gold group-hover/opt:text-black" />
                                     </div>
                                     <div className="text-left">
-                                      <p className="text-sm font-bold">Set Location on Map</p>
-                                      <p className="text-[10px] text-white/40 uppercase tracking-widest">Pin/Select on Map</p>
+                                      <p className="text-[13px] font-bold tracking-wide uppercase" >Pin on Map</p>
+                                      <p className="text-[10px] text-white/30 uppercase tracking-[0.1em] mt-0.5">Select manually</p>
                                     </div>
                                   </button>
                                   <button
@@ -1595,37 +1637,40 @@ export default function Booking() {
                                       setActiveDropdown(null);
                                       pickupInputRef.current?.focus();
                                     }}
-                                    className="w-full flex items-center gap-4 p-4 hover:bg-gold/5 transition-colors group/opt"
+                                    className="w-full flex items-center gap-4 p-5 hover:bg-gold/10 transition-all group/opt"
                                   >
-                                    <div className="w-8 h-8 rounded-full bg-gold/10 flex items-center justify-center group-hover/opt:bg-gold/20">
-                                      <Search size={16} className="text-gold" />
+                                    <div className="w-10 h-10 rounded-full bg-gold/10 flex items-center justify-center group-hover/opt:bg-gold group-hover/opt:text-black transition-all">
+                                      <Search size={18} className="text-gold group-hover/opt:text-black" />
                                     </div>
                                     <div className="text-left">
-                                      <p className="text-sm font-bold">Type to Search</p>
-                                      <p className="text-[10px] text-white/40 uppercase tracking-widest">Search Address</p>
+                                      <p className="text-[13px] font-bold tracking-wide uppercase">Type to Search</p>
+                                      <p className="text-[10px] text-white/30 uppercase tracking-[0.1em] mt-0.5">Manual Entry</p>
                                     </div>
                                   </button>
                                 </motion.div>
                               )}
                             </AnimatePresence>
                           </div>
-
                         </div>
                       </div>
 
-                      <div className="space-y-2">
-                        <label className="text-xs uppercase tracking-widest text-gold font-bold">
-                          Dropoff Location{" "}
-                          {formData.serviceType !== "hourly" && (
-                            <span className="text-red-500">*</span>
-                          )}
-                        </label>
-                        <div className="relative">
+                      {/* Dropoff Location */}
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <label className="text-[11px] uppercase tracking-[0.2em] text-gold font-bold flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-gold"></span>
+                            Dropoff Location{" "}
+                            {formData.serviceType !== "hourly" && (
+                              <span className="text-red-500">*</span>
+                            )}
+                          </label>
+                        </div>
+                        <div className="relative group/input">
                           <MapPin
-                            className="absolute left-4 top-1/2 -translate-y-1/2 text-gold/50"
-                            size={18}
+                            className="absolute left-4 top-1/2 -translate-y-1/2 text-gold/40 group-focus-within/input:text-gold transition-colors"
+                            size={20}
                           />
-                          <div className="relative group">
+                          <div className="relative">
                             <Autocomplete
                               onLoad={(autocomplete) => {
                                 autocomplete.addListener("place_changed", () => {
@@ -1662,10 +1707,10 @@ export default function Booking() {
                                 type="text"
                                 placeholder={
                                   formData.serviceType === "hourly"
-                                    ? "Enter destination (Optional)"
-                                    : "Enter destination"
+                                    ? "Destination (Optional for hourly)"
+                                    : "Enter destination address"
                                 }
-                                className="w-full bg-white/5 border border-white/10 rounded-lg py-4 pl-12 pr-12 focus:border-gold outline-none transition-all"
+                                className="w-full bg-white/5 border border-white/10 rounded-xl py-5 pl-14 pr-14 focus:border-gold/50 focus:bg-white/[0.08] outline-none transition-all text-base placeholder:text-white/20"
                                 value={formData.dropoff}
                                 onChange={(e) => {
                                   updateForm("dropoff", e.target.value);
@@ -1682,10 +1727,10 @@ export default function Booking() {
                                 e.preventDefault();
                                 setActiveDropdown(activeDropdown === "dropoff" ? null : "dropoff");
                               }}
-                              className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-gold transition-colors p-2"
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-white/20 hover:text-gold transition-all p-2.5 rounded-full hover:bg-gold/5"
                               title="Location options"
                             >
-                              <LocateFixed size={18} />
+                              <LocateFixed size={20} />
                             </button>
 
                             {/* Dropdown Options */}
@@ -1695,7 +1740,7 @@ export default function Booking() {
                                   initial={{ opacity: 0, scale: 0.95, y: 10 }}
                                   animate={{ opacity: 1, scale: 1, y: 0 }}
                                   exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                                  className="absolute left-0 right-0 top-full mt-2 bg-[#0A0A0A] border border-gold/20 rounded-xl overflow-hidden z-[100] shadow-2xl"
+                                  className="absolute left-0 right-0 top-full mt-3 bg-[#0D0D0D] border border-gold/20 rounded-2xl overflow-hidden z-[100] shadow-[0_20px_50px_rgba(0,0,0,0.5)] backdrop-blur-xl"
                                 >
                                   <button
                                     type="button"
@@ -1703,14 +1748,14 @@ export default function Booking() {
                                       handleGeolocation('dropoff');
                                       setActiveDropdown(null);
                                     }}
-                                    className="w-full flex items-center gap-4 p-4 hover:bg-gold/5 transition-colors border-b border-white/5 group/opt"
+                                    className="w-full flex items-center gap-4 p-5 hover:bg-gold/10 transition-all border-b border-white/5 group/opt"
                                   >
-                                    <div className="w-8 h-8 rounded-full bg-gold/10 flex items-center justify-center group-hover/opt:bg-gold/20">
-                                      <LocateFixed size={16} className="text-gold" />
+                                    <div className="w-10 h-10 rounded-full bg-gold/10 flex items-center justify-center group-hover/opt:bg-gold group-hover/opt:text-black transition-all">
+                                      <LocateFixed size={18} className="text-gold group-hover/opt:text-black" />
                                     </div>
                                     <div className="text-left">
-                                      <p className="text-sm font-bold">Use GPS Location</p>
-                                      <p className="text-[10px] text-white/40 uppercase tracking-widest">Fetch current location</p>
+                                      <p className="text-[13px] font-bold tracking-wide uppercase">Use GPS Location</p>
+                                      <p className="text-[10px] text-white/30 uppercase tracking-[0.1em] mt-0.5">Detect current position</p>
                                     </div>
                                   </button>
                                   <button
@@ -1720,14 +1765,14 @@ export default function Booking() {
                                       setActiveDropdown(null);
                                       showNotice('info', 'Click anywhere on the map to set dropoff location', 'Map Selection');
                                     }}
-                                    className="w-full flex items-center gap-4 p-4 hover:bg-gold/5 transition-colors border-b border-white/5 group/opt"
+                                    className="w-full flex items-center gap-4 p-5 hover:bg-gold/10 transition-all border-b border-white/5 group/opt"
                                   >
-                                    <div className="w-8 h-8 rounded-full bg-gold/10 flex items-center justify-center group-hover/opt:bg-gold/20">
-                                      <Map size={16} className="text-gold" />
+                                    <div className="w-10 h-10 rounded-full bg-gold/10 flex items-center justify-center group-hover/opt:bg-gold group-hover/opt:text-black transition-all">
+                                      <Map size={18} className="text-gold group-hover/opt:text-black" />
                                     </div>
                                     <div className="text-left">
-                                      <p className="text-sm font-bold">Set Location on Map</p>
-                                      <p className="text-[10px] text-white/40 uppercase tracking-widest">Pin/Select on Map</p>
+                                      <p className="text-[13px] font-bold tracking-wide uppercase">Pin on Map</p>
+                                      <p className="text-[10px] text-white/30 uppercase tracking-[0.1em] mt-0.5">Select manually</p>
                                     </div>
                                   </button>
                                   <button
@@ -1736,30 +1781,29 @@ export default function Booking() {
                                       setActiveDropdown(null);
                                       dropoffInputRef.current?.focus();
                                     }}
-                                    className="w-full flex items-center gap-4 p-4 hover:bg-gold/5 transition-colors group/opt"
+                                    className="w-full flex items-center gap-4 p-5 hover:bg-gold/10 transition-all group/opt"
                                   >
-                                    <div className="w-8 h-8 rounded-full bg-gold/10 flex items-center justify-center group-hover/opt:bg-gold/20">
-                                      <Search size={16} className="text-gold" />
+                                    <div className="w-10 h-10 rounded-full bg-gold/10 flex items-center justify-center group-hover/opt:bg-gold group-hover/opt:text-black transition-all">
+                                      <Search size={18} className="text-gold group-hover/opt:text-black" />
                                     </div>
                                     <div className="text-left">
-                                      <p className="text-sm font-bold">Type to Search</p>
-                                      <p className="text-[10px] text-white/40 uppercase tracking-widest">Search Address</p>
+                                      <p className="text-[13px] font-bold tracking-wide uppercase">Type to Search</p>
+                                      <p className="text-[10px] text-white/30 uppercase tracking-[0.1em] mt-0.5">Manual Entry</p>
                                     </div>
                                   </button>
                                 </motion.div>
                               )}
                             </AnimatePresence>
                           </div>
-
                         </div>
                       </div>
                     </div>
 
                     {/* Waypoints */}
-                    <div className="space-y-4">
+                    <div className="space-y-6 pt-4 border-t border-white/5">
                       <div className="flex items-center justify-between">
-                        <label className="text-xs uppercase tracking-widest text-gold font-bold">
-                          Waypoints (Optional)
+                        <label className="text-[11px] uppercase tracking-[0.2em] text-gold/60 font-bold">
+                          Waypoints
                         </label>
                         <button
                           onClick={() => {
@@ -1775,194 +1819,174 @@ export default function Booking() {
                             formData.waypoints.length >=
                             (Number(settings?.waypointLimit) || 5)
                           }
-                          className="text-gold hover:text-white transition-colors flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="text-gold hover:text-white transition-all flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.15em] bg-gold/5 px-4 py-2 rounded-full border border-gold/20 hover:bg-gold/20 disabled:opacity-30 disabled:cursor-not-allowed group"
                         >
-                          <Plus size={14} /> Add Waypoint{" "}
+                          <Plus size={14} className="group-hover:scale-125 transition-transform" /> 
+                          {formData.waypoints.length === 0 ? "Add Stop" : "Add Another"}
                           {settings?.waypointLimit &&
-                            `(${formData.waypoints.length}/${settings.waypointLimit})`}
+                            ` (${formData.waypoints.length}/${settings.waypointLimit})`}
                         </button>
                       </div>
-                      {formData.waypoints.map((wp, idx) => (
-                        <div key={`wp-${idx}`} className="relative flex gap-2">
-                          <div className="relative flex-1">
-                            <MapPin
-                              className="absolute left-4 top-1/2 -translate-y-1/2 text-gold/30"
-                              size={16}
-                            />
-                            <div className="relative group">
-                              <Autocomplete
-                                onLoad={(autocomplete) => {
-                                  autocomplete.addListener("place_changed", () => {
-                                    const place = autocomplete.getPlace();
-                                    const address = place.formatted_address || "";
-                                    const location = place.geometry?.location;
-                                    const coords = location ? { lat: location.lat(), lng: location.lng() } : null;
-
-                                    if (address) {
-                                      if (!validateZipCode(place)) {
-                                        const newWps = [...formData.waypoints];
-                                        newWps[idx] = "";
-                                        updateForm("waypoints", newWps);
-                                        return;
-                                      }
-                                      const newWps = [...formData.waypoints];
-                                      newWps[idx] = address;
-                                      updateForm("waypoints", newWps);
-                                      if (coords) {
-                                        setWaypointCoords(prev => ({ ...prev, [idx]: coords }));
-                                        setMapCenter(coords);
-                                        setMapZoom(16);
-                                      }
-                                      setActiveDropdown(null);
-                                    }
-                                  });
-                                }}
-                                options={{
-                                  componentRestrictions: settings?.limitCountry
-                                    ? { country: settings.limitCountry }
-                                    : undefined,
-                                  types: ["address"],
-                                }}
-                              >
-                                <input
-                                  ref={el => { waypointInputRefs.current[idx] = el; }}
-                                  type="text"
-                                  placeholder="Enter waypoint address"
-                                  className="w-full bg-white/5 rounded-lg border border-white/10 py-3 pl-12 pr-12 focus:border-gold outline-none transition-all text-sm"
-                                  value={wp}
-                                  onChange={(e) => {
-                                    const newWps = [...formData.waypoints];
-                                    newWps[idx] = e.target.value;
-                                    updateForm("waypoints", newWps);
-                                    if (e.target.value.length > 2) setActiveDropdown(null);
-                                  }}
-                                  onFocus={() => {
-                                    if (!wp) setActiveDropdown(`waypoint-${idx}`);
-                                  }}
-                                />
-                              </Autocomplete>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  setActiveDropdown(activeDropdown === `waypoint-${idx}` ? null : `waypoint-${idx}`);
-                                }}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-gold transition-colors p-2"
-                                title="Location options"
-                              >
-                                <LocateFixed size={16} />
-                              </button>
-
-                              {/* Dropdown Options */}
-                              <AnimatePresence>
-                                {activeDropdown === `waypoint-${idx}` && (
-                                  <motion.div
-                                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                                    exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                                    className="absolute left-0 right-0 top-full mt-2 bg-[#0A0A0A] border border-gold/20 rounded-xl overflow-hidden z-[100] shadow-2xl"
-                                  >
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        handleGeolocation(`waypoint-${idx}`);
-                                        setActiveDropdown(null);
-                                      }}
-                                      className="w-full flex items-center gap-4 p-4 hover:bg-gold/5 transition-colors border-b border-white/5 group/opt"
-                                    >
-                                      <div className="w-8 h-8 rounded-full bg-gold/10 flex items-center justify-center group-hover/opt:bg-gold/20">
-                                        <LocateFixed size={16} className="text-gold" />
-                                      </div>
-                                      <div className="text-left">
-                                        <p className="text-sm font-bold">Use GPS Location</p>
-                                        <p className="text-[10px] text-white/40 uppercase tracking-widest">Fetch current location</p>
-                                      </div>
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setIsSelectingOnMap(`waypoint-${idx}`);
-                                        setActiveDropdown(null);
-                                        showNotice('info', 'Click anywhere on the map to set waypoint location', 'Map Selection');
-                                      }}
-                                      className="w-full flex items-center gap-4 p-4 hover:bg-gold/5 transition-colors border-b border-white/5 group/opt"
-                                    >
-                                      <div className="w-8 h-8 rounded-full bg-gold/10 flex items-center justify-center group-hover/opt:bg-gold/20">
-                                        <Map size={16} className="text-gold" />
-                                      </div>
-                                      <div className="text-left">
-                                        <p className="text-sm font-bold">Set Location on Map</p>
-                                        <p className="text-[10px] text-white/40 uppercase tracking-widest">Pin/Select on Map</p>
-                                      </div>
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setActiveDropdown(null);
-                                        waypointInputRefs.current[idx]?.focus();
-                                      }}
-                                      className="w-full flex items-center gap-4 p-4 hover:bg-gold/5 transition-colors group/opt"
-                                    >
-                                      <div className="w-8 h-8 rounded-full bg-gold/10 flex items-center justify-center group-hover/opt:bg-gold/20">
-                                        <Search size={16} className="text-gold" />
-                                      </div>
-                                      <div className="text-left">
-                                        <p className="text-sm font-bold">Search Address</p>
-                                        <p className="text-[10px] text-white/40 uppercase tracking-widest">Type to search</p>
-                                      </div>
-                                    </button>
-                                  </motion.div>
-                                )}
-                              </AnimatePresence>
-                            </div>
-                          </div>
-                          <button
-                            onClick={() =>
-                              updateForm(
-                                "waypoints",
-                                formData.waypoints.filter((_, i) => i !== idx),
-                              )
-                            }
-                            className="p-3 bg-red-500/10 text-red-500 rounded hover:bg-red-500 hover:text-white transition-all flex items-center justify-center"
+                      
+                      <div className="space-y-4">
+                        {formData.waypoints.map((wp, idx) => (
+                          <motion.div 
+                            key={`wp-${idx}`} 
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="relative flex gap-3"
                           >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      ))}
+                            <div className="relative flex-1 group/wp">
+                              <MapPin
+                                className="absolute left-4 top-1/2 -translate-y-1/2 text-gold/30 group-focus-within/wp:text-gold transition-colors"
+                                size={18}
+                              />
+                              <div className="relative">
+                                <Autocomplete
+                                  onLoad={(autocomplete) => {
+                                    autocomplete.addListener("place_changed", () => {
+                                      const place = autocomplete.getPlace();
+                                      const address = place.formatted_address || "";
+                                      const location = place.geometry?.location;
+                                      const coords = location ? { lat: location.lat(), lng: location.lng() } : null;
+
+                                      if (address) {
+                                        if (!validateZipCode(place)) {
+                                          const newWps = [...formData.waypoints];
+                                          newWps[idx] = "";
+                                          updateForm("waypoints", newWps);
+                                          return;
+                                        }
+                                        const newWps = [...formData.waypoints];
+                                        newWps[idx] = address;
+                                        updateForm("waypoints", newWps);
+                                        if (coords) {
+                                          setWaypointCoords(prev => ({ ...prev, [idx]: coords }));
+                                          setMapCenter(coords);
+                                          setMapZoom(16);
+                                        }
+                                        setActiveDropdown(null);
+                                      }
+                                    });
+                                  }}
+                                  options={{
+                                    componentRestrictions: settings?.limitCountry
+                                      ? { country: settings.limitCountry }
+                                      : undefined,
+                                    types: ["address"],
+                                  }}
+                                >
+                                  <input
+                                    ref={el => { waypointInputRefs.current[idx] = el; }}
+                                    type="text"
+                                    placeholder={`Stop ${idx + 1} address`}
+                                    className="w-full bg-white/5 rounded-xl border border-white/10 py-4 pl-12 pr-12 focus:border-gold/50 focus:bg-white/[0.08] outline-none transition-all text-sm placeholder:text-white/20"
+                                    value={wp}
+                                    onChange={(e) => {
+                                      const newWps = [...formData.waypoints];
+                                      newWps[idx] = e.target.value;
+                                      updateForm("waypoints", newWps);
+                                      if (e.target.value.length > 2) setActiveDropdown(null);
+                                    }}
+                                    onFocus={() => {
+                                      if (!wp) setActiveDropdown(`waypoint-${idx}`);
+                                    }}
+                                  />
+                                </Autocomplete>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    setActiveDropdown(activeDropdown === `waypoint-${idx}` ? null : `waypoint-${idx}`);
+                                  }}
+                                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/20 hover:text-gold transition-all p-2 rounded-full"
+                                >
+                                  <LocateFixed size={18} />
+                                </button>
+                                
+                                <AnimatePresence>
+                                  {activeDropdown === `waypoint-${idx}` && (
+                                    <motion.div
+                                      initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                                      exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                                      className="absolute left-0 right-0 top-full mt-3 bg-[#0D0D0D] border border-gold/20 rounded-2xl overflow-hidden z-[100] shadow-2xl backdrop-blur-xl"
+                                    >
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          handleGeolocation(`waypoint-${idx}`);
+                                          setActiveDropdown(null);
+                                        }}
+                                        className="w-full flex items-center gap-4 p-4 hover:bg-gold/10 transition-colors border-b border-white/5 group/opt"
+                                      >
+                                        <div className="w-8 h-8 rounded-full bg-gold/10 flex items-center justify-center group-hover/opt:bg-gold transition-all">
+                                          <LocateFixed size={16} className="text-gold group-hover/opt:text-black" />
+                                        </div>
+                                        <p className="text-xs font-bold uppercase tracking-wide">Use GPS Location</p>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setIsSelectingOnMap(`waypoint-${idx}`);
+                                          setActiveDropdown(null);
+                                          showNotice('info', 'Pin waypoint on map', 'Map Selection');
+                                        }}
+                                        className="w-full flex items-center gap-4 p-4 hover:bg-gold/10 transition-colors border-b border-white/5 group/opt"
+                                      >
+                                        <div className="w-8 h-8 rounded-full bg-gold/10 flex items-center justify-center group-hover/opt:bg-gold transition-all">
+                                          <Map size={16} className="text-gold group-hover/opt:text-black" />
+                                        </div>
+                                        <p className="text-xs font-bold uppercase tracking-wide">Pin on Map</p>
+                                      </button>
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() =>
+                                updateForm(
+                                  "waypoints",
+                                  formData.waypoints.filter((_, i) => i !== idx),
+                                )
+                              }
+                              className="p-4 bg-red-500/5 text-red-500/50 rounded-xl hover:bg-red-500 hover:text-white transition-all flex items-center justify-center border border-red-500/10"
+                              title="Remove stop"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </motion.div>
+                        ))}
+                      </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-2">
-                        <label className="text-xs uppercase tracking-widest text-gold font-bold">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4">
+                      <div className="space-y-3">
+                        <label className="text-[11px] uppercase tracking-[0.2em] text-gold font-bold flex items-center gap-2">
+                          <Calendar size={14} className="text-gold" />
                           Pickup Date <span className="text-red-500">*</span>
                         </label>
-                        <div className="relative">
-                          <Calendar
-                            className="absolute left-4 top-1/2 -translate-y-1/2 text-gold/50"
-                            size={18}
-                          />
+                        <div className="relative group/input">
                           <input
                             type="date"
                             min={minDate}
-                            className="w-full bg-white/5 border border-white/10 rounded-lg py-4 pl-12 pr-4 focus:border-gold outline-none transition-all"
+                            className="w-full bg-white/5 border border-white/10 rounded-xl py-5 px-6 focus:border-gold/50 focus:bg-white/[0.08] outline-none transition-all text-sm appearance-none"
                             value={formData.date}
                             onChange={(e) => updateForm("date", e.target.value)}
                           />
                         </div>
                       </div>
-                      <div className="space-y-2">
-                        <label className="text-xs uppercase tracking-widest text-gold font-bold">
+                      <div className="space-y-3">
+                        <label className="text-[11px] uppercase tracking-[0.2em] text-gold font-bold flex items-center gap-2">
+                          <Clock size={14} className="text-gold" />
                           Pickup Time <span className="text-red-500">*</span>
                         </label>
-                        <div className="relative">
-                          <Clock
-                            className="absolute left-4 top-1/2 -translate-y-1/2 text-gold/50"
-                            size={18}
-                          />
+                        <div className="relative group/input">
                           <input
                             type="time"
                             min={minTime}
-                            className="w-full bg-white/5 border border-white/10 rounded-lg py-4 pl-12 pr-4 focus:border-gold outline-none transition-all"
+                            className="w-full bg-white/5 border border-white/10 rounded-xl py-5 px-6 focus:border-gold/50 focus:bg-white/[0.08] outline-none transition-all text-sm appearance-none"
                             value={formData.time}
                             onChange={(e) => updateForm("time", e.target.value)}
                           />
@@ -1972,21 +1996,22 @@ export default function Booking() {
 
                     {/* Hourly Options */}
                     {formData.serviceType === "hourly" && (
-                      <div className="space-y-2">
-                        <label className="text-xs uppercase tracking-widest text-gold font-bold">
+                      <motion.div 
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="space-y-3 pt-4"
+                      >
+                        <label className="text-[11px] uppercase tracking-[0.2em] text-gold font-bold flex items-center gap-2">
+                          <Clock size={14} />
                           Duration (Hours) <span className="text-red-500">*</span>
                         </label>
                         <div className="relative">
-                          <Clock
-                            className="absolute left-4 top-1/2 -translate-y-1/2 text-gold/50"
-                            size={18}
-                          />
                           <select
                             value={formData.hours}
                             onChange={(e) =>
                               updateForm("hours", parseFloat(e.target.value))
                             }
-                            className="w-full bg-white/5 border border-white/10 rounded-lg py-4 pl-12 pr-4 focus:border-gold outline-none transition-all appearance-none custom-select"
+                            className="w-full bg-white/5 border border-white/10 rounded-xl py-5 px-6 pr-12 focus:border-gold/50 focus:bg-white/[0.08] outline-none transition-all appearance-none custom-select text-sm font-bold"
                           >
                             {(() => {
                               const min = settings?.hourlyMinHours || 1;
@@ -1997,181 +2022,144 @@ export default function Booking() {
                                 options.push(h);
                               }
                               return options.map((h) => (
-                                <option key={h} value={h} className="bg-black">
+                                <option key={h} value={h} className="bg-[#0D0D0D] text-white">
                                   {h} {h === 1 ? "Hour" : "Hours"}
                                 </option>
                               ));
                             })()}
                           </select>
                         </div>
-                      </div>
+                      </motion.div>
                     )}
 
-                    {/* Return Trip Toggle */}
-                    <div className="p-4 bg-white/5 border border-white/10 rounded-xl">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-gold/10 rounded-full flex items-center justify-center">
-                            <RotateCcw className="text-gold" size={20} />
+                    {/* Return Trip / Special Services Panel */}
+                    <div className="space-y-4 pt-4">
+                      <div className="p-6 bg-white/5 border border-white/10 rounded-2xl flex flex-col gap-6 shadow-inner tracking-wide">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 bg-gold/10 rounded-2xl flex items-center justify-center border border-gold/10">
+                              <RotateCcw className="text-gold" size={22} />
+                            </div>
+                            <div>
+                              <p className="text-[13px] font-bold uppercase tracking-wider">Return Journey</p>
+                              <p className="text-[10px] text-white/30 uppercase tracking-[0.1em] mt-0.5">
+                                Add return trip details
+                              </p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="text-sm font-bold">Return Trip</p>
-                            <p className="text-[10px] text-white/40 uppercase tracking-widest">
-                              Book your journey back
-                            </p>
-                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              className="sr-only peer"
+                              checked={formData.isReturn}
+                              onChange={(e) =>
+                                updateForm("isReturn", e.target.checked)
+                              }
+                            />
+                            <div className="w-14 h-7 bg-white/10 peer-focus-outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-[1.25rem] after:w-[1.25rem] after:transition-all peer-checked:bg-gold shadow-[0_0_15px_rgba(212,175,55,0.3)]"></div>
+                          </label>
                         </div>
-                        <label className="relative inline-flex items-center cursor-pointer">
-                          <input
-                            type="checkbox"
-                            className="sr-only peer"
-                            checked={formData.isReturn}
-                            onChange={(e) =>
-                              updateForm("isReturn", e.target.checked)
-                            }
-                          />
-                          <div className="w-11 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gold"></div>
-                        </label>
+
+                        {formData.isReturn && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: "auto" }}
+                            className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-white/5"
+                          >
+                            <div className="space-y-2">
+                              <label className="text-[10px] uppercase tracking-[0.15em] text-white/40 font-bold mb-1 block">
+                                Return Date
+                              </label>
+                              <input
+                                type="date"
+                                min={formData.date || minDate}
+                                className="w-full bg-white/5 rounded-xl border border-white/10 py-4 px-5 focus:border-gold/50 outline-none text-sm font-medium"
+                                value={formData.returnDate}
+                                onChange={(e) =>
+                                  updateForm("returnDate", e.target.value)
+                                }
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-[10px] uppercase tracking-[0.15em] text-white/40 font-bold mb-1 block">
+                                Return Time
+                              </label>
+                              <input
+                                type="time"
+                                className="w-full bg-white/5 rounded-xl border border-white/10 py-4 px-5 focus:border-gold/50 outline-none text-sm font-medium"
+                                value={formData.returnTime}
+                                onChange={(e) =>
+                                  updateForm("returnTime", e.target.value)
+                                }
+                              />
+                            </div>
+                          </motion.div>
+                        )}
                       </div>
 
-                      {formData.isReturn && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: "auto" }}
-                          className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-white/5"
+                      {formData.serviceType === "airport" && (
+                        <motion.div 
+                          initial={{ opacity: 0, scale: 0.98 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          className="p-6 bg-white/5 border border-white/10 rounded-2xl space-y-4"
                         >
-                          <div className="space-y-2">
-                            <label className="text-[10px] uppercase tracking-widest text-white/40 font-bold">
-                              Return Date
-                            </label>
-                            <input
-                              type="date"
-                              min={formData.date || minDate}
-                              className="w-full bg-white/5 rounded-lg border border-white/10 py-3 px-4 focus:border-gold outline-none text-sm"
-                              value={formData.returnDate}
-                              onChange={(e) =>
-                                updateForm("returnDate", e.target.value)
-                              }
-                            />
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 bg-gold/10 rounded-2xl flex items-center justify-center border border-gold/10">
+                              <Plane className="text-gold" size={22} />
+                            </div>
+                            <div className="flex-1">
+                              <label className="text-[11px] uppercase tracking-[0.2em] text-gold font-bold mb-1 block">
+                                Arrival Flight Number
+                              </label>
+                              <input
+                                type="text"
+                                placeholder="E.G. QF400"
+                                className="w-full bg-transparent border-b border-white/10 py-2 focus:border-gold outline-none transition-all uppercase text-lg font-bold tracking-widest placeholder:text-white/10"
+                                value={formData.flightNumber}
+                                onChange={(e) => {
+                                  updateForm(
+                                    "flightNumber",
+                                    e.target.value.toUpperCase(),
+                                  );
+                                }}
+                              />
+                            </div>
                           </div>
-                          <div className="space-y-2">
-                            <label className="text-[10px] uppercase tracking-widest text-white/40 font-bold">
-                              Return Time
-                            </label>
-                            <input
-                              type="time"
-                              className="w-full bg-white/5 rounded-lg border border-white/10 py-3 px-4 focus:border-gold outline-none text-sm"
-                              value={formData.returnTime}
-                              onChange={(e) =>
-                                updateForm("returnTime", e.target.value)
-                              }
-                            />
-                          </div>
+                          <p className="text-[10px] text-white/20 italic tracking-wide pl-16">
+                            * We monitor your flight for real-time adjustment of pickup.
+                          </p>
                         </motion.div>
                       )}
                     </div>
-
-                    {formData.serviceType === "airport" && (
-                      <div className="space-y-4">
-                        <div className="space-y-2">
-                          <label className="text-xs uppercase tracking-widest text-gold font-bold">
-                            Flight Number (Optional)
-                          </label>
-                          <div className="relative">
-                            <Plane
-                              className="absolute left-4 top-1/2 -translate-y-1/2 text-gold/50"
-                              size={18}
-                            />
-                            <input
-                              type="text"
-                              placeholder="e.g. QF400"
-                              className="w-full bg-white/5 border border-white/10 rounded-lg py-4 pl-12 pr-4 focus:border-gold outline-none transition-all uppercase"
-                              value={formData.flightNumber}
-                              onChange={(e) => {
-                                updateForm(
-                                  "flightNumber",
-                                  e.target.value.toUpperCase(),
-                                );
-                              }}
-                            />
-                          </div>
-                          <p className="text-[10px] text-white/40 italic">
-                            Please provide your flight number for arrival monitoring.
-                          </p>
-                        </div>
-                      </div>
-                    )}
                   </div>
 
-                  <div className="space-y-4 h-full flex flex-col">
-                    <div className="relative flex-grow min-h-[400px] lg:min-h-[500px] rounded-xl overflow-hidden border border-white/10 shadow-2xl">
+                  <div className="space-y-6 h-full flex flex-col">
+                    <div className="relative flex-grow min-h-[450px] lg:min-h-full rounded-2xl overflow-hidden border border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.6)] group/map">
+                      <div className="absolute inset-0 bg-gold/5 pointer-events-none group-hover/map:opacity-0 transition-opacity z-10"></div>
                       <GoogleMap
                         mapContainerStyle={mapContainerStyle}
                         center={mapCenter}
                         zoom={mapZoom}
                         onClick={handleMapClick}
-                        onUnmount={() => {
-                          // Cleanup to avoid setOptions error on unmount
-                        }}
+                        onUnmount={() => {}}
                         options={{
                           styles: [
-                            {
-                              elementType: "geometry",
-                              stylers: [{ color: "#000000" }],
-                            },
-                            {
-                              elementType: "labels.text.stroke",
-                              stylers: [{ color: "#000000" }],
-                            },
-                            {
-                              elementType: "labels.text.fill",
-                              stylers: [{ color: "#d4af37" }], // Gold labels
-                            },
-                            {
-                              featureType: "road",
-                              elementType: "geometry",
-                              stylers: [{ color: "#444444" }], // Much lighter roads
-                            },
-                            {
-                              featureType: "road",
-                              elementType: "geometry.stroke",
-                              stylers: [{ color: "#212121" }],
-                            },
-                            {
-                              featureType: "road",
-                              elementType: "labels.text.fill",
-                              stylers: [{ color: "#ffffff" }], // White road labels
-                            },
-                            {
-                              featureType: "road.highway",
-                              elementType: "geometry",
-                              stylers: [{ color: "#666666" }], // Bright highways
-                            },
-                            {
-                              featureType: "road.highway.controlled_access",
-                              elementType: "geometry",
-                              stylers: [{ color: "#888888" }], // Expressways
-                            },
-                            {
-                              featureType: "transit",
-                              elementType: "geometry",
-                              stylers: [{ color: "#2f3948" }],
-                            },
-                            {
-                              featureType: "water",
-                              elementType: "geometry",
-                              stylers: [{ color: "#0a121d" }],
-                            },
-                            {
-                              featureType: "poi",
-                              elementType: "labels.text.fill",
-                              stylers: [{ color: "#8a8a8a" }],
-                            },
+                            { elementType: "geometry", stylers: [{ color: "#000000" }] },
+                            { elementType: "labels.text.stroke", stylers: [{ color: "#000000" }] },
+                            { elementType: "labels.text.fill", stylers: [{ color: "#d4af37" }] },
+                            { featureType: "road", elementType: "geometry", stylers: [{ color: "#333333" }] },
+                            { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#212121" }] },
+                            { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#ffffff" }] },
+                            { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#4d4d4d" }] },
+                            { featureType: "road.highway.controlled_access", elementType: "geometry", stylers: [{ color: "#666666" }] },
+                            { featureType: "transit", elementType: "geometry", stylers: [{ color: "#2f3948" }] },
+                            { featureType: "water", elementType: "geometry", stylers: [{ color: "#0a121d" }] },
+                            { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#8a8a8a" }] },
                           ],
                           disableDefaultUI: false,
                           zoomControl: true,
-                          mapTypeControl: true,
-                          streetViewControl: true,
+                          mapTypeControl: false,
+                          streetViewControl: false,
                           fullscreenControl: true,
                           backgroundColor: '#000000',
                           clickableIcons: true,
@@ -2184,18 +2172,10 @@ export default function Booking() {
                           />
                         )}
                         {!directions && pickupCoords && (
-                          <Marker
-                            position={pickupCoords}
-                            label="P"
-                            title="Pickup Location"
-                          />
+                          <Marker position={pickupCoords} label="P" title="Pickup" />
                         )}
                         {!directions && dropoffCoords && (
-                          <Marker
-                            position={dropoffCoords}
-                            label="D"
-                            title="Dropoff Location"
-                          />
+                          <Marker position={dropoffCoords} label="D" title="Dropoff" />
                         )}
                         {!directions && Object.entries(waypointCoords).map(([idx, coords]) => (
                           <Marker
@@ -2211,73 +2191,74 @@ export default function Booking() {
                               directions: directions,
                               polylineOptions: {
                                 strokeColor: "#D4AF37",
-                                strokeWeight: 5,
+                                strokeWeight: 6,
+                                strokeOpacity: 0.8,
                               },
                             }}
                           />
                         )}
                       </GoogleMap>
+                      
+                      {/* Floating Directions Stats */}
+                      {distance && duration && (formData.serviceType !== 'hourly' || (parseFloat(distance.replace(/[^\d.]/g, "")) || 0) > 0) && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="absolute bottom-6 left-6 right-6 flex flex-wrap gap-4 z-20"
+                        >
+                          <div className="flex-1 min-w-[120px] flex items-center gap-4 p-4 bg-[#0A0A0A]/90 backdrop-blur-xl border border-gold/30 rounded-2xl shadow-2xl">
+                            <div className="w-10 h-10 bg-gold/10 rounded-full flex items-center justify-center border border-gold/20">
+                              <Navigation className="text-gold" size={18} />
+                            </div>
+                            <div>
+                              <p className="text-[10px] uppercase tracking-[0.2em] text-white/40 font-bold">Distance</p>
+                              <p className="text-sm font-black text-white tracking-widest uppercase">
+                                {(() => {
+                                  const distVal = parseFloat(distance.replace(/[^\d.]/g, "")) || 0;
+                                  return formData.isReturn ? `${(distVal * 2).toFixed(1)} km` : distance;
+                                })()}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex-1 min-w-[120px] flex items-center gap-4 p-4 bg-[#0A0A0A]/90 backdrop-blur-xl border border-gold/30 rounded-2xl shadow-2xl">
+                            <div className="w-10 h-10 bg-gold/10 rounded-full flex items-center justify-center border border-gold/20">
+                              <Timer className="text-gold" size={18} />
+                            </div>
+                            <div>
+                              <p className="text-[10px] uppercase tracking-[0.2em] text-white/40 font-bold">Est. Time</p>
+                              <p className="text-sm font-black text-white tracking-widest uppercase">
+                                {(() => {
+                                  if (!duration) return "N/A";
+                                  const match = duration.match(/(\d+)\s*min/);
+                                  if (match && formData.isReturn) {
+                                    const mins = parseInt(match[1]);
+                                    return `${mins * 2} mins`;
+                                  }
+                                  return duration;
+                                })()}
+                              </p>
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
                     </div>
-
-                    {distance && duration && (formData.serviceType !== 'hourly' || (parseFloat(distance.replace(/[^\d.]/g, "")) || 0) > 0) && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="flex justify-between p-4 bg-white/5 border border-white/10 rounded-lg"
-                      >
-                        <div className="flex items-center gap-3">
-                          <Navigation className="text-gold" size={18} />
-                          <div>
-                            <p className="text-[10px] uppercase tracking-widest text-white/40">
-                              Distance
-                            </p>
-                            <p className="text-sm font-bold">
-                              {(() => {
-                                const distVal =
-                                  parseFloat(distance.replace(/[^\d.]/g, "")) ||
-                                  0;
-                                return formData.isReturn
-                                  ? `${(distVal * 2).toFixed(1)} km`
-                                  : distance;
-                              })()}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <Clock className="text-gold" size={18} />
-                          <div>
-                            <p className="text-[10px] uppercase tracking-widest text-white/40">
-                              Est. Time
-                            </p>
-                            <p className="text-sm font-bold">
-                              {(() => {
-                                if (!duration) return "N/A";
-                                const match = duration.match(/(\d+)\s*min/);
-                                if (match && formData.isReturn) {
-                                  const mins = parseInt(match[1]);
-                                  return `${mins * 2} mins`;
-                                }
-                                return duration;
-                              })()}
-                            </p>
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
                   </div>
 
-                  <div className="flex flex-col sm:flex-row justify-between gap-4 pt-8 w-full lg:col-span-2 border-t border-white/10 mt-8">
+                  {/* Redesigned Actions */}
+                  <div className="flex flex-col sm:flex-row justify-between gap-6 pt-10 w-full lg:col-span-2 border-t border-white/5 mt-4">
                     <button
                       onClick={prevStep}
-                      className="btn-outline py-4 px-8 w-full sm:w-auto"
+                      className="group flex items-center justify-center gap-3 py-5 px-10 rounded-xl border border-white/10 text-white/40 hover:text-white hover:border-white/20 transition-all font-bold uppercase tracking-widest text-xs"
                     >
+                      <ChevronsLeft className="group-hover:scale-110 transition-transform" size={18} />
                       Back
                     </button>
                     <button
                       onClick={nextStep}
-                      className="btn-primary py-4 px-12 w-full sm:w-auto"
+                      className="group flex items-center justify-center gap-4 bg-gold py-5 px-16 rounded-xl text-black font-black uppercase tracking-[0.25em] text-xs hover:bg-[#F2D06B] transition-all shadow-[0_10px_30px_rgba(212,175,55,0.2)] hover:shadow-[0_15px_40px_rgba(212,175,55,0.4)]"
                     >
-                      Continue
+                      Continue 
+                      <Car className=" group-hover:translate-x-2 transition-transform" size={18} />
                     </button>
                   </div>
                 </motion.div>

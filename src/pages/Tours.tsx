@@ -660,7 +660,7 @@ export default function Tours() {
             </div>
           </div>
 
-          <AnimatePresence mode="wait">
+          <AnimatePresence mode="popLayout">
             {!showFullDetails && step === 1 && (
               <motion.div
                 key="filters"
@@ -1684,6 +1684,18 @@ export default function Tours() {
                               const extra = (selectedTour?.extras || []).find((e: any) => (e.id || e.name) === idOrName);
                               return <p key={`summary-extra-${idOrName}`} className="text-[10px] text-white/60">• {extra?.name} (x{count})</p>
                             })}
+                          </div>
+                        )}
+
+                        {bookingPricing.appliedAddons.length > 0 && (
+                          <div className="space-y-2 border-b border-white/5 pb-3">
+                            <p className="text-[8px] uppercase tracking-widest text-white/30 font-bold">Price Add-ons</p>
+                            {bookingPricing.appliedAddons.map((addon: any, aIdx: number) => (
+                              <div key={`addon-tour-sticky-summary-${addon.id || aIdx}-${aIdx}`} className="flex justify-between text-[10px] text-white/60">
+                                <span>{addon.name}</span>
+                                <span className="font-mono text-gold font-bold">+${addon.value.toFixed(2)}</span>
+                              </div>
+                            ))}
                           </div>
                         )}
 

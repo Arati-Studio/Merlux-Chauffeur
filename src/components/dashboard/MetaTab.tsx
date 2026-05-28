@@ -566,7 +566,18 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
       });
     });
 
-    return items;
+    // Deduplicate items based on type-id combination to prevent React key collisions
+    const uniqueItems: any[] = [];
+    const seenKeys = new Set<string>();
+    items.forEach(item => {
+      const itemKey = `${item.type}-${item.id || 'unnamed'}`;
+      if (!seenKeys.has(itemKey)) {
+        seenKeys.add(itemKey);
+        uniqueItems.push(item);
+      }
+    });
+
+    return uniqueItems;
   };
 
   const allContent = getMergedContent();
@@ -914,7 +925,7 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
       </div>
 
       {/* Top Inline Header Navigation */}
-      <div className="glass p-6 rounded-3xl border border-white/5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="glass p-2 rounded-lg px-4 border border-white/5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="text-left">
           <h3 className="text-lg font-display text-gold flex items-center gap-2">
             {activeSubSection === 'console' && (
@@ -1220,7 +1231,7 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
                                   onChange={(e) => {
                                     const itemKey = `${item.type}-${item.id}`;
                                     if (e.target.checked) {
-                                      setSelectedIds(prev => [...prev, itemKey]);
+                                      setSelectedIds(prev => prev.includes(itemKey) ? prev : [...prev, itemKey]);
                                     } else {
                                       setSelectedIds(prev => prev.filter(id => id !== itemKey));
                                     }

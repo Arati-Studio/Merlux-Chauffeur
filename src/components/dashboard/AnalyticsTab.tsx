@@ -452,7 +452,7 @@ export default function AnalyticsTab({
                 <div
                   key={chart.id}
                   className={cn(
-                    "glass p-8 rounded-3xl border border-white/5 relative group transition-all duration-500",
+                    "glass p-8 rounded-3xl border border-white/5 relative group transition-all duration-500 min-w-0",
                     chart.width === 'small' ? "lg:col-span-4" :
                       chart.width === 'medium' ? "lg:col-span-6" :
                         chart.width === 'large' ? "lg:col-span-8" : "lg:col-span-12"
@@ -484,8 +484,8 @@ export default function AnalyticsTab({
                     </div>
                   </div>
 
-                  <div className="h-60 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
+                  <div className="h-60 w-full min-w-0">
+                    <ResponsiveContainer width="100%" height={240}>
                       {chart.type === 'area' ? (
                         <AreaChart data={(analytics as any)[chart.dataSource || 'revenueData'] || []}>
                           <defs>
