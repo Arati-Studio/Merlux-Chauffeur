@@ -747,7 +747,9 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
           <div class="booking-card" style="text-align: center;">
             <p style="font-size: 18px; font-weight: 700; color: #dab866; margin-bottom: 10px;">How was your ride?</p>
             <p style="color: #71717a; font-size: 14px; margin-bottom: 20px;">We would love to hear your thoughts to help us provide absolute perfection.</p>
-            <span style="font-size: 24px; color: #e4e4e7;">★★★★★</span>
+            <div style="margin: 20px 0;">
+              <a href="{rateUrl}" style="background-color: #dab866; color: #000000; padding: 12px 25px; text-decoration: none; font-weight: bold; border-radius: 25px; display: inline-block; font-size: 13px; text-transform: uppercase; letter-spacing: 1px;">Rate Now</a>
+            </div>
           </div>
           <p class="content-text">Thank you for choosing Merlux. We eagerly look forward to serving you again very soon.</p>
         `, 'Book Another Ride'),

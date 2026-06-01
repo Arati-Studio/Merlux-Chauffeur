@@ -27,15 +27,14 @@ export default defineConfig(({ mode }) => {
       chunkSizeWarningLimit: 1500,
 
       rollupOptions: {
+        // ✅ merge everything here
+        external: ["react-helmet-async"],
         output: {
-          manualChunks: {
-            // Split vendor libraries
-            vendor: ['react', 'react-dom'],
-
-            // Force services into their own chunks
-            emailService: ['/app/applet/src/services/emailService.ts'],
-            smsService: ['/app/applet/src/services/smsService.ts'],
-          },
+manualChunks: {
+  vendor: ["react", "react-dom"],
+  emailService: [path.resolve(__dirname, "src/services/emailService.ts")],
+  smsService: [path.resolve(__dirname, "src/services/smsService.ts")],
+}
         },
       },
     },

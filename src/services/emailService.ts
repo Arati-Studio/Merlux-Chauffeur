@@ -74,6 +74,19 @@ export const emailService = {
 
     // Enrich driver/vehicle information if vehicleId exists
     const enrichedData = { ...data };
+    let siteUrl = '';
+    if (typeof window !== 'undefined') {
+      siteUrl = window.location.origin;
+    } else if (process.env.VITE_SITE_URL) {
+      siteUrl = process.env.VITE_SITE_URL;
+    } else {
+      siteUrl = 'https://merlux.au';
+    }
+    if (siteUrl.endsWith('/')) {
+      siteUrl = siteUrl.slice(0, -1);
+    }
+    enrichedData.siteUrl = siteUrl;
+    enrichedData.rateUrl = `${siteUrl}/payment/success?booking_id=${enrichedData.id || enrichedData.bookingId || data.id || ''}&rate=true`;
     if (!enrichedData.bookingId) enrichedData.bookingId = enrichedData.id || '';
     if (!enrichedData.id) enrichedData.id = enrichedData.bookingId || '';
     if (enrichedData.vehicleId) {

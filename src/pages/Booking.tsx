@@ -74,14 +74,20 @@ import SEO from "../components/SEO";
 
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_ID } from "../lib/google-maps";
 
-// Suppress Google Maps Places Autocomplete deprecation warning
+// Suppress Google Maps Places Autocomplete, DirectionsService, Marker, and DirectionsRenderer deprecation warnings
 if (typeof window !== "undefined") {
   const originalWarn = console.warn;
   console.warn = (...args: any[]) => {
     if (
       args[0] &&
       typeof args[0] === "string" &&
-      (args[0].includes("google.maps.places.Autocomplete") || args[0].includes("PlaceAutocompleteElement"))
+      (args[0].includes("google.maps.places.Autocomplete") || 
+       args[0].includes("PlaceAutocompleteElement") ||
+       args[0].includes("google.maps.DirectionsService") ||
+       args[0].includes("Route.computeRoutes") ||
+       args[0].includes("google.maps.Marker") ||
+       args[0].includes("AdvancedMarkerElement") ||
+       args[0].includes("google.maps.DirectionsRenderer"))
     ) {
       return;
     }
