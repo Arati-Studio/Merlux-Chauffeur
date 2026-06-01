@@ -49,11 +49,114 @@ export default function UsersTab({
     return () => unsubscribe();
   }, [isAdmin]);
 
-  // Fetch User Detail Stats
+  // Fetch Bookings & Compute User Detail Stats
   useEffect(() => {
     if (!isAdmin || allUsers.length === 0) return;
-    // Calculation logic for userDetailStats could be here or derived
-    // For now, let's just keep it as is or move the calculation from AppDashboard
+
+    const qBookings = query(collection(db, 'bookings'));
+    const unsubscribeBookings = onSnapshot(qBookings, (snapshot) => {
+      const bookings = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+      const stats: Record<string, any> = {};
+
+      allUsers.forEach(u => {
+        if (u.role === 'admin') {
+          // System Overview Admin Stats
+          const totalRevenue = bookings
+            .filter(b => b.paymentStatus === 'paid' || b.status === 'completed')
+            .reduce((sum, b) => sum + (Number(b.price) || 0), 0);
+          
+          const lostRevenue = bookings
+            .filter(b => b.status === 'cancelled')
+            .reduce((sum, b) => sum + (Number(b.price) || 0), 0);
+          
+          const unassignedCount = bookings
+            .filter(b => !b.driverId && b.status !== 'cancelled')
+            .length;
+
+          stats[u.id] = {
+            totalRevenue,
+            lostRevenue,
+            unassignedCount,
+            totalSystemUsers: allUsers.length
+          };
+        } else if (u.role === 'driver') {
+          // Driver Stats
+          const driverBookings = bookings.filter(b => b.driverId === u.id);
+          const completedRides = driverBookings.filter(b => b.status === 'completed').length;
+          
+          const ratedBookings = driverBookings.filter(b => b.rating);
+          const ratingCount = ratedBookings.length;
+          const avgRating = ratingCount > 0 
+            ? ratedBookings.reduce((sum, b) => sum + (b.rating || 0), 0) / ratingCount 
+            : 0;
+
+          const unreviewedCount = driverBookings.filter(b => b.status === 'completed' && !b.rating).length;
+          
+          const feedbacks = driverBookings
+            .filter(b => b.rating || b.feedback)
+            .map(b => ({
+              customerName: b.customerName || 'Customer',
+              rating: b.rating || 0,
+              comment: b.feedback || ''
+            }));
+
+          const totalEarnings = driverBookings
+            .filter(b => b.status === 'completed' || b.paymentStatus === 'paid')
+            .reduce((sum, b) => sum + (Number(b.price) || 0), 0);
+
+          stats[u.id] = {
+            completedRides,
+            ratingCount,
+            avgRating,
+            unreviewedCount,
+            totalRatingValue: avgRating > 0 ? Number(avgRating.toFixed(1)) : 0,
+            totalEarnings,
+            feedbacks
+          };
+        } else {
+          // Customer / User Stats
+          const customerBookings = bookings.filter(b => b.userId === u.id || b.customerEmail === u.email);
+          const completedRides = customerBookings.filter(b => b.status === 'completed').length;
+          const totalBookings = customerBookings.length;
+          const totalSpend = customerBookings
+            .filter(b => b.status !== 'cancelled')
+            .reduce((sum, b) => sum + (Number(b.price) || 0), 0);
+          const cancelledRides = customerBookings.filter(b => b.status === 'cancelled').length;
+          const reviewedCount = customerBookings.filter(b => b.status === 'completed' && b.rating).length;
+          const unreviewedCount = customerBookings.filter(b => b.status === 'completed' && !b.rating).length;
+
+          // Compute Favorite Service
+          const serviceCounts: Record<string, number> = {};
+          customerBookings.forEach(b => {
+            if (b.serviceType) {
+              serviceCounts[b.serviceType] = (serviceCounts[b.serviceType] || 0) + 1;
+            }
+          });
+          let favoriteService = 'N/A';
+          let maxCount = 0;
+          Object.entries(serviceCounts).forEach(([service, count]) => {
+            if (count > maxCount) {
+              maxCount = count;
+              favoriteService = service;
+            }
+          });
+
+          stats[u.id] = {
+            completedRides,
+            totalBookings,
+            totalSpend,
+            cancelledRides,
+            reviewedCount,
+            unreviewedCount,
+            favoriteService
+          };
+        }
+      });
+
+      setUserDetailStats(stats);
+    });
+
+    return () => unsubscribeBookings();
   }, [allUsers, isAdmin]);
 
   const [editingUser, setEditingUser] = useState<any>(null);

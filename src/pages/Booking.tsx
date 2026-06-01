@@ -74,6 +74,21 @@ import SEO from "../components/SEO";
 
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_ID } from "../lib/google-maps";
 
+// Suppress Google Maps Places Autocomplete deprecation warning
+if (typeof window !== "undefined") {
+  const originalWarn = console.warn;
+  console.warn = (...args: any[]) => {
+    if (
+      args[0] &&
+      typeof args[0] === "string" &&
+      (args[0].includes("google.maps.places.Autocomplete") || args[0].includes("PlaceAutocompleteElement"))
+    ) {
+      return;
+    }
+    originalWarn(...args);
+  };
+}
+
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 
 const mapContainerStyle = {
@@ -291,6 +306,11 @@ export default function Booking() {
   const [distance, setDistance] = useState<string>("");
   const [duration, setDuration] = useState<string>("");
   const [distanceValue, setDistanceValue] = useState<number>(0);
+
+  // Route Avoidance options
+  const [avoidTolls, setAvoidTolls] = useState(false);
+  const [avoidHighways, setAvoidHighways] = useState(false);
+  const [avoidFerries, setAvoidFerries] = useState(false);
 
   // Geocode address when it changes manually to update map pins
 
@@ -796,12 +816,12 @@ export default function Booking() {
       }
 
       let distanceKm = distanceValue || parseFloat(distance.replace(/[^\d.]/g, "")) || 0;
-      
+
       // If return trip, double the distance for validation against limits
       if (formData.isReturn) {
         distanceKm = distanceKm * 2;
       }
-      
+
       console.log("Validating distance (km):", distanceKm);
 
       // If service is not hourly, distance calculation is required
@@ -1135,8 +1155,11 @@ export default function Booking() {
       origin: debouncedPickup,
       waypoints: finalWaypoints,
       travelMode: "DRIVING" as google.maps.TravelMode,
+      avoidTolls: avoidTolls,
+      avoidHighways: avoidHighways,
+      avoidFerries: avoidFerries,
     };
-  }, [debouncedPickup, debouncedDropoff, formData.waypoints]);
+  }, [debouncedPickup, debouncedDropoff, formData.waypoints, avoidTolls, avoidHighways, avoidFerries]);
 
   const handleValidateCoupon = () => {
     if (!formData.couponCode) return;
@@ -1389,7 +1412,7 @@ export default function Booking() {
 
   return (
     <>
-      <SEO 
+      <SEO
         title="Book Your Chauffeur Service"
         description="Secure your luxury transport in Melbourne. Easy booking for airport transfers, corporate travel, corporate events, and special occasions."
       />
@@ -1513,7 +1536,7 @@ export default function Booking() {
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
-                  className="glass p-6 rounded-2xl md:p-10 lg:p-12 grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-14 items-stretch overflow-hidden border border-gold/10 shadow-[0_0_50px_rgba(212,175,55,0.05)]"
+                  className="bg-[#030303]/40 backdrop-blur-3xl p-5 md:p-10 xl:p-12 rounded-3xl border border-white/[0.05] shadow-[0_25px_60px_rgba(0,0,0,0.85)] grid grid-cols-1 lg:grid-cols-2 gap-8 md:gap-10 hover:border-white/[0.08] transition-all duration-700 relative overflow-hidden"
                 >
                   <div className="space-y-8 h-full flex flex-col justify-between overflow-y-auto custom-scrollbar pr-2">
                     <div className="grid grid-cols-1 gap-8">
@@ -1629,22 +1652,6 @@ export default function Booking() {
                                     <div className="text-left">
                                       <p className="text-[13px] font-bold tracking-wide uppercase" >Pin on Map</p>
                                       <p className="text-[10px] text-white/30 uppercase tracking-[0.1em] mt-0.5">Select manually</p>
-                                    </div>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setActiveDropdown(null);
-                                      pickupInputRef.current?.focus();
-                                    }}
-                                    className="w-full flex items-center gap-4 p-5 hover:bg-gold/10 transition-all group/opt"
-                                  >
-                                    <div className="w-10 h-10 rounded-full bg-gold/10 flex items-center justify-center group-hover/opt:bg-gold group-hover/opt:text-black transition-all">
-                                      <Search size={18} className="text-gold group-hover/opt:text-black" />
-                                    </div>
-                                    <div className="text-left">
-                                      <p className="text-[13px] font-bold tracking-wide uppercase">Type to Search</p>
-                                      <p className="text-[10px] text-white/30 uppercase tracking-[0.1em] mt-0.5">Manual Entry</p>
                                     </div>
                                   </button>
                                 </motion.div>
@@ -1775,22 +1782,6 @@ export default function Booking() {
                                       <p className="text-[10px] text-white/30 uppercase tracking-[0.1em] mt-0.5">Select manually</p>
                                     </div>
                                   </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setActiveDropdown(null);
-                                      dropoffInputRef.current?.focus();
-                                    }}
-                                    className="w-full flex items-center gap-4 p-5 hover:bg-gold/10 transition-all group/opt"
-                                  >
-                                    <div className="w-10 h-10 rounded-full bg-gold/10 flex items-center justify-center group-hover/opt:bg-gold group-hover/opt:text-black transition-all">
-                                      <Search size={18} className="text-gold group-hover/opt:text-black" />
-                                    </div>
-                                    <div className="text-left">
-                                      <p className="text-[13px] font-bold tracking-wide uppercase">Type to Search</p>
-                                      <p className="text-[10px] text-white/30 uppercase tracking-[0.1em] mt-0.5">Manual Entry</p>
-                                    </div>
-                                  </button>
                                 </motion.div>
                               )}
                             </AnimatePresence>
@@ -1821,17 +1812,17 @@ export default function Booking() {
                           }
                           className="text-gold hover:text-white transition-all flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.15em] bg-gold/5 px-4 py-2 rounded-full border border-gold/20 hover:bg-gold/20 disabled:opacity-30 disabled:cursor-not-allowed group"
                         >
-                          <Plus size={14} className="group-hover:scale-125 transition-transform" /> 
+                          <Plus size={14} className="group-hover:scale-125 transition-transform" />
                           {formData.waypoints.length === 0 ? "Add Stop" : "Add Another"}
                           {settings?.waypointLimit &&
                             ` (${formData.waypoints.length}/${settings.waypointLimit})`}
                         </button>
                       </div>
-                      
+
                       <div className="space-y-4">
                         {formData.waypoints.map((wp, idx) => (
-                          <motion.div 
-                            key={`wp-${idx}`} 
+                          <motion.div
+                            key={`wp-${idx}`}
                             initial={{ opacity: 0, y: -10 }}
                             animate={{ opacity: 1, y: 0 }}
                             className="relative flex gap-3"
@@ -1903,7 +1894,7 @@ export default function Booking() {
                                 >
                                   <LocateFixed size={18} />
                                 </button>
-                                
+
                                 <AnimatePresence>
                                   {activeDropdown === `waypoint-${idx}` && (
                                     <motion.div
@@ -1996,7 +1987,7 @@ export default function Booking() {
 
                     {/* Hourly Options */}
                     {formData.serviceType === "hourly" && (
-                      <motion.div 
+                      <motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         className="space-y-3 pt-4"
@@ -2098,7 +2089,7 @@ export default function Booking() {
                       </div>
 
                       {formData.serviceType === "airport" && (
-                        <motion.div 
+                        <motion.div
                           initial={{ opacity: 0, scale: 0.98 }}
                           animate={{ opacity: 1, scale: 1 }}
                           className="p-6 bg-white/5 border border-white/10 rounded-2xl space-y-4"
@@ -2134,14 +2125,65 @@ export default function Booking() {
                   </div>
 
                   <div className="space-y-6 h-full flex flex-col">
-                    <div className="relative flex-grow min-h-[450px] lg:min-h-full rounded-2xl overflow-hidden border border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.6)] group/map">
+
+                    {/* Route Preferences — Above Map */}
+                    <div className="bg-black/85 backdrop-blur-xl border border-white/10 p-4 rounded-xl shadow-2xl flex flex-col gap-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-gold animate-ping"></span>
+                        <p className="text-[10px] uppercase font-bold tracking-[0.2em] text-white">Route Preferences</p>
+                      </div>
+                      <div className="flex flex-col sm:flex-row gap-4">
+                        <label className="flex items-center gap-2.5 cursor-pointer text-xs font-bold text-white/70 hover:text-white select-none transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={avoidTolls}
+                            onChange={(e) => {
+                              setAvoidTolls(e.target.checked);
+                              showNotice('info', e.target.checked ? 'Recalculating to avoid tolls...' : 'Tolls enabled', 'Route Change');
+                            }}
+                            className="rounded border-white/20 bg-white/5 text-gold focus:ring-gold focus:ring-offset-0 focus:ring-1 cursor-pointer w-4 h-4 accent-gold"
+                          />
+                          <span>AVOID TOLLS</span>
+                        </label>
+
+                        <label className="flex items-center gap-2.5 cursor-pointer text-xs font-bold text-white/70 hover:text-white select-none transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={avoidHighways}
+                            onChange={(e) => {
+                              setAvoidHighways(e.target.checked);
+                              showNotice('info', e.target.checked ? 'Recalculating to avoid highways...' : 'Highways enabled', 'Route Change');
+                            }}
+                            className="rounded border-white/20 bg-white/5 text-gold focus:ring-gold focus:ring-offset-0 focus:ring-1 cursor-pointer w-4 h-4 accent-gold"
+                          />
+                          <span>AVOID HIGHWAYS</span>
+                        </label>
+
+                        <label className="flex items-center gap-2.5 cursor-pointer text-xs font-bold text-white/70 hover:text-white select-none transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={avoidFerries}
+                            onChange={(e) => {
+                              setAvoidFerries(e.target.checked);
+                              showNotice('info', e.target.checked ? 'Recalculating to avoid ferries...' : 'Ferries enabled', 'Route Change');
+                            }}
+                            className="rounded border-white/20 bg-white/5 text-gold focus:ring-gold focus:ring-offset-0 focus:ring-1 cursor-pointer w-4 h-4 accent-gold"
+                          />
+                          <span>AVOID FERRIES</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Map */}
+                    <div className="relative flex-grow min-h-[450px] lg:min-h-0 rounded-2xl overflow-hidden border border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.6)] group/map">
                       <div className="absolute inset-0 bg-gold/5 pointer-events-none group-hover/map:opacity-0 transition-opacity z-10"></div>
+
                       <GoogleMap
                         mapContainerStyle={mapContainerStyle}
                         center={mapCenter}
                         zoom={mapZoom}
                         onClick={handleMapClick}
-                        onUnmount={() => {}}
+                        onUnmount={() => { }}
                         options={{
                           styles: [
                             { elementType: "geometry", stylers: [{ color: "#000000" }] },
@@ -2198,16 +2240,18 @@ export default function Booking() {
                           />
                         )}
                       </GoogleMap>
-                      
-                      {/* Floating Directions Stats */}
-                      {distance && duration && (formData.serviceType !== 'hourly' || (parseFloat(distance.replace(/[^\d.]/g, "")) || 0) > 0) && (
-                        <motion.div
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className="absolute bottom-6 left-6 right-6 flex flex-wrap gap-4 z-20"
-                        >
-                          <div className="flex-1 min-w-[120px] flex items-center gap-4 p-4 bg-[#0A0A0A]/90 backdrop-blur-xl border border-gold/30 rounded-2xl shadow-2xl">
-                            <div className="w-10 h-10 bg-gold/10 rounded-full flex items-center justify-center border border-gold/20">
+                    </div>
+
+                    {/* Directions Stats (Distance & Est. Time) Below Map */}
+                    {(distance || duration) && (formData.serviceType !== 'hourly' || (parseFloat((distance || "").replace(/[^\d.]/g, "")) || 0) > 0) && (
+                      <div className="flex flex-col sm:flex-row gap-4 w-full">
+                        {distance && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="flex-1 flex items-center gap-4 p-4 bg-[#020202]/90 backdrop-blur-xl border border-gold/10 rounded-2xl shadow-lg"
+                          >
+                            <div className="w-10 h-10 bg-gold/10 rounded-full flex items-center justify-center border border-gold/20 flex-shrink-0">
                               <Navigation className="text-gold" size={18} />
                             </div>
                             <div>
@@ -2219,9 +2263,16 @@ export default function Booking() {
                                 })()}
                               </p>
                             </div>
-                          </div>
-                          <div className="flex-1 min-w-[120px] flex items-center gap-4 p-4 bg-[#0A0A0A]/90 backdrop-blur-xl border border-gold/30 rounded-2xl shadow-2xl">
-                            <div className="w-10 h-10 bg-gold/10 rounded-full flex items-center justify-center border border-gold/20">
+                          </motion.div>
+                        )}
+
+                        {duration && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="flex-1 flex items-center gap-4 p-4 bg-[#020202]/90 backdrop-blur-xl border border-gold/10 rounded-2xl shadow-lg"
+                          >
+                            <div className="w-10 h-10 bg-gold/10 rounded-full flex items-center justify-center border border-gold/20 flex-shrink-0">
                               <Timer className="text-gold" size={18} />
                             </div>
                             <div>
@@ -2238,10 +2289,11 @@ export default function Booking() {
                                 })()}
                               </p>
                             </div>
-                          </div>
-                        </motion.div>
-                      )}
-                    </div>
+                          </motion.div>
+                        )}
+                      </div>
+                    )}
+
                   </div>
 
                   {/* Redesigned Actions */}
@@ -2257,7 +2309,7 @@ export default function Booking() {
                       onClick={nextStep}
                       className="group flex items-center justify-center gap-4 bg-gold py-5 px-16 rounded-xl text-black font-black uppercase tracking-[0.25em] text-xs hover:bg-[#F2D06B] transition-all shadow-[0_10px_30px_rgba(212,175,55,0.2)] hover:shadow-[0_15px_40px_rgba(212,175,55,0.4)]"
                     >
-                      Continue 
+                      Continue
                       <Car className=" group-hover:translate-x-2 transition-transform" size={18} />
                     </button>
                   </div>
@@ -2270,137 +2322,161 @@ export default function Booking() {
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
-                  className="glass p-4 rounded-lg md:p-12 grid grid-cols-1 lg:grid-cols-3 gap-8"
+                  className="bg-[#030303]/40 backdrop-blur-3xl p-5 md:p-10 xl:p-12 rounded-3xl border border-white/[0.05] shadow-[0_25px_60px_rgba(0,0,0,0.85)] grid grid-cols-1 lg:grid-cols-3 gap-8 md:gap-10 hover:border-white/[0.08] transition-all duration-700 relative overflow-hidden items-start"
                 >
-                  <div className="lg:col-span-2 space-y-6">
+                  <div className="lg:col-span-2 space-y-8">
                     {/* Vehicle Filters */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-white/5 border border-white/10 rounded-xl">
-                      <div className="space-y-1">
-                        <label className="text-[8px] uppercase tracking-widest text-white/40 font-bold">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-5 bg-[#080808]/90 backdrop-blur-xl border border-white/[0.08] rounded-2xl shadow-[0_15px_50px_rgba(0,0,0,0.8)] relative overflow-hidden group">
+                      {/* Subtle elegant top line accent for filter card */}
+                      <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-gold/30 to-transparent"></div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] uppercase tracking-[0.2em] text-gold/60 font-bold block">
                           Type
                         </label>
                         <select
-                          className="w-full bg-black/50 border border-white/10 text-[10px] py-2 px-2 outline-none focus:border-gold custom-select"
+                          className="w-full bg-[#111111]/90 border border-white/10 hover:border-gold/30 text-white text-xs py-2.5 px-3 rounded-xl outline-none focus:border-gold/60 transition-all custom-select cursor-pointer tracking-wider font-medium shadow-inner"
                           onChange={(e) => setTypeFilter(e.target.value)}
                           value={typeFilter}
                         >
-                          <option value="all">All Types</option>
-                          <option value="sedan">Sedan</option>
-                          <option value="suv">SUV</option>
-                          <option value="van">Van</option>
-                          <option value="luxury">Luxury</option>
+                          <option value="all" className="bg-[#121212]">All Types</option>
+                          <option value="sedan" className="bg-[#121212]">Sedan</option>
+                          <option value="suv" className="bg-[#121212]">SUV</option>
+                          <option value="van" className="bg-[#121212]">Van</option>
+                          <option value="luxury" className="bg-[#121212]">Luxury</option>
                         </select>
                       </div>
-                      <div className="space-y-1">
-                        <label className="text-[8px] uppercase tracking-widest text-white/40 font-bold">
+
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] uppercase tracking-[0.2em] text-gold/60 font-bold block">
                           Passengers
                         </label>
                         <select
-                          className="w-full bg-black/50 border border-white/10 text-[10px] py-2 px-2 outline-none focus:border-gold custom-select"
+                          className="w-full bg-[#111111]/90 border border-white/10 hover:border-gold/30 text-white text-xs py-2.5 px-3 rounded-xl outline-none focus:border-gold/60 transition-all custom-select cursor-pointer tracking-wider font-medium shadow-inner"
                           onChange={(e) => setPaxFilter(parseInt(e.target.value))}
                           value={paxFilter}
                         >
-                          <option value={0}>Any</option>
-                          <option value={2}>2+ Pax</option>
-                          <option value={4}>4+ Pax</option>
-                          <option value={6}>6+ Pax</option>
+                          <option value={0} className="bg-[#121212]">Any</option>
+                          <option value={2} className="bg-[#121212]">2+ Pax</option>
+                          <option value={4} className="bg-[#121212]">4+ Pax</option>
+                          <option value={6} className="bg-[#121212]">6+ Pax</option>
                         </select>
                       </div>
-                      <div className="space-y-1">
-                        <label className="text-[8px] uppercase tracking-widest text-white/40 font-bold">
+
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] uppercase tracking-[0.2em] text-gold/60 font-bold block">
                           Bags
                         </label>
                         <select
-                          className="w-full bg-black/50 border border-white/10 text-[10px] py-2 px-2 outline-none focus:border-gold custom-select"
+                          className="w-full bg-[#111111]/90 border border-white/10 hover:border-gold/30 text-white text-xs py-2.5 px-3 rounded-xl outline-none focus:border-gold/60 transition-all custom-select cursor-pointer tracking-wider font-medium shadow-inner"
                           onChange={(e) =>
                             setBagsFilter(parseInt(e.target.value))
                           }
                           value={bagsFilter}
                         >
-                          <option value={0}>Any</option>
-                          <option value={2}>2+ Bags</option>
-                          <option value={4}>4+ Bags</option>
+                          <option value={0} className="bg-[#121212]">Any</option>
+                          <option value={2} className="bg-[#121212]">2+ Bags</option>
+                          <option value={4} className="bg-[#121212]">4+ Bags</option>
                         </select>
                       </div>
-                      <div className="space-y-1">
-                        <label className="text-[8px] uppercase tracking-widest text-white/40 font-bold">
+
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] uppercase tracking-[0.2em] text-gold/60 font-bold block">
                           Sort By
                         </label>
                         <select
-                          className="w-full bg-black/50 border border-white/10 text-[10px] py-2 px-2 outline-none focus:border-gold custom-select"
+                          className="w-full bg-[#111111]/90 border border-white/10 hover:border-gold/30 text-white text-xs py-2.5 px-3 rounded-xl outline-none focus:border-gold/60 transition-all custom-select cursor-pointer tracking-wider font-medium shadow-inner"
                           onChange={(e) => setPriceSort(e.target.value as any)}
                           value={priceSort || ""}
                         >
-                          <option value="">Default</option>
-                          <option value="asc">Price: Low to High</option>
-                          <option value="desc">Price: High to Low</option>
+                          <option value="" className="bg-[#121212]">Default</option>
+                          <option value="asc" className="bg-[#121212]">Price: Low to High</option>
+                          <option value="desc" className="bg-[#121212]">Price: High to Low</option>
                         </select>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       {filteredFleet.map((v) => {
                         const priceDetails = calculatePrice(v.id);
+                        const isSelected = formData.vehicle === v.id;
                         return (
                           <button
                             key={v.id}
                             onClick={() => updateForm("vehicle", v.id)}
                             className={cn(
-                              "flex flex-col border rounded-lg transition-all text-left overflow-hidden group", // ← removed p-4
-                              formData.vehicle === v.id
-                                ? "border-gold bg-gold/5"
-                                : "border-white/10 hover:border-gold/50 bg-white/5",
+                              "flex flex-col border rounded-2xl transition-all duration-500 text-left overflow-hidden group relative",
+                              isSelected
+                                ? "border-gold/80 bg-gold/[0.03] shadow-[0_15px_40px_rgba(212,175,55,0.12)] ring-1 ring-gold/30"
+                                : "border-white/[0.08] hover:border-gold/40 bg-[#0E0E0E]/90 hover:bg-[#121212]/90 shadow-[0_10px_30px_rgba(0,0,0,0.4)]",
                             )}
                           >
-                            {/* Image — no padding, flush to card edges */}
-                            <div className="relative aspect-[16/9] overflow-hidden flex-shrink-0">
+                            {/* Selected Badge Ring Accent */}
+                            {isSelected && (
+                              <div className="absolute top-3 right-3 z-20 px-3 py-1 bg-gold text-black text-[9px] uppercase tracking-[0.2em] font-black rounded-full shadow-lg">
+                                Selected
+                              </div>
+                            )}
+
+                            {/* Image with Luxury Ambient Gradient Overlay */}
+                            <div className="relative aspect-[16/10] overflow-hidden flex-shrink-0 bg-black/40">
                               <img
                                 src={v.img || null}
                                 alt={v.name}
-                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 block"
+                                className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105 block"
                                 referrerPolicy="no-referrer"
                               />
+                              <div className="absolute inset-0 bg-gradient-to-t from-[#0e0e0e] via-transparent to-transparent opacity-80 pointer-events-none" />
                             </div>
 
-                            {/* Content — padding only here */}
-                            <div className="flex-1 p-4">
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="flex flex-col gap-0.5 min-w-0">
-                                  <h3 className="font-display text-xl leading-tight truncate">{v.name}</h3>
-                                  <p className="text-white/40 text-[10px] uppercase tracking-widest">{v.model}</p>
-                                  {v.excerpt && (
-                                    <p className="text-white/50 text-[10px] line-clamp-1 mt-1 leading-relaxed italic">
-                                      {v.excerpt}
+                            {/* Luxury Text Content Container */}
+                            <div className="flex-1 p-5 flex flex-col justify-between">
+                              <div>
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="flex flex-col gap-1 min-w-0">
+                                    <h3 className="font-display text-lg md:text-xl font-medium tracking-tight text-white group-hover:text-gold transition-colors truncate">
+                                      {v.name}
+                                    </h3>
+                                    <p className="text-white/40 text-[9px] uppercase tracking-[0.2em] font-medium">
+                                      {v.model}
                                     </p>
-                                  )}
+                                  </div>
+                                  <div className="flex flex-col items-end shrink-0 text-right">
+                                    <span className="text-gold font-display font-medium text-lg tracking-wider leading-none">
+                                      ${priceDetails.gross.toFixed(2)}
+                                    </span>
+                                    <span className="text-white/30 text-[8px] uppercase tracking-[0.18em] font-medium mt-1">
+                                      Total
+                                    </span>
+                                  </div>
                                 </div>
-                                <div className="flex flex-col items-end shrink-0">
-                                  <span className="text-gold font-bold text-lg leading-tight">
-                                    ${priceDetails.gross.toFixed(2)}
-                                  </span>
-                                  <span className="text-white/30 text-[9px] uppercase tracking-widest">Total</span>
-                                </div>
+
+                                {v.excerpt && (
+                                  <p className="text-white/50 text-[10px] mt-2 leading-relaxed italic line-clamp-2">
+                                    "{v.excerpt}"
+                                  </p>
+                                )}
                               </div>
 
-                              <div className="h-px bg-white/[0.06] my-3" />
+                              <div className="h-px bg-white/[0.06] my-4" />
 
-                              <div className="flex gap-4">
-                                <div className="flex items-center gap-2 text-white/60 text-[10px] uppercase tracking-widest font-bold">
-                                  <User size={12} className="text-gold" /> {v.pax} Pax
-                                </div>
-                                <div className="flex items-center gap-2 text-white/60 text-[10px] uppercase tracking-widest font-bold">
-                                  <Briefcase size={12} className="text-gold" /> {v.bags} Bags
-                                </div>
+                              <div className="flex gap-3">
+                                <span className="flex items-center gap-1.5 px-3 py-1 bg-white/[0.02] border border-white/[0.08] rounded-full text-white/60 text-[9px] uppercase tracking-[0.16em] font-medium transition-colors group-hover:border-gold/20">
+                                  <User size={10} className="text-gold" /> {v.pax} Passengers
+                                </span>
+                                <span className="flex items-center gap-1.5 px-3 py-1 bg-white/[0.02] border border-white/[0.08] rounded-full text-white/60 text-[9px] uppercase tracking-[0.16em] font-medium transition-colors group-hover:border-gold/20">
+                                  <Briefcase size={10} className="text-gold" /> {v.bags} Bags
+                                </span>
                               </div>
                             </div>
                           </button>
                         );
                       })}
                       {filteredFleet.length === 0 && (
-                        <div className="col-span-full text-center py-12 border border-dashed border-white/10 rounded-xl">
-                          <Car size={48} className="text-white/10 mx-auto mb-4" />
-                          <p className="text-white/40 text-sm">
-                            No vehicles match your filters.
+                        <div className="col-span-full text-center py-20 border border-dashed border-gold/15 rounded-3xl bg-[#080808]/60 backdrop-blur-md">
+                          <Car size={36} className="text-gold/20 mx-auto mb-4 animate-pulse" />
+                          <p className="text-white/50 text-sm uppercase tracking-[0.18em] font-light">
+                            No vehicles match your search filters.
                           </p>
                           <button
                             onClick={() => {
@@ -2409,7 +2485,7 @@ export default function Booking() {
                               setBagsFilter(0);
                               setPriceSort(null);
                             }}
-                            className="text-gold text-xs font-bold uppercase tracking-widest mt-4 hover:text-white transition-colors"
+                            className="text-gold hover:text-white hover:bg-gold hover:text-black text-[10px] font-bold uppercase tracking-[0.25em] mt-6 px-6 py-2.5 border border-gold/30 rounded-full transition-all duration-300"
                           >
                             Clear Filters
                           </button>
@@ -2419,66 +2495,77 @@ export default function Booking() {
 
                     {/* Extras Section */}
                     {extras.length > 0 && (
-                      <div className="space-y-4 pt-8 border-t border-white/5">
-                        <div className="flex items-center gap-3 mb-6">
-                          <Plus className="text-gold" size={20} />
-                          <h3 className="text-xl font-display text-gold">
-                            Extra Options
-                          </h3>
+                      <div className="space-y-4 pt-10 border-t border-white/[0.06]">
+                        <div className="flex items-start justify-between mb-6">
+                          <div>
+                            <p className="text-[10px] uppercase tracking-[0.25em] text-gold/60 font-bold mb-1">
+                              Customize Journeys
+                            </p>
+                            <h3 className="text-xl font-display font-medium text-white flex items-center gap-2">
+                              Extra Options & Upgrades
+                            </h3>
+                          </div>
+                          <div className="p-2 bg-gold/10 rounded-full border border-gold/20 flex items-center justify-center">
+                            <Plus className="text-gold" size={16} />
+                          </div>
                         </div>
+
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          {extras.map((extra) => (
-                            <button
-                              key={extra.id}
-                              onClick={() => {
-                                const isSelected =
-                                  formData.selectedExtras.includes(extra.id);
-                                updateForm(
-                                  "selectedExtras",
-                                  isSelected
-                                    ? formData.selectedExtras.filter(
-                                      (id) => id !== extra.id,
-                                    )
-                                    : [...formData.selectedExtras, extra.id],
-                                );
-                              }}
-                              className={cn(
-                                "flex items-center justify-between p-4 rounded-2xl border transition-all text-left",
-                                formData.selectedExtras.includes(extra.id)
-                                  ? "bg-gold/10 border-gold"
-                                  : "bg-white/5 border-white/10 hover:border-gold/30",
-                              )}
-                            >
-                              <div className="flex-1">
-                                <p className="text-sm font-bold text-white">
-                                  {extra.name}
-                                </p>
-                                <p className="text-[10px] text-white/40 uppercase tracking-widest line-clamp-1">
-                                  {extra.description}
-                                </p>
-                              </div>
-                              <div className="text-right ml-4">
-                                <p className="text-sm font-display text-gold">
-                                  ${extra.price}
-                                </p>
-                                <div
-                                  className={cn(
-                                    "w-4 h-4 rounded border flex items-center justify-center mt-1 ml-auto",
-                                    formData.selectedExtras.includes(extra.id)
-                                      ? "bg-gold border-gold"
-                                      : "border-white/20",
-                                  )}
-                                >
-                                  {formData.selectedExtras.includes(extra.id) && (
-                                    <CheckCircle
-                                      size={10}
-                                      className="text-black"
-                                    />
-                                  )}
+                          {extras.map((extra) => {
+                            const isExtraSelected = formData.selectedExtras.includes(extra.id);
+                            return (
+                              <button
+                                key={extra.id}
+                                onClick={() => {
+                                  const isSelected =
+                                    formData.selectedExtras.includes(extra.id);
+                                  updateForm(
+                                    "selectedExtras",
+                                    isSelected
+                                      ? formData.selectedExtras.filter(
+                                        (id) => id !== extra.id,
+                                      )
+                                      : [...formData.selectedExtras, extra.id],
+                                  );
+                                }}
+                                className={cn(
+                                  "flex items-center justify-between p-5 rounded-2xl border transition-all duration-300 text-left relative overflow-hidden group",
+                                  isExtraSelected
+                                    ? "bg-gold/[0.04] border-gold shadow-[0_10px_30px_rgba(212,175,55,0.06)] ring-1 ring-gold/20"
+                                    : "bg-[#0E0E0E]/90 border-white/[0.06] hover:border-gold/30 hover:bg-[#121212]/90",
+                                )}
+                              >
+                                <div className="flex-1 min-w-0 pr-4">
+                                  <p className="text-sm font-bold text-white group-hover:text-gold transition-colors truncate">
+                                    {extra.name}
+                                  </p>
+                                  <p className="text-[10px] text-white/40 uppercase tracking-[0.12em] mt-1 line-clamp-1">
+                                    {extra.description}
+                                  </p>
                                 </div>
-                              </div>
-                            </button>
-                          ))}
+                                <div className="text-right flex flex-col items-end shrink-0 ml-2">
+                                  <p className="text-sm font-display text-gold font-medium tracking-wide">
+                                    +${extra.price}
+                                  </p>
+                                  <div
+                                    className={cn(
+                                      "w-4 h-4 rounded-full border flex items-center justify-center mt-2.5 transition-all duration-300",
+                                      isExtraSelected
+                                        ? "bg-gold border-gold"
+                                        : "border-white/20 group-hover:border-gold/40",
+                                    )}
+                                  >
+                                    {isExtraSelected && (
+                                      <CheckCircle
+                                        size={10}
+                                        className="text-black fill-current"
+                                      />
+                                    )}
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
                     )}
@@ -2486,61 +2573,64 @@ export default function Booking() {
 
                   {/* Sidebar Summary */}
                   <div className="space-y-6">
-                    <div className="glass p-6 sticky top-32 rounded-lg border border-white/10">
-                      <h3 className="text-gold text-xs uppercase tracking-widest font-bold mb-6 border-b border-white/5 pb-4">
+                    <div className="bg-[#080808]/95 backdrop-blur-2xl p-6 md:p-8 sticky top-32 rounded-2xl border border-white/[0.08] shadow-[0_20px_50px_rgba(0,0,0,0.8)] relative overflow-hidden group">
+                      {/* Subtle elegant linear gold gradient accent line at the top of card */}
+                      <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-gold/40 to-transparent"></div>
+
+                      <h3 className="text-gold text-xs uppercase tracking-[0.25em] font-bold mb-8 border-b border-white/[0.06] pb-4">
                         Booking Summary
                       </h3>
 
-                      <div className="space-y-4 mb-8">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-gold/10 flex items-center justify-center">
-                            <MapPin size={14} className="text-gold" />
+                      <div className="space-y-5 mb-8">
+                        <div className="flex items-center gap-4">
+                          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-gold/15 to-gold/5 flex items-center justify-center border border-gold/10 hover:border-gold/30 transition-colors duration-300 flex-shrink-0 animate-fade-in">
+                            <LocateFixed size={14} className="text-gold" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-[8px] uppercase tracking-widest text-white/40">
+                            <p className="text-[9px] uppercase tracking-[0.18em] text-white/35 font-bold mb-0.5">
                               Pickup
                             </p>
-                            <p className="text-[10px] text-white truncate">
+                            <p className="text-[11px] text-white/95 font-medium truncate leading-normal">
                               {formData.pickup}
                             </p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-gold/10 flex items-center justify-center">
+                        <div className="flex items-center gap-4">
+                          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-gold/15 to-gold/5 flex items-center justify-center border border-gold/10 hover:border-gold/30 transition-colors duration-300 flex-shrink-0 animate-fade-in">
                             <MapPin size={14} className="text-gold" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-[8px] uppercase tracking-widest text-white/40">
+                            <p className="text-[9px] uppercase tracking-[0.18em] text-white/35 font-bold mb-0.5">
                               Dropoff
                             </p>
-                            <p className="text-[10px] text-white truncate">
+                            <p className="text-[11px] text-white/95 font-medium truncate leading-normal">
                               {formData.dropoff || "Hourly Hire"}
                             </p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-gold/10 flex items-center justify-center">
+                        <div className="flex items-center gap-4">
+                          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-gold/15 to-gold/5 flex items-center justify-center border border-gold/10 hover:border-gold/30 transition-colors duration-300 flex-shrink-0 animate-fade-in">
                             <Calendar size={14} className="text-gold" />
                           </div>
                           <div>
-                            <p className="text-[8px] uppercase tracking-widest text-white/40">
+                            <p className="text-[9px] uppercase tracking-[0.18em] text-white/35 font-bold mb-0.5">
                               Date & Time
                             </p>
-                            <p className="text-[10px] text-white">
+                            <p className="text-[11px] text-white/95 font-medium leading-normal">
                               {formData.date} at {formData.time}
                             </p>
                           </div>
                         </div>
                         {formData.isReturn && (
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-gold/10 flex items-center justify-center">
+                          <div className="flex items-center gap-4">
+                            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-gold/15 to-gold/5 flex items-center justify-center border border-gold/10 hover:border-gold/30 transition-colors duration-300 flex-shrink-0 animate-fade-in">
                               <RotateCcw size={14} className="text-gold" />
                             </div>
                             <div>
-                              <p className="text-[8px] uppercase tracking-widest text-white/40">
+                              <p className="text-[9px] uppercase tracking-[0.18em] text-white/35 font-bold mb-0.5">
                                 Return Trip
                               </p>
-                              <p className="text-[10px] text-white">
+                              <p className="text-[11px] text-white/95 font-medium leading-normal">
                                 {formData.returnDate} at {formData.returnTime}
                               </p>
                             </div>
@@ -2549,12 +2639,12 @@ export default function Booking() {
 
                         {formData.waypoints.filter((wp) => wp.length > 5).length >
                           0 && (
-                            <div className="flex items-start gap-3">
-                              <div className="w-8 h-8 rounded-full bg-gold/10 flex items-center justify-center shrink-0">
+                            <div className="flex items-start gap-4">
+                              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-gold/15 to-gold/5 flex items-center justify-center border border-gold/10 hover:border-gold/30 transition-colors duration-300 shrink-0 animate-fade-in">
                                 <Navigation size={14} className="text-gold" />
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className="text-[8px] uppercase tracking-widest text-white/40">
+                                <p className="text-[9px] uppercase tracking-[0.18em] text-white/35 font-bold mb-0.5">
                                   Waypoints
                                 </p>
                                 <div className="space-y-1">
@@ -2563,7 +2653,7 @@ export default function Booking() {
                                     .map((wp, idx) => (
                                       <p
                                         key={idx}
-                                        className="text-[10px] text-white truncate"
+                                        className="text-[11px] text-white/95 font-medium truncate leading-normal"
                                       >
                                         {wp}
                                       </p>
@@ -2574,12 +2664,12 @@ export default function Booking() {
                           )}
 
                         {formData.selectedExtras.length > 0 && (
-                          <div className="flex items-start gap-3">
-                            <div className="w-8 h-8 rounded-full bg-gold/10 flex items-center justify-center shrink-0">
+                          <div className="flex items-start gap-4">
+                            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-gold/15 to-gold/5 flex items-center justify-center border border-gold/10 hover:border-gold/30 transition-colors duration-300 shrink-0 animate-fade-in">
                               <Plus size={14} className="text-gold" />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-[8px] uppercase tracking-widest text-white/40">
+                              <p className="text-[9px] uppercase tracking-[0.18em] text-white/35 font-bold mb-0.5">
                                 Extras
                               </p>
                               <div className="space-y-1">
@@ -2588,7 +2678,7 @@ export default function Booking() {
                                   return (
                                     <p
                                       key={`sel-extra-${id}-${seIdx}`}
-                                      className="text-[10px] text-white truncate"
+                                      className="text-[11px] text-white/95 font-medium truncate leading-normal"
                                     >
                                       {extra?.name}
                                     </p>
@@ -2598,15 +2688,15 @@ export default function Booking() {
                             </div>
                           </div>
                         )}
-                        <div className="flex items-center gap-3 mb-2">
-                          <div className="w-8 h-8 rounded-full bg-gold/10 flex items-center justify-center">
+                        <div className="flex items-center gap-4 mb-2">
+                          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-gold/15 to-gold/5 flex items-center justify-center border border-gold/10 hover:border-gold/30 transition-colors duration-300 flex-shrink-0 animate-fade-in">
                             <Car size={14} className="text-gold" />
                           </div>
                           <div>
-                            <p className="text-[8px] uppercase tracking-widest text-white/40">
+                            <p className="text-[9px] uppercase tracking-[0.18em] text-white/35 font-bold mb-0.5">
                               Vehicle
                             </p>
-                            <p className="text-[10px] text-white">
+                            <p className="text-[11px] text-white/95 font-medium leading-normal">
                               {
                                 (
                                   fleet.find(
@@ -2624,22 +2714,22 @@ export default function Booking() {
 
 
                       {formData.vehicle && (
-                        <div className="space-y-3 pt-3 border-t border-white/5">
+                        <div className="space-y-3.5 pt-4 border-t border-white/[0.06]">
                           {settings?.showPriceBreakdown !== false && (
-                            <div className="space-y-2">
+                            <div className="space-y-2.5">
                               {(() => {
                                 const details = calculatePrice(formData.vehicle);
                                 return (
                                   <>
                                     {settings?.showBasePrice !== false && (
-                                      <div className="flex justify-between text-[10px] uppercase tracking-widest text-white/40">
+                                      <div className="flex justify-between items-center text-[10px] uppercase tracking-[0.16em] text-white/50 py-1.5 border-b border-white/[0.03] transition-colors hover:text-white/80">
                                         <span>Base Fare</span>
-                                        <span>${details.base.toFixed(2)}</span>
+                                        <span className="font-display font-medium text-white/90">${details.base.toFixed(2)}</span>
                                       </div>
                                     )}
                                     {settings?.showDistancePrice !== false && (
-                                      <div className="space-y-2">
-                                        <div className="flex justify-between items-center text-[10px] uppercase tracking-widest text-white/40">
+                                      <div className="space-y-2 border-b border-white/[0.03] last:border-0 pb-1.5">
+                                        <div className="flex justify-between items-center text-[10px] uppercase tracking-[0.16em] text-white/50 py-1 border-b-0">
                                           <div className="flex items-center gap-2">
                                             <span>
                                               {formData.serviceType === "hourly"
@@ -2655,21 +2745,21 @@ export default function Booking() {
                                                   )
                                                 }
                                                 className={cn(
-                                                  "flex items-center gap-1 text-gold/50 hover:text-gold transition-colors",
+                                                  "flex items-center gap-1.5 text-gold/60 hover:text-gold transition-all duration-300",
                                                   showDistanceBreakdown &&
-                                                  "text-gold",
+                                                  "text-gold font-mediumScale",
                                                 )}
                                                 title="View Range Wise Price"
                                               >
                                                 <Eye size={10} />
-                                                <span className="text-[9px] font-bold uppercase tracking-widest">
+                                                <span className="text-[9px] font-bold uppercase tracking-[0.15em]">
                                                   View
                                                 </span>
                                               </button>
                                             )}
                                           </div>
 
-                                          <span>
+                                          <span className="font-display font-medium text-white/90">
                                             ${details.distance.toFixed(2)}
                                           </span>
                                         </div>
@@ -2677,9 +2767,9 @@ export default function Booking() {
                                         {showDistanceBreakdown &&
                                           details.rangeCalcs &&
                                           details.rangeCalcs.length > 0 && (
-                                            <div className="p-3 bg-white/5 rounded-lg border border-gold/20 space-y-2 mb-2">
-                                              <div className="flex items-center justify-between mb-1 border-b border-white/5 pb-1">
-                                                <h4 className="text-[8px] uppercase tracking-widest font-bold text-gold">
+                                            <div className="p-4 bg-[#050505]/95 rounded-xl border border-gold/15 space-y-2.5 my-3 shadow-inner">
+                                              <div className="flex items-center justify-between mb-1.5 border-b border-white/5 pb-1.5">
+                                                <h4 className="text-[9px] uppercase tracking-[0.2em] font-bold text-gold">
                                                   {formData.serviceType ===
                                                     "hourly"
                                                     ? "Hourly Calculation"
@@ -2690,17 +2780,17 @@ export default function Booking() {
                                                 (calc: any, i: number) => (
                                                   <div
                                                     key={i}
-                                                    className="flex justify-between items-center text-[9px]"
+                                                    className="flex justify-between items-center text-[10px] tracking-wide"
                                                   >
                                                     <div className="flex items-center gap-2">
-                                                      <div className="w-1 h-1 rounded-full bg-gold" />
-                                                      <span className="text-white font-bold uppercase tracking-tighter">
+                                                      <div className="w-1 h-1 rounded-full bg-gold/70" />
+                                                      <span className="text-white font-medium uppercase tracking-[0.05em]">
                                                         {calc.label}{" "}
                                                         {calc.isHourly
                                                           ? ""
                                                           : "Range"}
                                                       </span>
-                                                      <span className="text-white/40">
+                                                      <span className="text-white/40 text-[9px]">
                                                         ({calc.dist.toFixed(1)}
                                                         {calc.isHourly
                                                           ? "h"
@@ -2708,7 +2798,7 @@ export default function Booking() {
                                                         × ${calc.rate})
                                                       </span>
                                                     </div>
-                                                    <span className="text-white font-bold">
+                                                    <span className="text-white/95 font-semibold">
                                                       ${calc.total.toFixed(2)}
                                                     </span>
                                                   </div>
@@ -2720,39 +2810,39 @@ export default function Booking() {
                                     )}
                                     {settings?.showWaypointPrice !== false &&
                                       details.waypoints > 0 && (
-                                        <div className="flex justify-between text-[10px] uppercase tracking-widest text-white/40">
+                                        <div className="flex justify-between items-center text-[10px] uppercase tracking-[0.16em] text-white/50 py-1.5 border-b border-white/[0.03] transition-colors hover:text-white/80">
                                           <span>Waypoints</span>
-                                          <span>
+                                          <span className="font-display font-medium text-white/90">
                                             ${details.waypoints.toFixed(2)}
                                           </span>
                                         </div>
                                       )}
                                     {formData.isReturn && (
-                                      <div className="flex justify-between text-[10px] uppercase tracking-widest text-white/40">
+                                      <div className="flex justify-between items-center text-[10px] uppercase tracking-[0.16em] text-white/50 py-1.5 border-b border-white/[0.03] transition-colors hover:text-white/80">
                                         <span>Return Trip (2x)</span>
-                                        <span>
+                                        <span className="font-display font-medium text-white/90">
                                           ${details.returnPrice.toFixed(2)}
                                         </span>
                                       </div>
                                     )}
                                     {settings?.showExtrasPrice !== false &&
                                       details.extras > 0 && (
-                                        <div className="flex justify-between text-[10px] uppercase tracking-widest text-white/40">
+                                        <div className="flex justify-between items-center text-[10px] uppercase tracking-[0.16em] text-white/50 py-1.5 border-b border-white/[0.03] transition-colors hover:text-white/80">
                                           <span>Extras</span>
-                                          <span>
+                                          <span className="font-display font-medium text-white/90">
                                             ${details.extras.toFixed(2)}
                                           </span>
                                         </div>
                                       )}
                                     {settings?.showNetPrice !== false && (
-                                      <div className="flex justify-between text-[10px] uppercase tracking-widest text-white/40 border-t border-white/5 pt-2">
+                                      <div className="flex justify-between items-center text-[10px] uppercase tracking-[0.16em] text-white/50 py-1.5 border-b border-white/[0.03] transition-colors hover:text-white/80">
                                         <span>Gross Price</span>
-                                        <span>${details.gross.toFixed(2)}</span>
+                                        <span className="font-display font-medium text-white/90">${details.gross.toFixed(2)}</span>
                                       </div>
                                     )}
                                     {settings?.showDiscount !== false &&
                                       details.discount > 0 && (
-                                        <div className="flex justify-between text-[10px] uppercase tracking-widest text-green-500 border-b border-white/5 pb-2">
+                                        <div className="flex justify-between items-center text-[10px] uppercase tracking-[0.16em] text-[#10B981] font-medium py-1.5 border-b border-white/[0.03]">
                                           <span>
                                             Discount ({appliedCoupon?.code} -{" "}
                                             {appliedCoupon?.type === "percentage"
@@ -2760,40 +2850,40 @@ export default function Booking() {
                                               : `$${appliedCoupon.value}`}
                                             )
                                           </span>
-                                          <span>
+                                          <span className="font-semibold text-[#10B981]">
                                             -${details.discount.toFixed(2)}
                                           </span>
                                         </div>
                                       )}
                                     {settings?.showNetPrice !== false &&
                                       details.discount > 0 && (
-                                        <div className="flex justify-between text-[10px] uppercase tracking-widest text-white/40">
+                                        <div className="flex justify-between items-center text-[10px] uppercase tracking-[0.16em] text-gold/50 font-bold py-1.5 border-b border-white/[0.03] transition-colors hover:text-white/80">
                                           <span>Net Price</span>
-                                          <span>${details.net.toFixed(2)}</span>
+                                          <span className="font-display font-medium text-gold/50 font-bold">${details.net.toFixed(2)}</span>
                                         </div>
                                       )}
                                     {settings?.showTax !== false && (
-                                      <div className="flex justify-between text-[10px] uppercase tracking-widest text-white/40">
+                                      <div className="flex justify-between items-center text-[10px] uppercase tracking-[0.16em] text-white/50 py-1.5 border-b border-white/[0.03] transition-colors hover:text-white/80">
                                         <span>
                                           Tax ({settings?.taxPercentage || 0}%)
                                         </span>
-                                        <span>${details.tax.toFixed(2)}</span>
+                                        <span className="font-display font-medium text-white/90">${details.tax.toFixed(2)}</span>
                                       </div>
                                     )}
                                     {settings?.showStripeFees !== false &&
                                       details.stripe > 0 && (
-                                        <div className="flex justify-between text-[10px] uppercase tracking-widest text-white/40">
+                                        <div className="flex justify-between items-center text-[10px] uppercase tracking-[0.16em] text-white/50 py-1.5 border-b border-white/[0.03] transition-colors hover:text-white/80">
                                           <span>Stripe Fees</span>
-                                          <span>
+                                          <span className="font-display font-medium text-white/90">
                                             ${details.stripe.toFixed(2)}
                                           </span>
                                         </div>
                                       )}
-                                    <div className="flex justify-between pt-4 border-t border-white/10">
-                                      <span className="text-white font-bold text-xs uppercase tracking-widest">
+                                    <div className="flex justify-between items-center pt-5">
+                                      <span className="text-white font-bold text-xs uppercase tracking-[0.2em]">
                                         Total
                                       </span>
-                                      <span className="text-gold font-bold text-xl">
+                                      <span className="text-gold font-display font-semibold text-2xl tracking-widest leading-none">
                                         ${details.total.toFixed(2)}
                                       </span>
                                     </div>
@@ -2809,13 +2899,13 @@ export default function Booking() {
                       <div className="flex flex-col sm:flex-row gap-4 mt-8">
                         <button
                           onClick={prevStep}
-                          className="btn-outline flex-1 py-4 text-xs uppercase tracking-widest font-bold"
+                          className="btn-outline flex-1 py-3.5 px-6 rounded-xl border border-white/10 hover:border-gold/50 text-[10px] uppercase tracking-[0.2em] font-medium transition-all duration-300 active:scale-[0.98]"
                         >
                           Back
                         </button>
                         <button
                           onClick={nextStep}
-                          className="btn-primary flex-1 py-4 text-xs uppercase tracking-widest font-bold"
+                          className="btn-primary flex-1 py-3.5 px-6 rounded-xl bg-gold hover:bg-white text-black font-semibold text-[10px] uppercase tracking-[0.2em] transition-all duration-300 active:scale-[0.98] disabled:opacity-30 disabled:pointer-events-none"
                           disabled={!formData.vehicle}
                         >
                           Continue
@@ -2836,16 +2926,19 @@ export default function Booking() {
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 text-left items-start">
                     <div className="lg:col-span-7 space-y-8">
                       {/* Confirmation Card */}
-                      <div className="glass p-3 md:p-12 rounded-md">
-                        <div className="flex items-center gap-4 mb-2">
-                          <div className="w-15 h-15 bg-green-500 rounded-full flex items-center justify-center shrink-0">
-                            <CheckCircle size={25} className="text-black" />
+                      <div className="bg-[#080808]/95 backdrop-blur-2xl p-6 md:p-8 xl:p-10 rounded-2xl border border-white/[0.08] shadow-[0_20px_50px_rgba(0,0,0,0.85)] relative overflow-hidden group hover:border-gold/20 transition-all duration-500">
+                        {/* Subtle elegant linear gold gradient accent line at the top of card */}
+                        <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-gold/40 to-transparent"></div>
+
+                        <div className="flex items-center gap-5">
+                          <div className="w-12 h-12 bg-[#10B981]/15 border border-[#10B981]/35 text-[#10B981] rounded-full flex items-center justify-center shrink-0 shadow-[0_0_20px_rgba(16,185,129,0.15)]">
+                            <CheckCircle size={24} className="text-[#10B981]" />
                           </div>
                           <div className="text-left">
-                            <h2 className="text-xl font-display mb-2">
+                            <h2 className="text-lg md:text-xl font-display font-medium text-white tracking-wide mb-1">
                               Confirm Your Booking
                             </h2>
-                            <p className="text-white/60 max-w-md">
+                            <p className="text-white/60 text-xs md:text-sm max-w-md leading-relaxed">
                               Please review your details. A confirmation email
                               will be sent once payment is processed.
                             </p>
@@ -2853,21 +2946,24 @@ export default function Booking() {
                         </div>
                       </div>
                       {/* Customer Information Card */}
-                      <div className="glass p-6 md:p-8 space-y-6  rounded-md">
+                      <div className="bg-[#080808]/95 backdrop-blur-2xl p-6 md:p-8 space-y-6 rounded-2xl border border-white/[0.08] shadow-[0_20px_50px_rgba(0,0,0,0.8)] relative overflow-hidden group hover:border-gold/15 transition-all duration-500">
+                        {/* Subtle gold line at top */}
+                        <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-gold/30 to-transparent"></div>
+
                         <div className="space-y-4">
-                          <h3 className="text-gold text-xs uppercase tracking-widest font-bold mb-4">
+                          <h3 className="text-gold text-xs uppercase tracking-[0.25em] font-bold mb-6 border-b border-white/[0.06] pb-4">
                             Customer Information
                           </h3>
 
                           {/* First row: Name + Email + Phone */}
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div className="space-y-1">
-                              <label className="text-[10px] uppercase tracking-widest text-white/40">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                            <div className="space-y-1.5">
+                              <label className="text-[9px] uppercase tracking-[0.18em] text-white/40 font-bold">
                                 Full Name <span className="text-red-500">*</span>
                               </label>
                               <input
                                 type="text"
-                                className="w-full bg-white/5 rounded-lg border border-white/10 py-2 px-4 focus:border-gold outline-none text-sm"
+                                className="w-full bg-black/40 hover:bg-black/60 focus:bg-black/80 rounded-xl border border-white/[0.08] focus:border-gold/50 py-3 px-4 outline-none text-white text-sm transition-all duration-300 placeholder:text-white/20 select-none shadow-inner"
                                 value={formData.customerName}
                                 onChange={(e) =>
                                   updateForm("customerName", e.target.value)
@@ -2876,13 +2972,13 @@ export default function Booking() {
                                 required
                               />
                             </div>
-                            <div className="space-y-1">
-                              <label className="text-[10px] uppercase tracking-widest text-white/40">
+                            <div className="space-y-1.5">
+                              <label className="text-[9px] uppercase tracking-[0.18em] text-white/40 font-bold">
                                 Email <span className="text-red-500">*</span>
                               </label>
                               <input
                                 type="email"
-                                className="w-full bg-white/5 rounded-lg border border-white/10 py-2 px-4 focus:border-gold outline-none text-sm"
+                                className="w-full bg-black/40 hover:bg-black/60 focus:bg-black/80 rounded-xl border border-white/[0.08] focus:border-gold/50 py-3 px-4 outline-none text-white text-sm transition-all duration-300 placeholder:text-white/20 select-none shadow-inner"
                                 value={formData.customerEmail}
                                 onChange={(e) =>
                                   updateForm("customerEmail", e.target.value)
@@ -2891,13 +2987,13 @@ export default function Booking() {
                                 required
                               />
                             </div>
-                            <div className="space-y-1">
-                              <label className="text-[10px] uppercase tracking-widest text-white/40">
+                            <div className="space-y-1.5">
+                              <label className="text-[9px] uppercase tracking-[0.18em] text-white/40 font-bold">
                                 Phone <span className="text-red-500">*</span>
                               </label>
                               <input
                                 type="tel"
-                                className="w-full bg-white/5 rounded-lg border border-white/10 py-2 px-4 focus:border-gold outline-none text-sm"
+                                className="w-full bg-black/40 hover:bg-black/60 focus:bg-black/80 rounded-xl border border-white/[0.08] focus:border-gold/50 py-3 px-4 outline-none text-white text-sm transition-all duration-300 placeholder:text-white/20 select-none shadow-inner"
                                 value={formData.customerPhone}
                                 onChange={(e) =>
                                   updateForm("customerPhone", e.target.value)
@@ -2912,7 +3008,7 @@ export default function Booking() {
                           {!user && (
                             <div className="space-y-6">
                               <div className="flex flex-col gap-4">
-                                <div className="flex items-center justify-between p-4 bg-gold/5 border border-gold/20 rounded-xl">
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 bg-gold/[0.02] border border-gold/15 rounded-2xl relative overflow-hidden group">
                                   <div>
                                     <p className="text-sm font-bold text-gold">Already have an account?</p>
                                     <p className="text-[10px] text-white/60">Log in to sync your profile and previous details.</p>
@@ -2920,7 +3016,7 @@ export default function Booking() {
                                   <button
                                     type="button"
                                     onClick={() => setShowLoginFields(!showLoginFields)}
-                                    className="text-gold hover:text-white transition-colors text-xs font-bold uppercase tracking-widest border border-gold/30 px-4 py-2 rounded-lg"
+                                    className="text-gold hover:text-black hover:bg-gold transition-all duration-300 text-[10px] font-bold uppercase tracking-[0.18em] border border-gold/30 hover:border-gold px-5 py-2.5 rounded-xl active:scale-95 flex-shrink-0 w-full sm:w-auto text-center justify-center flex"
                                   >
                                     {showLoginFields ? "Cancel" : "Login"}
                                   </button>
@@ -2929,28 +3025,28 @@ export default function Booking() {
                                 {showLoginFields && (
                                   <form
                                     onSubmit={handleLogin}
-                                    className="p-6 bg-white/5 border border-white/10 rounded-2xl space-y-4 animate-in fade-in slide-in-from-top-4 duration-300"
+                                    className="p-6 md:p-8 bg-black/45 border border-white/[0.08] rounded-2xl space-y-5 animate-in fade-in slide-in-from-top-4 duration-500 shadow-2xl"
                                   >
-                                    <h4 className="text-xs font-bold text-white uppercase tracking-widest flex items-center gap-2">
+                                    <h4 className="text-[10px] font-bold text-white uppercase tracking-[0.2em] flex items-center gap-2 mb-2 border-b border-white/[0.05] pb-3">
                                       <User size={14} className="text-gold" /> Member Login
                                     </h4>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                      <div className="space-y-1">
-                                        <label className="text-[10px] uppercase tracking-widest text-white/40">Email</label>
+                                      <div className="space-y-1.5">
+                                        <label className="text-[9px] uppercase tracking-[0.18em] text-white/40 font-bold">Email</label>
                                         <input
                                           type="email"
-                                          className="w-full bg-black/40 rounded-lg border border-white/10 py-2 px-4 focus:border-gold outline-none text-sm"
+                                          className="w-full bg-black/60 hover:bg-black/85 focus:bg-black/95 rounded-xl border border-white/[0.08] focus:border-gold/50 py-2.5 px-4 outline-none text-sm text-white/95 transition-all duration-300 placeholder:text-white/20 select-none shadow-inner"
                                           value={loginEmail}
                                           onChange={(e) => setLoginEmail(e.target.value)}
                                           placeholder="your@email.com"
                                           autoComplete="email"
                                         />
                                       </div>
-                                      <div className="space-y-1">
-                                        <label className="text-[10px] uppercase tracking-widest text-white/40">Password</label>
+                                      <div className="space-y-1.5">
+                                        <label className="text-[9px] uppercase tracking-[0.18em] text-white/40 font-bold">Password</label>
                                         <input
                                           type="password"
-                                          className="w-full bg-black/40 rounded-lg border border-white/10 py-2 px-4 focus:border-gold outline-none text-sm"
+                                          className="w-full bg-black/60 hover:bg-black/85 focus:bg-black/95 rounded-xl border border-white/[0.08] focus:border-gold/50 py-2.5 px-4 outline-none text-sm text-white/95 transition-all duration-300 placeholder:text-white/20 select-none shadow-inner"
                                           value={loginPassword}
                                           onChange={(e) => setLoginPassword(e.target.value)}
                                           placeholder="••••••••"
@@ -2961,7 +3057,7 @@ export default function Booking() {
                                     <button
                                       type="submit"
                                       disabled={isLoggingIn}
-                                      className="w-full bg-gold text-black py-3 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-white transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                                      className="w-full bg-gradient-to-r from-gold to-[#D4AF37] hover:from-white hover:to-white text-black py-3 px-6 rounded-xl font-bold text-[10px] uppercase tracking-[0.2em] transition-all duration-300 active:scale-[0.98] disabled:opacity-40 flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(212,175,55,0.15)]"
                                     >
                                       {isLoggingIn ? (
                                         <>
@@ -2978,14 +3074,14 @@ export default function Booking() {
 
                               {!showLoginFields && (
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                  <div className="space-y-1 md:col-span-1">
-                                    <label className="text-[10px] uppercase tracking-widest text-white/40">
+                                  <div className="space-y-1.5 md:col-span-1">
+                                    <label className="text-[9px] uppercase tracking-[0.18em] text-white/40 font-bold">
                                       Create Password{" "}
                                       <span className="text-red-500">*</span>
                                     </label>
                                     <input
                                       type="password"
-                                      className="w-full bg-white/5 rounded-lg border border-white/10 py-2 px-4 focus:border-gold outline-none text-sm"
+                                      className="w-full bg-black/40 hover:bg-black/60 focus:bg-black/80 rounded-xl border border-white/[0.08] focus:border-gold/50 py-3 px-4 outline-none text-white text-sm transition-all duration-300 placeholder:text-white/20 select-none shadow-inner"
                                       value={formData.customerPassword}
                                       onChange={(e) =>
                                         updateForm("customerPassword", e.target.value)
@@ -2993,7 +3089,7 @@ export default function Booking() {
                                       placeholder="Min 6 characters"
                                       required
                                     />
-                                    <p className="text-[8px] text-white/40 italic">
+                                    <p className="text-[9px] text-white/35 italic">
                                       An account will be created for you.
                                     </p>
                                   </div>
@@ -3003,12 +3099,12 @@ export default function Booking() {
                           )}
 
                           {/* Additional info */}
-                          <div className="space-y-1 pt-2">
-                            <label className="text-[10px] uppercase tracking-widest text-white/40">
+                          <div className="space-y-1.5 pt-2">
+                            <label className="text-[9px] uppercase tracking-[0.18em] text-white/40 font-bold">
                               Additional information
                             </label>
                             <textarea
-                              className="w-full bg-white/5 rounded-lg border border-white/10 py-2 px-4 focus:border-gold outline-none text-sm min-h-[80px]"
+                              className="w-full bg-black/40 hover:bg-black/60 focus:bg-black/80 rounded-xl border border-white/[0.08] focus:border-gold/50 py-3 px-4 outline-none text-white text-sm min-h-[90px] transition-all duration-300 placeholder:text-white/20 select-none shadow-inner"
                               value={formData.purpose}
                               onChange={(e) =>
                                 updateForm("purpose", e.target.value)
@@ -3020,21 +3116,24 @@ export default function Booking() {
                       </div>
 
                       {/* Coupon Section Card */}
-                      <div className="glass p-6 md:p-8 space-y-4 rounded-md">
-                        <h3 className="text-gold text-xs uppercase tracking-widest font-bold mb-4">
+                      <div className="bg-[#080808]/95 backdrop-blur-2xl p-6 md:p-8 space-y-5 rounded-2xl border border-white/[0.08] shadow-[0_20px_50px_rgba(0,0,0,0.8)] relative overflow-hidden group hover:border-gold/15 transition-all duration-500">
+                        {/* Subtle gold line at top */}
+                        <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-gold/30 to-transparent"></div>
+
+                        <h3 className="text-gold text-xs uppercase tracking-[0.25em] font-bold mb-6 border-b border-white/[0.06] pb-4 font-display">
                           Discount Coupon
                         </h3>
                         <div className="space-y-4">
                           <div className="flex gap-2">
                             <div className="relative flex-1">
                               <Tag
-                                className="absolute left-3 top-1/2 -translate-y-1/2 text-gold/50"
+                                className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gold/50"
                                 size={14}
                               />
                               <input
                                 type="text"
                                 placeholder="Enter coupon code"
-                                className="w-full bg-white/5 rounded-lg border border-white/10 py-2 pl-10 pr-4 focus:border-gold outline-none text-sm uppercase"
+                                className="w-full bg-black/40 hover:bg-black/65 focus:bg-black/85 rounded-xl border border-white/[0.08] focus:border-gold/50 py-3 pl-11 pr-4 outline-none text-white text-sm transition-all duration-300 placeholder:text-white/20 select-none shadow-inner uppercase tracking-wider"
                                 value={formData.couponCode}
                                 onChange={(e) =>
                                   updateForm(
@@ -3047,7 +3146,7 @@ export default function Booking() {
                             <button
                               onClick={handleValidateCoupon}
                               disabled={isValidatingCoupon || !formData.couponCode}
-                              className="bg-gold text-black px-4 text-[10px] font-bold uppercase rounded-lg hover:bg-white transition-colors disabled:opacity-50"
+                              className="bg-gold hover:bg-white text-black px-6 rounded-xl text-[10px] uppercase tracking-[0.2em] font-semibold transition-all duration-300 active:scale-95 disabled:opacity-50 flex items-center justify-center shrink-0"
                             >
                               {isValidatingCoupon ? (
                                 <Loader2 size={14} className="animate-spin" />
@@ -3059,19 +3158,19 @@ export default function Booking() {
 
                           {/* Available Coupons Pills */}
                           {availableCoupons.length > 0 && !appliedCoupon && (
-                            <div className="space-y-2">
-                              <p className="text-[10px] uppercase tracking-widest text-white/30 font-bold">Available Offers:</p>
+                            <div className="space-y-3 pt-1">
+                              <p className="text-[9px] uppercase tracking-[0.18em] text-white/30 font-bold">Available Offers:</p>
                               <div className="flex flex-wrap gap-2">
                                 {availableCoupons.map((coupon) => (
                                   <button
                                     key={`coupon-pill-${coupon.id}`}
                                     type="button"
                                     onClick={() => handleApplyCouponFromList(coupon.code)}
-                                    className="flex items-center gap-2 px-3 py-1.5 bg-gold/5 border border-gold/20 hover:border-gold/50 hover:bg-gold/10 rounded-full transition-all group"
+                                    className="flex items-center gap-2 px-3 py-2 bg-gold/[0.03] border border-gold/15 hover:border-gold/40 hover:bg-gold/[0.08] rounded-full transition-all duration-300 group hover:scale-[1.02] active:scale-95"
                                   >
                                     <BadgePercent size={12} className="text-gold" />
                                     <span className="text-[10px] font-bold text-white/80 group-hover:text-gold uppercase tracking-wider">{coupon.code}</span>
-                                    <span className="text-[8px] text-gold/60 font-medium">
+                                    <span className="text-[9px] text-gold/60 font-medium">
                                       {coupon.type === 'percentage' ? `${coupon.value}% OFF` : `$${coupon.value} OFF`}
                                     </span>
                                   </button>
@@ -3081,13 +3180,13 @@ export default function Booking() {
                           )}
                         </div>
                         {couponError && (
-                          <p className="text-red-500 text-[10px]">
+                          <p className="text-red-500 text-[10px] tracking-wide mt-2">
                             {couponError}
                           </p>
                         )}
                         {appliedCoupon && (
-                          <div className="flex items-center justify-between bg-gold/10 border border-gold/20 p-2 rounded">
-                            <div className="flex items-center gap-2 text-gold text-[10px] font-bold uppercase tracking-widest">
+                          <div className="flex items-center justify-between bg-gold/[0.06] border border-gold/25 p-3.5 rounded-xl animate-fade-in mt-3">
+                            <div className="flex items-center gap-2.5 text-gold text-[10px] font-bold uppercase tracking-[0.15em]">
                               <CheckCircle size={14} />
                               Coupon Applied: {appliedCoupon.code}
                             </div>
@@ -3096,7 +3195,7 @@ export default function Booking() {
                                 setAppliedCoupon(null);
                                 updateForm("couponCode", "");
                               }}
-                              className="text-white/40 hover:text-white"
+                              className="text-white/40 hover:text-white transition-colors duration-200"
                             >
                               <Trash2 size={14} />
                             </button>
@@ -3105,35 +3204,38 @@ export default function Booking() {
                       </div>
 
                       {/* Payment Method Card */}
-                      <div className="glass p-6 md:p-8 space-y-6 rounded-md">
-                        <h3 className="text-gold text-xs uppercase tracking-widest font-bold mb-4">
+                      <div className="bg-[#080808]/95 backdrop-blur-2xl p-6 md:p-8 space-y-5 rounded-2xl border border-white/[0.08] shadow-[0_20px_50px_rgba(0,0,0,0.8)] relative overflow-hidden group hover:border-gold/15 transition-all duration-500">
+                        {/* Subtle gold line at top */}
+                        <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-gold/30 to-transparent"></div>
+
+                        <h3 className="text-gold text-xs uppercase tracking-[0.25em] font-bold mb-6 border-b border-white/[0.06] pb-4 font-display">
                           Payment Method
                         </h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <button
                             onClick={() => setPaymentMethod("card")}
                             className={cn(
-                              "flex items-center gap-4 p-4 border rounded-lg transition-all text-left",
+                              "flex items-center gap-4 p-5 rounded-xl border transition-all duration-300 text-left active:scale-[0.98]",
                               paymentMethod === "card"
-                                ? "border-gold bg-gold/5"
-                                : "border-white/10 hover:border-gold/50 bg-white/5",
+                                ? "border-gold bg-gradient-to-br from-gold/10 to-gold/5 shadow-[0_0_20px_rgba(212,175,55,0.08)]"
+                                : "border-white/[0.06] hover:border-gold/30 hover:bg-white/[0.02] bg-black/45",
                             )}
                           >
                             <div
                               className={cn(
-                                "w-10 h-10 rounded-full flex items-center justify-center",
+                                "w-11 h-11 rounded-full flex items-center justify-center transition-all duration-300 shrink-0",
                                 paymentMethod === "card"
-                                  ? "bg-gold text-black"
-                                  : "bg-white/10 text-white/60",
+                                  ? "bg-gold text-black shadow-[0_4px_15px_rgba(212,175,55,0.2)]"
+                                  : "bg-white/[0.05] text-white/60 border border-white/[0.04]",
                               )}
                             >
                               <CreditCard size={20} />
                             </div>
                             <div>
-                              <p className="text-sm font-bold">
+                              <p className="text-sm font-bold text-white/95">
                                 Credit/Debit Card
                               </p>
-                              <p className="text-[10px] text-white/40 uppercase tracking-widest">
+                              <p className="text-[9px] text-white/40 uppercase tracking-[0.16em] mt-0.5">
                                 Secure via Stripe
                               </p>
                             </div>
@@ -3142,25 +3244,25 @@ export default function Booking() {
                           <button
                             onClick={() => setPaymentMethod("cash")}
                             className={cn(
-                              "flex items-center gap-4 p-4 rounded-lg border transition-all text-left",
+                              "flex items-center gap-4 p-5 rounded-xl border transition-all duration-300 text-left active:scale-[0.98]",
                               paymentMethod === "cash"
-                                ? "border-gold bg-gold/5"
-                                : "border-white/10 hover:border-gold/50 bg-white/5",
+                                ? "border-gold bg-gradient-to-br from-gold/10 to-gold/5 shadow-[0_0_20px_rgba(212,175,55,0.08)]"
+                                : "border-white/[0.06] hover:border-gold/30 hover:bg-white/[0.02] bg-black/45",
                             )}
                           >
                             <div
                               className={cn(
-                                "w-10 h-10 rounded-full flex items-center justify-center",
+                                "w-11 h-11 rounded-full flex items-center justify-center transition-all duration-300 shrink-0",
                                 paymentMethod === "cash"
-                                  ? "bg-gold text-black"
-                                  : "bg-white/10 text-white/60",
+                                  ? "bg-gold text-black shadow-[0_4px_15px_rgba(212,175,55,0.2)]"
+                                  : "bg-white/[0.05] text-white/60 border border-white/[0.04]",
                               )}
                             >
                               <Banknote size={20} />
                             </div>
                             <div>
-                              <p className="text-sm font-bold">Cash on Pickup</p>
-                              <p className="text-[10px] text-white/40 uppercase tracking-widest">
+                              <p className="text-sm font-bold text-white/95">Cash on Pickup</p>
+                              <p className="text-[9px] text-white/40 uppercase tracking-[0.16em] mt-0.5">
                                 Pay the driver
                               </p>
                             </div>
@@ -3169,23 +3271,26 @@ export default function Booking() {
                       </div>
                     </div>
 
-                    <div className="lg:col-span-5 space-y-8 rounded-md">
+                    <div className="lg:col-span-5 space-y-8 rounded-2xl">
                       {/* Booking Summary Card */}
-                      <div className="glass p-6 md:p-8 space-y-6  rounded-md">
-                        <h3 className="text-gold text-xs uppercase tracking-widest font-bold mb-4">
+                      <div className="bg-[#080808]/95 backdrop-blur-3xl p-6 md:p-8 space-y-6 rounded-2xl border border-white/[0.08] shadow-[0_20px_50px_rgba(0,0,0,0.8)] relative overflow-hidden lg:sticky lg:top-32 group">
+                        {/* Subtle gold line at top */}
+                        <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-gold/40 to-transparent"></div>
+
+                        <h3 className="text-gold text-xs uppercase tracking-[0.25em] font-bold mb-6 border-b border-white/[0.06] pb-4 font-display">
                           Booking Summary
                         </h3>
                         <div className="space-y-6">
-                          <div className="grid grid-cols-2 gap-6">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-gold/10 flex items-center justify-center shrink-0">
+                          <div className="grid grid-cols-2 gap-5">
+                            <div className="flex items-center gap-3.5">
+                              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold/15 to-gold/5 flex items-center justify-center border border-gold/10 hover:border-gold/30 transition-colors duration-300 shrink-0">
                                 <Info size={16} className="text-gold" />
                               </div>
-                              <div>
-                                <p className="text-[10px] text-white/40 uppercase tracking-widest">
+                              <div className="min-w-0">
+                                <p className="text-[9px] uppercase tracking-[0.18em] text-white/35 font-bold mb-0.5">
                                   Service
                                 </p>
-                                <p className="text-white font-bold text-xs">
+                                <p className="text-white font-semibold text-xs truncate">
                                   {
                                     serviceTypes.find(
                                       (t) => t.id === formData.serviceType,
@@ -3195,15 +3300,15 @@ export default function Booking() {
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-gold/10 flex items-center justify-center shrink-0">
+                            <div className="flex items-center gap-3.5">
+                              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold/15 to-gold/5 flex items-center justify-center border border-gold/10 hover:border-gold/30 transition-colors duration-300 shrink-0">
                                 <Car size={16} className="text-gold" />
                               </div>
-                              <div>
-                                <p className="text-[10px] text-white/40 uppercase tracking-widest">
+                              <div className="min-w-0">
+                                <p className="text-[9px] uppercase tracking-[0.18em] text-white/35 font-bold mb-0.5">
                                   Vehicle
                                 </p>
-                                <p className="text-white font-bold text-xs">
+                                <p className="text-white font-semibold text-xs truncate">
                                   {
                                     (
                                       fleet.find(
@@ -3218,59 +3323,59 @@ export default function Booking() {
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-gold/10 flex items-center justify-center shrink-0">
+                            <div className="flex items-center gap-3.5">
+                              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold/15 to-gold/5 flex items-center justify-center border border-gold/10 hover:border-gold/30 transition-colors duration-300 shrink-0">
                                 <Calendar size={16} className="text-gold" />
                               </div>
-                              <div>
-                                <p className="text-[10px] text-white/40 uppercase tracking-widest">
+                              <div className="min-w-0">
+                                <p className="text-[9px] uppercase tracking-[0.18em] text-white/35 font-bold mb-0.5">
                                   Date
                                 </p>
-                                <p className="text-white font-bold text-xs">
+                                <p className="text-white font-semibold text-xs truncate">
                                   {formData.date}
                                 </p>
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-gold/10 flex items-center justify-center shrink-0">
+                            <div className="flex items-center gap-3.5">
+                              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold/15 to-gold/5 flex items-center justify-center border border-gold/10 hover:border-gold/30 transition-colors duration-300 shrink-0">
                                 <Clock size={16} className="text-gold" />
                               </div>
-                              <div>
-                                <p className="text-[10px] text-white/40 uppercase tracking-widest">
+                              <div className="min-w-0">
+                                <p className="text-[9px] uppercase tracking-[0.18em] text-white/35 font-bold mb-0.5">
                                   Time
                                 </p>
-                                <p className="text-white font-bold text-xs">
+                                <p className="text-white font-semibold text-xs truncate">
                                   {formData.time}
                                 </p>
                               </div>
                             </div>
                           </div>
 
-                          <div className="pt-6 border-t border-white/5 space-y-4">
-                            <div className="flex items-start gap-3">
-                              <div className="w-8 h-8 rounded-full bg-gold/10 flex items-center justify-center shrink-0">
+                          <div className="pt-6 border-t border-white/[0.06] space-y-4">
+                            <div className="flex items-start gap-3.5">
+                              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold/15 to-gold/5 flex items-center justify-center border border-gold/10 hover:border-gold/30 transition-colors duration-300 shrink-0">
                                 <MapPin size={16} className="text-gold" />
                               </div>
-                              <div>
-                                <p className="text-[10px] text-white/40 uppercase tracking-widest">
+                              <div className="min-w-0">
+                                <p className="text-[9px] uppercase tracking-[0.18em] text-white/35 font-bold mb-0.5">
                                   Pickup
                                 </p>
-                                <p className="text-white text-xs">
+                                <p className="text-white text-xs leading-relaxed font-medium">
                                   {formData.pickup}
                                 </p>
                               </div>
                             </div>
 
-                            <div className="flex items-start gap-3">
-                              <div className="w-8 h-8 rounded-full bg-gold/10 flex items-center justify-center shrink-0">
+                            <div className="flex items-start gap-3.5">
+                              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold/15 to-gold/5 flex items-center justify-center border border-gold/10 hover:border-gold/30 transition-colors duration-300 shrink-0">
                                 <MapPin size={16} className="text-gold" />
                               </div>
-                              <div>
-                                <p className="text-[10px] text-white/40 uppercase tracking-widest">
+                              <div className="min-w-0">
+                                <p className="text-[9px] uppercase tracking-[0.18em] text-white/35 font-bold mb-0.5">
                                   Dropoff
                                 </p>
-                                <p className="text-white text-xs">
+                                <p className="text-white text-xs leading-relaxed font-medium">
                                   {formData.dropoff || "Hourly Hire"}
                                 </p>
                               </div>
@@ -3279,13 +3384,13 @@ export default function Booking() {
 
                           {formData.waypoints.filter((wp) => wp.length > 5)
                             .length > 0 && (
-                              <div className="pt-6 border-t border-white/5">
-                                <div className="flex items-start gap-3">
-                                  <div className="w-8 h-8 rounded-full bg-gold/10 flex items-center justify-center shrink-0">
+                              <div className="pt-6 border-t border-white/[0.06]">
+                                <div className="flex items-start gap-3.5">
+                                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold/15 to-gold/5 flex items-center justify-center border border-gold/10 hover:border-gold/30 transition-colors duration-300 shrink-0">
                                     <Navigation size={16} className="text-gold" />
                                   </div>
-                                  <div>
-                                    <p className="text-[10px] text-white/40 uppercase tracking-widest mb-1">
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-[9px] uppercase tracking-[0.18em] text-white/35 font-bold mb-2">
                                       Waypoints
                                     </p>
                                     <div className="flex flex-wrap gap-2">
@@ -3294,7 +3399,7 @@ export default function Booking() {
                                         .map((wp, idx) => (
                                           <span
                                             key={idx}
-                                            className="bg-white/5 border border-white/10 px-2 py-1 rounded text-[10px] text-white/60"
+                                            className="bg-white/5 border border-white/[0.08] px-2.5 py-1 rounded-lg text-[10px] text-white/70 font-medium whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px] inline-block"
                                           >
                                             {wp}
                                           </span>
@@ -3306,13 +3411,13 @@ export default function Booking() {
                             )}
 
                           {formData.selectedExtras.length > 0 && (
-                            <div className="pt-6 border-t border-white/5">
-                              <div className="flex items-start gap-3">
-                                <div className="w-8 h-8 rounded-full bg-gold/10 flex items-center justify-center shrink-0">
+                            <div className="pt-6 border-t border-white/[0.06]">
+                              <div className="flex items-start gap-3.5">
+                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold/15 to-gold/5 flex items-center justify-center border border-gold/10 hover:border-gold/30 transition-colors duration-300 shrink-0">
                                   <Plus size={16} className="text-gold" />
                                 </div>
-                                <div>
-                                  <p className="text-[10px] text-white/40 uppercase tracking-widest mb-1">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-[9px] uppercase tracking-[0.18em] text-white/35 font-bold mb-2">
                                     Extras
                                   </p>
                                   <div className="flex flex-wrap gap-2">
@@ -3323,7 +3428,7 @@ export default function Booking() {
                                       return (
                                         <span
                                           key={id}
-                                          className="bg-white/5 border border-white/10 px-2 py-1 rounded text-[10px] text-white/60"
+                                          className="bg-white/5 border border-white/[0.08] px-2.5 py-1 rounded-lg text-[10px] text-white/70 font-medium"
                                         >
                                           {extra?.name}
                                         </span>
@@ -3336,16 +3441,16 @@ export default function Booking() {
                           )}
 
                           {formData.isReturn && (
-                            <div className="pt-6 border-t border-white/5">
-                              <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-gold/10 flex items-center justify-center shrink-0">
+                            <div className="pt-6 border-t border-white/[0.06]">
+                              <div className="flex items-center gap-3.5">
+                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold/15 to-gold/5 flex items-center justify-center border border-gold/10 hover:border-gold/30 transition-colors duration-300 shrink-0">
                                   <RotateCcw size={16} className="text-gold" />
                                 </div>
                                 <div>
-                                  <p className="text-[10px] text-white/40 uppercase tracking-widest">
+                                  <p className="text-[9px] uppercase tracking-[0.18em] text-white/35 font-bold mb-0.5">
                                     Return Trip
                                   </p>
-                                  <p className="text-white font-bold text-xs">
+                                  <p className="text-white font-semibold text-xs leading-normal">
                                     {formData.returnDate} at {formData.returnTime}
                                   </p>
                                 </div>
@@ -3353,20 +3458,20 @@ export default function Booking() {
                             </div>
                           )}
 
-                          <div className="pt-6 border-t border-white/5 grid grid-cols-2 gap-6">
+                          <div className="pt-6 border-t border-white/[0.06] grid grid-cols-2 gap-5">
                             {formData.serviceType !== "hourly" ? (
                               <>
                                 {/* Distance */}
                                 {distance && (
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-full bg-gold/10 flex items-center justify-center shrink-0">
+                                  <div className="flex items-center gap-3.5">
+                                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold/15 to-gold/5 flex items-center justify-center border border-gold/10 hover:border-gold/30 transition-colors duration-300 shrink-0">
                                       <Navigation size={16} className="text-gold" />
                                     </div>
-                                    <div>
-                                      <p className="text-[10px] text-white/40 uppercase tracking-widest">
+                                    <div className="min-w-0">
+                                      <p className="text-[9px] uppercase tracking-[0.18em] text-white/35 font-bold mb-0.5">
                                         Distance
                                       </p>
-                                      <p className="text-white font-bold text-xs">
+                                      <p className="text-white font-semibold text-xs leading-normal">
                                         {(() => {
                                           const distVal =
                                             parseFloat(distance.replace(/[^\d.]/g, "")) || 0;
@@ -3381,15 +3486,15 @@ export default function Booking() {
 
                                 {/* Est. Time */}
                                 {duration && (
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-full bg-gold/10 flex items-center justify-center shrink-0">
+                                  <div className="flex items-center gap-3.5">
+                                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold/15 to-gold/5 flex items-center justify-center border border-gold/10 hover:border-gold/30 transition-colors duration-300 shrink-0">
                                       <Clock size={16} className="text-gold" />
                                     </div>
-                                    <div>
-                                      <p className="text-[10px] text-white/40 uppercase tracking-widest">
+                                    <div className="min-w-0">
+                                      <p className="text-[9px] uppercase tracking-[0.18em] text-white/35 font-bold mb-0.5">
                                         Est. Time
                                       </p>
-                                      <p className="text-white font-bold text-xs">
+                                      <p className="text-white font-semibold text-xs leading-normal">
                                         {(() => {
                                           const match = duration.match(/(\d+)\s*min/);
                                           if (match && formData.isReturn) {
@@ -3405,15 +3510,15 @@ export default function Booking() {
                               </>
                             ) : (
                               /* Travelling Hours (Hourly Service) */
-                              <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-gold/10 flex items-center justify-center shrink-0">
+                              <div className="flex items-center gap-3.5">
+                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold/15 to-gold/5 flex items-center justify-center border border-gold/10 hover:border-gold/30 transition-colors duration-300 shrink-0">
                                   <Clock size={16} className="text-gold" />
                                 </div>
-                                <div>
-                                  <p className="text-[10px] text-white/40 uppercase tracking-widest">
+                                <div className="min-w-0">
+                                  <p className="text-[9px] uppercase tracking-[0.18em] text-white/35 font-bold mb-0.5">
                                     Travel Hours
                                   </p>
-                                  <p className="text-white font-bold text-xs">
+                                  <p className="text-white font-semibold text-xs leading-normal">
                                     {formData.hours} Hours
                                   </p>
                                 </div>
@@ -3423,8 +3528,8 @@ export default function Booking() {
 
                           {/* Price Breakdown */}
                           {settings?.showPriceBreakdown !== false && (
-                            <div className="space-y-2 pt-4 border-t border-white/10">
-                              <h3 className="text-gold text-[10px] uppercase tracking-widest font-bold mb-2">
+                            <div className="space-y-3 pt-4 border-t border-white/[0.06]">
+                              <h3 className="text-gold text-[10px] uppercase tracking-[0.2em] font-bold mb-3">
                                 Price Breakdown
                               </h3>
                               {(() => {
@@ -3432,62 +3537,59 @@ export default function Booking() {
                                 return (
                                   <>
                                     {settings?.showBasePrice !== false && (
-                                      <div className="flex justify-between text-[10px] uppercase tracking-widest text-white/40">
+                                      <div className="flex justify-between items-center text-[10px] uppercase tracking-[0.16em] text-white/50 py-1.5 border-b border-white/[0.03] transition-colors hover:text-white/80">
                                         <span>Base Fare</span>
-                                        <span>${details.base.toFixed(2)}</span>
+                                        <span className="font-display font-medium text-white/90">${details.base.toFixed(2)}</span>
                                       </div>
                                     )}
                                     {settings?.showDistancePrice !== false && (
-                                      <div className="space-y-2">
-                                        {settings?.showDistancePrice !==
-                                          false && (
-                                            <div className="flex justify-between items-center text-[10px] uppercase tracking-widest text-white/40">
-                                              {/* Left side: Label + Eye icon */}
-                                              <div className="flex items-center gap-2">
-                                                <span>
-                                                  {formData.serviceType === "hourly"
-                                                    ? `Hourly Charge (${formData.hours}h)`
-                                                    : "Distance Charge"}
-                                                </span>
+                                      <div className="space-y-2 border-b border-white/[0.03] last:border-0 pb-1.5 font-display">
+                                        <div className="flex justify-between items-center text-[10px] uppercase tracking-[0.16em] text-white/50 py-1">
+                                          {/* Left side: Label + Eye icon */}
+                                          <div className="flex items-center gap-2">
+                                            <span>
+                                              {formData.serviceType === "hourly"
+                                                ? `Hourly Charge (${formData.hours}h)`
+                                                : "Distance Charge"}
+                                            </span>
 
-                                                {settings?.showDistanceEyeIcon && (
-                                                  <button
-                                                    onClick={() =>
-                                                      setShowDistanceBreakdown(
-                                                        !showDistanceBreakdown,
-                                                      )
-                                                    }
-                                                    className={cn(
-                                                      "flex items-center gap-1 text-gold/50 hover:text-gold transition-colors",
-                                                      showDistanceBreakdown &&
-                                                      "text-gold",
-                                                    )}
-                                                    title="View Range Wise Price"
-                                                  >
-                                                    <Eye size={12} />
-                                                  </button>
+                                            {settings?.showDistanceEyeIcon && (
+                                              <button
+                                                onClick={() =>
+                                                  setShowDistanceBreakdown(
+                                                    !showDistanceBreakdown,
+                                                  )
+                                                }
+                                                className={cn(
+                                                  "flex items-center gap-1.5 text-gold/60 hover:text-gold transition-all duration-300",
+                                                  showDistanceBreakdown &&
+                                                  "text-gold font-medium",
                                                 )}
-                                              </div>
+                                                title="View Range Wise Price"
+                                              >
+                                                <Eye size={12} />
+                                              </button>
+                                            )}
+                                          </div>
 
-                                              {/* Right side: Value */}
-                                              <span>
-                                                ${details.distance.toFixed(2)}
-                                              </span>
-                                            </div>
-                                          )}
+                                          {/* Right side: Value */}
+                                          <span className="font-display font-medium text-white/90">
+                                            ${details.distance.toFixed(2)}
+                                          </span>
+                                        </div>
 
                                         {showDistanceBreakdown &&
                                           details.rangeCalcs &&
                                           details.rangeCalcs.length > 0 && (
-                                            <div className="p-4 bg-white/5 rounded-2xl border border-gold/20 space-y-3 mt-2 mb-4">
-                                              <div className="flex items-center justify-between mb-2">
-                                                <h4 className="text-[10px] uppercase tracking-widest font-bold text-gold">
+                                            <div className="p-4 bg-[#050505]/95 rounded-xl border border-gold/15 space-y-2.5 my-3 shadow-inner">
+                                              <div className="flex items-center justify-between mb-1.5 border-b border-white/5 pb-1.5">
+                                                <h4 className="text-[9px] uppercase tracking-[0.2em] font-bold text-gold font-display">
                                                   {formData.serviceType ===
                                                     "hourly"
                                                     ? "Hourly Price Calculation"
                                                     : "Distance Range Calculation"}
                                                 </h4>
-                                                <span className="text-[8px] bg-gold/10 text-gold px-2 py-0.5 rounded font-bold uppercase">
+                                                <span className="text-[8px] bg-gold/10 text-gold px-2 py-0.5 rounded font-bold uppercase tracking-widest">
                                                   {formData.serviceType ===
                                                     "hourly"
                                                     ? "Fixed Hourly"
@@ -3502,17 +3604,17 @@ export default function Booking() {
                                                   (calc: any, i: number) => (
                                                     <div
                                                       key={i}
-                                                      className="flex justify-between items-center text-[10px]"
+                                                      className="flex justify-between items-center text-[10px] tracking-wide font-display"
                                                     >
                                                       <div className="flex items-center gap-2">
-                                                        <div className="w-1 h-1 rounded-full bg-gold" />
-                                                        <span className="text-white font-bold uppercase tracking-tighter">
+                                                        <div className="w-1 h-1 rounded-full bg-gold/70" />
+                                                        <span className="text-white font-medium uppercase tracking-[0.05em]">
                                                           {calc.label}{" "}
                                                           {calc.isHourly
                                                             ? ""
                                                             : "Range"}
                                                         </span>
-                                                        <span className="text-white/40">
+                                                        <span className="text-white/40 text-[9px]">
                                                           ({calc.dist.toFixed(1)}
                                                           {calc.isHourly
                                                             ? "h"
@@ -3520,7 +3622,7 @@ export default function Booking() {
                                                           × ${calc.rate})
                                                         </span>
                                                       </div>
-                                                      <span className="text-white font-bold">
+                                                      <span className="text-white/95 font-semibold">
                                                         ${calc.total.toFixed(2)}
                                                       </span>
                                                     </div>
@@ -3544,40 +3646,40 @@ export default function Booking() {
                                     )}
                                     {settings?.showWaypointPrice !== false &&
                                       details.waypoints > 0 && (
-                                        <div className="flex justify-between text-[10px] uppercase tracking-widest text-white/40">
+                                        <div className="flex justify-between items-center text-[10px] uppercase tracking-[0.16em] text-white/50 py-1.5 border-b border-white/[0.03] transition-colors hover:text-white/80">
                                           <span>Waypoints</span>
-                                          <span>
+                                          <span className="font-display font-medium text-white/90">
                                             ${details.waypoints.toFixed(2)}
                                           </span>
                                         </div>
                                       )}
 
                                     {formData.isReturn && (
-                                      <div className="flex justify-between text-[10px] uppercase tracking-widest text-white/40">
+                                      <div className="flex justify-between items-center text-[10px] uppercase tracking-[0.16em] text-white/50 py-1.5 border-b border-white/[0.03] transition-colors hover:text-white/80">
                                         <span>Return Trip (2x)</span>
-                                        <span>
+                                        <span className="font-display font-medium text-white/90">
                                           ${details.returnPrice.toFixed(2)}
                                         </span>
                                       </div>
                                     )}
                                     {settings?.showExtrasPrice !== false &&
                                       details.extras > 0 && (
-                                        <div className="flex justify-between text-[10px] uppercase tracking-widest text-white/40">
+                                        <div className="flex justify-between items-center text-[10px] uppercase tracking-[0.16em] text-white/50 py-1.5 border-b border-white/[0.03] transition-colors hover:text-white/80">
                                           <span>Extra Options</span>
-                                          <span>
+                                          <span className="font-display font-medium text-white/90">
                                             ${details.extras.toFixed(2)}
                                           </span>
                                         </div>
                                       )}
                                     {settings?.showNetPrice !== false && (
-                                      <div className="flex justify-between text-[10px] uppercase tracking-widest text-white/40 border-t border-white/5 pt-2">
+                                      <div className="flex justify-between items-center text-[10px] uppercase tracking-[0.16em] text-white/50 py-1.5 border-b border-white/[0.03] transition-colors hover:text-white/80">
                                         <span>Gross Price</span>
-                                        <span>${details.gross.toFixed(2)}</span>
+                                        <span className="font-display font-medium text-white/90">${details.gross.toFixed(2)}</span>
                                       </div>
                                     )}
                                     {settings?.showDiscount !== false &&
                                       details.discount > 0 && (
-                                        <div className="flex justify-between text-[10px] uppercase tracking-widest text-green-500 border-b border-white/5 pb-2">
+                                        <div className="flex justify-between items-center text-[10px] uppercase tracking-[0.16em] text-[#10B981] font-medium py-1.5 border-b border-white/[0.03]">
                                           <span>
                                             Discount ({appliedCoupon?.code} -{" "}
                                             {appliedCoupon?.type === "percentage"
@@ -3585,41 +3687,41 @@ export default function Booking() {
                                               : `$${appliedCoupon.value}`}
                                             )
                                           </span>
-                                          <span>
+                                          <span className="font-semibold text-[#10B981]">
                                             -${details.discount.toFixed(2)}
                                           </span>
                                         </div>
                                       )}
                                     {settings?.showNetPrice !== false &&
                                       details.discount > 0 && (
-                                        <div className="flex justify-between text-[10px] uppercase tracking-widest text-white/40">
+                                        <div className="flex justify-between items-center text-[10px] uppercase tracking-[0.16em] text-gold/50 font-bold py-1.5 border-b border-white/[0.03] transition-colors hover:text-white/80">
                                           <span>Net Price</span>
-                                          <span>${details.net.toFixed(2)}</span>
+                                          <span className="font-display font-medium text-gold/50 font-bold">${details.net.toFixed(2)}</span>
                                         </div>
                                       )}
                                     {settings?.showTax !== false && (
-                                      <div className="flex justify-between text-[10px] uppercase tracking-widest text-white/40">
+                                      <div className="flex justify-between items-center text-[10px] uppercase tracking-[0.16em] text-white/50 py-1.5 border-b border-white/[0.03] transition-colors hover:text-white/80">
                                         <span>
                                           Tax ({settings?.taxPercentage || 0}%)
                                         </span>
-                                        <span>${details.tax.toFixed(2)}</span>
+                                        <span className="font-display font-medium text-white/90">${details.tax.toFixed(2)}</span>
                                       </div>
                                     )}
                                     {settings?.showStripeFees !== false &&
                                       details.stripe > 0 && (
-                                        <div className="flex justify-between text-[10px] uppercase tracking-widest text-white/40">
+                                        <div className="flex justify-between items-center text-[10px] uppercase tracking-[0.16em] text-white/50 py-1.5 border-b border-white/[0.03] transition-colors hover:text-white/80">
                                           <span>Stripe Fees</span>
-                                          <span>
+                                          <span className="font-display font-medium text-white/90 font-semibold">
                                             ${details.stripe.toFixed(2)}
                                           </span>
                                         </div>
                                       )}
                                     {details.appliedAddons && details.appliedAddons.length > 0 && (
-                                      <div className="space-y-1">
+                                      <div className="space-y-1 py-1.5 border-b border-white/[0.03]">
                                         {details.appliedAddons.map((addon: any, aIdx: number) => (
-                                          <div key={`addon-cust-${addon.id || aIdx}-${aIdx}`} className="flex justify-between text-[10px] uppercase tracking-widest text-gold/60">
+                                          <div key={`addon-cust-${addon.id || aIdx}-${aIdx}`} className="flex justify-between items-center text-[10px] uppercase tracking-[0.16em] text-gold/60 py-1 font-display">
                                             <span>{addon.name}</span>
-                                            <span>
+                                            <span className="font-display font-medium">
                                               {addon.impact > 0 ? '+' : '-'}${Math.abs(addon.impact).toFixed(2)}
                                             </span>
                                           </div>
@@ -3628,11 +3730,11 @@ export default function Booking() {
                                     )}
 
                                     {settings?.showTotalPrice !== false && (
-                                      <div className="flex justify-between pt-4 pb-4 border-t border-b border-white/10">
-                                        <span className="text-white font-bold">
+                                      <div className="flex justify-between items-center pt-5 pb-1">
+                                        <span className="text-white font-bold text-xs uppercase tracking-[0.2em]">
                                           Total Price
                                         </span>
-                                        <span className="text-gold font-bold text-2xl">
+                                        <span className="text-gold font-display font-semibold text-2xl tracking-widest leading-none">
                                           ${details.total.toFixed(2)}
                                         </span>
                                       </div>
@@ -3646,17 +3748,17 @@ export default function Booking() {
                       </div>
                     </div>
                   </div>
-                  <div className="glass p-6 flex flex-col sm:flex-row gap-4 items-stretch sm:items-center sm:justify-between rounded-md max-sm:bg-transparent max-sm:border-none max-sm:backdrop-blur-none max-sm:p-0">
-                    <div className="glass p-4 rounded-md sm:p-0 sm:bg-transparent sm:border-none sm:backdrop-blur-none sm:shadow-none">
+                  <div className="bg-[#050505]/60 backdrop-blur-md p-5 flex flex-col sm:flex-row gap-4 items-stretch sm:items-center sm:justify-between rounded-2xl border border-white/[0.06] shadow-xl max-sm:bg-transparent max-sm:border-none max-sm:backdrop-blur-none max-sm:p-0">
+                    <div className="rounded-xl sm:p-0 sm:bg-transparent sm:border-none sm:backdrop-blur-none sm:shadow-none">
                       <button
                         onClick={prevStep}
-                        className="w-full sm:w-auto border border-white/40 text-white/40 hover:text-white hover:border-white text-xs uppercase transition-colors py-4 px-8 flex items-center justify-center gap-2 rounded"
+                        className="w-full sm:w-auto border border-white/20 text-white/50 hover:text-white hover:border-gold/50 text-[10px] uppercase font-bold tracking-[0.2em] transition-all duration-300 py-3.5 px-8 flex items-center justify-center gap-2.5 rounded-xl active:scale-95 bg-black/40 hover:bg-black/80"
                       >
-                        <ArrowLeft size={16} />
+                        <ArrowLeft size={14} />
                         Back
                       </button>
                     </div>
-                    <div className="glass p-4 rounded-md sm:p-0 sm:bg-transparent sm:border-none sm:backdrop-blur-none sm:shadow-none">
+                    <div className="rounded-xl sm:p-0 sm:bg-transparent sm:border-none sm:backdrop-blur-none sm:shadow-none">
                       <button
                         onClick={handleConfirmBooking}
                         disabled={
@@ -3667,7 +3769,7 @@ export default function Booking() {
                               !formData.customerPhone ||
                               !formData.customerPassword))
                         }
-                        className="w-full sm:w-auto btn-primary py-4 px-12 flex items-center justify-center gap-2 rounded text-[15px]"
+                        className="w-full sm:w-auto bg-gradient-to-r from-gold to-[#D4AF37] hover:from-white hover:to-white text-black py-4 px-12 flex items-center justify-center gap-2.5 rounded-xl text-xs uppercase font-bold tracking-[0.2em] transition-all duration-300 active:scale-[0.98] disabled:opacity-40 shadow-[0_4px_25px_rgba(212,175,55,0.2)]"
                       >
                         {isSubmitting ? (
                           <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />
