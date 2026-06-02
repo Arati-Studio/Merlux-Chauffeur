@@ -1526,7 +1526,7 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
                 <div className="space-y-4">
                   <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 block">Robots Directives</label>
                   <textarea
-                    value={systemSettings?.seo?.robotsTxt || 'User-agent: *\nAllow: /\nSitemap: ' + window.location.origin + '/sitemap.xml'}
+                    value={systemSettings?.seo?.robotsTxt || 'User-agent: *\nAllow: /\nSitemap: ' + window.location.origin + '/sitemap_index.xml'}
                     onChange={(e) => setSystemSettings({ ...systemSettings, seo: { ...(systemSettings?.seo || {}), robotsTxt: e.target.value } })}
                     className="w-full bg-black/40 border border-white/10 rounded-2xl p-6 font-mono text-sm text-gold outline-none focus:border-gold transition-all min-h-[300px]"
                     placeholder="User-agent: *..."

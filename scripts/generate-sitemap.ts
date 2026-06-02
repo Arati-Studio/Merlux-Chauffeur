@@ -110,28 +110,63 @@ async function* streamCollection(collectionName: string, batchSize = 100) {
   }
 }
 
-const writeUrlEntry = (stream: fs.WriteStream, path: string, lastmod: string, changefreq: string, priority: string) => {
-  stream.write(`  <url>
-    <loc>${SITE_URL}${path}</loc>
-    <lastmod>${lastmod}</lastmod>
-    <changefreq>${changefreq}</changefreq>
-    <priority>${priority}</priority>
-  </url>\n`);
-};
-
 async function generateSitemap() {
-  console.log('🚀 Starting Scalable Streaming Sitemap Generation Matching MetaTab.tsx Dynamic Rules...');
+  console.log('🚀 Starting Scalable Streaming Multiple Sitemap Generation matching MetaTab.tsx rules...');
 
   try {
     if (!fs.existsSync(PUBLIC_DIR)) fs.mkdirSync(PUBLIC_DIR, { recursive: true });
     if (!fs.existsSync(DIST_DIR)) fs.mkdirSync(DIST_DIR, { recursive: true });
 
-    const tempPublicPath = path.join(PUBLIC_DIR, 'sitemap.xml.tmp');
-    const writeStream = fs.createWriteStream(tempPublicPath, { encoding: 'utf8' });
+    const pageTempPath = path.join(PUBLIC_DIR, 'page-sitemap.xml.tmp');
+    const blogTempPath = path.join(PUBLIC_DIR, 'blog-sitemap.xml.tmp');
+    const offerTempPath = path.join(PUBLIC_DIR, 'offer-sitemap.xml.tmp');
+    const toursTempPath = path.join(PUBLIC_DIR, 'tours-sitemap.xml.tmp');
 
-    // Header structure
-    writeStream.write('<?xml version="1.0" encoding="UTF-8"?>\n');
-    writeStream.write('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n');
+    const pageStream = fs.createWriteStream(pageTempPath, { encoding: 'utf8' });
+    const blogStream = fs.createWriteStream(blogTempPath, { encoding: 'utf8' });
+    const offerStream = fs.createWriteStream(offerTempPath, { encoding: 'utf8' });
+    const toursStream = fs.createWriteStream(toursTempPath, { encoding: 'utf8' });
+
+    const writeHeader = (stream: fs.WriteStream) => {
+      stream.write('<?xml version="1.0" encoding="UTF-8"?>\n');
+      stream.write('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n');
+    };
+
+    writeHeader(pageStream);
+    writeHeader(blogStream);
+    writeHeader(offerStream);
+    writeHeader(toursStream);
+
+    let maxLastmodPage = formatDate(null);
+    let maxLastmodBlog = formatDate(null);
+    let maxLastmodOffer = formatDate(null);
+    let maxLastmodTour = formatDate(null);
+
+    const writeUrlEntryWithTracking = (
+      stream: fs.WriteStream, 
+      path: string, 
+      lastmod: string, 
+      changefreq: string, 
+      priority: string,
+      category: 'page' | 'blog' | 'offer' | 'tour'
+    ) => {
+      stream.write(`  <url>
+    <loc>${SITE_URL}${path}</loc>
+    <lastmod>${lastmod}</lastmod>
+    <changefreq>${changefreq}</changefreq>
+    <priority>${priority}</priority>
+  </url>\n`);
+
+      if (category === 'page') {
+        maxLastmodPage = lastmod > maxLastmodPage ? lastmod : maxLastmodPage;
+      } else if (category === 'blog') {
+        maxLastmodBlog = lastmod > maxLastmodBlog ? lastmod : maxLastmodBlog;
+      } else if (category === 'offer') {
+        maxLastmodOffer = lastmod > maxLastmodOffer ? lastmod : maxLastmodOffer;
+      } else if (category === 'tour') {
+        maxLastmodTour = lastmod > maxLastmodTour ? lastmod : maxLastmodTour;
+      }
+    };
 
     // 1. Accumulate metadata overrides in a memory-efficient Map
     console.log('📦 Loading metadata overrides incrementally...');
@@ -212,7 +247,7 @@ async function generateSitemap() {
             registeredPaths.add(cleanPath);
             if (!noindex && active) {
               const lastmod = formatDate(updatedAt || createdAt);
-              writeUrlEntry(writeStream, cleanPath, lastmod, cleanPath === '/' ? 'daily' : 'weekly', cleanPath === '/' ? '1.0' : '0.8');
+              writeUrlEntryWithTracking(pageStream, cleanPath, lastmod, cleanPath === '/' ? 'daily' : 'weekly', cleanPath === '/' ? '1.0' : '0.8', 'page');
             }
           }
         }
@@ -236,7 +271,7 @@ async function generateSitemap() {
           registeredPaths.add(cleanPath);
           if (!noindex && active) {
             const lastmod = formatDate(updatedAt || createdAt);
-            writeUrlEntry(writeStream, cleanPath, lastmod, 'weekly', '0.8');
+            writeUrlEntryWithTracking(blogStream, cleanPath, lastmod, 'weekly', '0.8', 'blog');
           }
         }
       });
@@ -259,7 +294,7 @@ async function generateSitemap() {
           registeredPaths.add(cleanPath);
           if (!noindex && active) {
             const lastmod = formatDate(updatedAt || createdAt);
-            writeUrlEntry(writeStream, cleanPath, lastmod, 'weekly', '0.8');
+            writeUrlEntryWithTracking(offerStream, cleanPath, lastmod, 'weekly', '0.8', 'offer');
           }
         }
       });
@@ -282,7 +317,7 @@ async function generateSitemap() {
           registeredPaths.add(cleanPath);
           if (!noindex && active) {
             const lastmod = formatDate(updatedAt || createdAt);
-            writeUrlEntry(writeStream, cleanPath, lastmod, 'weekly', '0.8');
+            writeUrlEntryWithTracking(toursStream, cleanPath, lastmod, 'weekly', '0.8', 'tour');
           }
         }
       });
@@ -316,50 +351,100 @@ async function generateSitemap() {
       if (!registeredPaths.has(cleanPath)) {
         registeredPaths.add(cleanPath);
         const lastmod = formatDate(updatedAt || createdAt);
-        writeUrlEntry(
-          writeStream,
+        writeUrlEntryWithTracking(
+          pageStream,
           cleanPath,
           lastmod,
           cleanPath === '/' ? 'daily' : 'weekly',
-          cleanPath === '/' ? '1.0' : '0.8'
+          cleanPath === '/' ? '1.0' : '0.8',
+          'page'
         );
       }
     });
 
-    // Close XML tags and finalize the writing
-    writeStream.write('</urlset>');
-    writeStream.end();
+    const endSitemapStream = async (stream: fs.WriteStream) => {
+      stream.write('</urlset>');
+      stream.end();
+      await new Promise<void>((resolve, reject) => {
+        stream.on('finish', () => resolve());
+        stream.on('error', (err) => reject(err));
+      });
+    };
 
-    // Promisify the writeStream flush
-    await new Promise<void>((resolve, reject) => {
-      writeStream.on('finish', () => resolve());
-      writeStream.on('error', (err) => reject(err));
+    console.log('💾 Finalizing sub-sitemap files...');
+    await Promise.all([
+      endSitemapStream(pageStream),
+      endSitemapStream(blogStream),
+      endSitemapStream(offerStream),
+      endSitemapStream(toursStream)
+    ]);
+
+    console.log('🗂️ Generating sitemap_index.xml...');
+    const indexTempPath = path.join(PUBLIC_DIR, 'sitemap_index.xml.tmp');
+    const indexStream = fs.createWriteStream(indexTempPath, { encoding: 'utf8' });
+    indexStream.write('<?xml version="1.0" encoding="UTF-8"?>\n');
+    indexStream.write('<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n');
+
+    const subSitemapFiles = [
+      { name: 'page-sitemap.xml', lastmod: maxLastmodPage },
+      { name: 'blog-sitemap.xml', lastmod: maxLastmodBlog },
+      { name: 'offer-sitemap.xml', lastmod: maxLastmodOffer },
+      { name: 'tours-sitemap.xml', lastmod: maxLastmodTour }
+    ];
+
+    subSitemapFiles.forEach(file => {
+      indexStream.write(`  <sitemap>
+    <loc>${SITE_URL}/${file.name}</loc>
+    <lastmod>${file.lastmod}</lastmod>
+  </sitemap>\n`);
     });
 
-    // Move completed sitemap into public/ and dist/
-    fs.copyFileSync(tempPublicPath, path.join(PUBLIC_DIR, 'sitemap.xml'));
-    fs.copyFileSync(tempPublicPath, path.join(DIST_DIR, 'sitemap.xml'));
-    
-    // Safely cleanup temporary file
-    try {
-      fs.unlinkSync(tempPublicPath);
-    } catch (e) {}
+    indexStream.write('</sitemapindex>');
+    indexStream.end();
 
-    console.log('✨ sitemap.xml generated successfully in public/ and dist/');
+    await new Promise<void>((resolve, reject) => {
+      indexStream.on('finish', () => resolve());
+      indexStream.on('error', (err) => reject(err));
+    });
+
+    // Move completed sitemaps into public/ and dist/
+    const filesToCopy = [
+      { temp: pageTempPath, name: 'page-sitemap.xml' },
+      { temp: blogTempPath, name: 'blog-sitemap.xml' },
+      { temp: offerTempPath, name: 'offer-sitemap.xml' },
+      { temp: toursTempPath, name: 'tours-sitemap.xml' },
+      { temp: indexTempPath, name: 'sitemap_index.xml' },
+      { temp: indexTempPath, name: 'sitemap.xml' } // Copy index as sitemap.xml for legacy compatibility
+    ];
+
+    filesToCopy.forEach(f => {
+      fs.copyFileSync(f.temp, path.join(PUBLIC_DIR, f.name));
+      fs.copyFileSync(f.temp, path.join(DIST_DIR, f.name));
+    });
+
+    // Clean up temporary files unique paths at the end
+    const uniqueTemps = Array.from(new Set(filesToCopy.map(f => f.temp)));
+    uniqueTemps.forEach(tempPath => {
+      try {
+        fs.unlinkSync(tempPath);
+      } catch (e) {}
+    });
+
+    console.log('✨ All sitemaps (index and sub-sitemaps) generated successfully in public/ and dist/');
 
     // Generate Robots.txt
     const robotsTxt = `User-agent: *
 Allow: /
 
 # Sitemap
-Sitemap: ${SITE_URL}/sitemap.xml
+Sitemap: ${SITE_URL}/sitemap_index.xml
 `;
     fs.writeFileSync(path.join(PUBLIC_DIR, 'robots.txt'), robotsTxt);
     fs.writeFileSync(path.join(DIST_DIR, 'robots.txt'), robotsTxt);
     console.log('✨ robots.txt generated successfully in public/ and dist/');
 
   } catch (error) {
-    console.error('❌ Error generating sitemap:', error);
+    console.error('❌ Error generating sitemaps:', error);
     process.exit(1);
   } finally {
     process.exit(0);
