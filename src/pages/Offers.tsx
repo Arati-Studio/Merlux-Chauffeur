@@ -174,13 +174,27 @@ export default function Offers() {
 
   // Deep Linking Effect
   useEffect(() => {
-    if (slug && offers.length > 0 && !selectedPackage) {
-      const offer = offers.find(o => o.slug === slug);
-      if (offer) {
-        handlePackageSelect(offer);
+    if (offers.length > 0) {
+      if (slug) {
+        const offer = offers.find(o => o.slug === slug);
+        if (offer) {
+          if (!selectedPackage || selectedPackage.slug !== slug) {
+            setSelectedPackage(offer);
+            setStep(2);
+          }
+        } else {
+          setSelectedPackage(null);
+          setStep(1);
+          navigate('/offers', { replace: true });
+        }
+      } else {
+        if (selectedPackage) {
+          setSelectedPackage(null);
+          setStep(1);
+        }
       }
     }
-  }, [slug, offers, selectedPackage]);
+  }, [slug, offers, selectedPackage, navigate]);
 
   const autocompleteOptions = useMemo(() => {
     const options: any = {
@@ -195,6 +209,7 @@ export default function Offers() {
   const handlePackageSelect = (pkg: any) => {
     setSelectedPackage(pkg);
     setStep(2);
+    navigate(`/offers/${pkg.slug}`, { replace: true });
     // Scroll to top
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -300,6 +315,7 @@ export default function Offers() {
     setDetails({
       name: '', email: '', phone: '', pickup: '', dropoff: '', date: '', time: '', notes: '', returnRide: false, returnDate: '', returnTime: ''
     });
+    navigate('/offers', { replace: true });
   };
 
   // Helper to get price range for an offer
@@ -458,6 +474,11 @@ export default function Offers() {
                           if (step === 2 && !selectedFleet) return;
                         }
                         setStep(s.id);
+                        if (s.id === 1) {
+                          setSelectedPackage(null);
+                          setSelectedFleet(null);
+                          navigate('/offers', { replace: true });
+                        }
                       }
                     }}
                   >
@@ -702,7 +723,7 @@ export default function Offers() {
                     className="space-y-8"
                   >
                     <div className="flex items-center justify-between mb-8">
-                      <button onClick={() => setStep(1)} className="text-gold hover:text-white flex items-center gap-2 uppercase tracking-[0.2em] text-[10px] font-bold transition-all">
+                      <button onClick={() => { setStep(1); setSelectedPackage(null); setSelectedFleet(null); navigate('/offers', { replace: true }); }} className="text-gold hover:text-white flex items-center gap-2 uppercase tracking-[0.2em] text-[10px] font-bold transition-all">
                         <ArrowRight size={14} className="rotate-180" /> Back to Packages
                       </button>
                       <div className="flex items-center gap-3">

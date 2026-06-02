@@ -651,6 +651,19 @@ ${sitemapEntries.map(entry => `  <url>
     }
   });
 
+  // Serve compiled visual HTML sitemap directory
+  app.get(['/sitemap', '/sitemap.html'], (req, res) => {
+    let sitemapHtmlPath = path.join(process.cwd(), 'dist', 'sitemap.html');
+    if (!fs.existsSync(sitemapHtmlPath)) {
+      sitemapHtmlPath = path.join(process.cwd(), 'public', 'sitemap.html');
+    }
+    if (fs.existsSync(sitemapHtmlPath)) {
+      res.header('Content-Type', 'text/html');
+      return res.sendFile(sitemapHtmlPath);
+    }
+    res.status(404).send('Sitemap HTML directory not found. Please run build first.');
+  });
+
   app.get('/robots.txt', (req, res) => {
     const robotsPath = path.join(process.cwd(), 'dist', 'robots.txt');
     if (fs.existsSync(robotsPath)) {
@@ -700,7 +713,7 @@ ${sitemapEntries.map(entry => `  <url>
         title = titleTemplate.replace('%s', title);
       }
 
-      const desc = seoData?.metaDescription || globalSeo.defaultDescription || '';
+      const desc = seoData?.metaDescription || seoData?.seoDescription || seoData?.description || seoData?.shortDescription || globalSeo.defaultDescription || '';
       const seoKeywords = Array.isArray(seoData?.keywords) ? seoData.keywords : (typeof seoData?.keywords === 'string' ? seoData.keywords.split(',').map((k: string) => k.trim()) : []);
       const defaultKeywords = Array.isArray(globalSeo.defaultKeywords) ? globalSeo.defaultKeywords : (typeof globalSeo.defaultKeywords === 'string' ? globalSeo.defaultKeywords.split(',').map((k: string) => k.trim()) : []);
       const keywords = [...seoKeywords, ...defaultKeywords].filter(k => k !== '').join(', ');

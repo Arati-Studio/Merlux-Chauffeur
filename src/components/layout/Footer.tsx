@@ -192,8 +192,8 @@ export default function Footer() {
             © {new Date().getFullYear()} Merlux Chauffeur Services. All rights reserved.
           </p>
           <div className="flex gap-8">
-            <a href="#" className="text-white/30 hover:text-white text-xs transition-colors">Privacy Policy</a>
-            <a href="#" className="text-white/30 hover:text-white text-xs transition-colors">Terms of Service</a>
+            <a href="/sitemap.html" className="text-white/30 hover:text-white text-xs transition-colors">Sitemap</a>
+            <Link to="/terms" className="text-white/30 hover:text-white text-xs transition-colors">Terms of Service</Link>
           </div>
         </div>
       </div>

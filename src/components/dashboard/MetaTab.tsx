@@ -183,6 +183,7 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
     { title: 'FAQ', slug: 'faq', path: '/faq' },
     { title: 'About', slug: 'about', path: '/about' },
     { title: 'Contact', slug: 'contact', path: '/contact' },
+    { title: 'Terms and Conditions', slug: 'terms', path: '/terms' },
   ];
 
   const getSchemaType = (structuredData: any): string => {

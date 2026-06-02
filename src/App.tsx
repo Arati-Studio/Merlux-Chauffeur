@@ -13,6 +13,7 @@ import Login from './pages/Login';
 import Blog from './pages/Blog';
 import BlogPost from './pages/BlogPost';
 import FAQ from './pages/FAQ';
+import Terms from './pages/Terms';
 import DynamicPage from './pages/DynamicPage';
 import Offers from './pages/Offers';
 import Tours from './pages/Tours';
@@ -121,6 +122,7 @@ function AppLayout() {
           } />
           <Route path="/login" element={<Login />} />
           <Route path="/payment/success" element={<PaymentSuccess />} />
+          <Route path="/terms" element={<Terms />} />
           {/* Dynamic SEO Pages */}
           <Route path="/:slug" element={<DynamicPage />} />
         </Routes>

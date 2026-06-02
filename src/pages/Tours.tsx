@@ -286,20 +286,38 @@ export default function Tours() {
 
   // Deep Linking Effect
   useEffect(() => {
-    if (slug && tours.length > 0 && !selectedTour) {
-      const tour = tours.find(t => t.slug === slug);
-      if (tour) {
-        handleTourSelect(tour);
-        // Removed automatic handleStartBooking(tour) to stay on Package details
+    if (tours.length > 0) {
+      if (slug) {
+        const tour = tours.find(t => t.slug === slug);
+        if (tour) {
+          if (!selectedTour || selectedTour.slug !== slug) {
+            setSelectedTour(tour);
+            setMainImage(tour.image || tour.featuredImage);
+            setShowFullDetails(true);
+            setExpandedItinerary(0);
+          }
+        } else {
+          setSelectedTour(null);
+          setShowFullDetails(false);
+          setStep(1);
+          navigate('/tours', { replace: true });
+        }
+      } else {
+        if (selectedTour) {
+          setSelectedTour(null);
+          setShowFullDetails(false);
+          setStep(1);
+        }
       }
     }
-  }, [slug, tours, selectedTour]);
+  }, [slug, tours, selectedTour, navigate]);
 
   const handleTourSelect = (tour: any) => {
     setSelectedTour(tour);
     setMainImage(tour.image || tour.featuredImage);
     setShowFullDetails(true);
     setExpandedItinerary(0);
+    navigate(`/tours/${tour.slug}`, { replace: true });
   };
 
   const handleStartBooking = (tour?: any) => {
@@ -453,6 +471,7 @@ export default function Tours() {
     setSelectedFleet(null);
     setSelectedExtras({});
     setQuantity(1);
+    navigate('/tours', { replace: true });
   };
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -605,6 +624,11 @@ export default function Tours() {
                           if (step === 2 && !selectedFleet) return;
                         }
                         setStep(s.id);
+                        if (s.id === 1) {
+                          setShowFullDetails(false);
+                          setSelectedTour(null);
+                          navigate('/tours', { replace: true });
+                        }
                       }
                     }}
                   >
@@ -748,7 +772,12 @@ export default function Tours() {
               >
                 {/* Back Button */}
                 <button
-                  onClick={() => setShowFullDetails(false)}
+                  onClick={() => {
+                    setShowFullDetails(false);
+                    setSelectedTour(null);
+                    setStep(1);
+                    navigate('/tours', { replace: true });
+                  }}
                   className="mb-8 flex items-center gap-2 text-gold font-bold uppercase tracking-[0.2em] text-[10px] hover:gap-4 transition-all"
                 >
                   <ArrowRight size={14} className="rotate-180" /> Back to Collections

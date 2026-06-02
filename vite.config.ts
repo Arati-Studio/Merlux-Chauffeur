@@ -29,7 +29,9 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         output: {
 manualChunks: {
-  vendor: ["react", "react-dom"],
+  reactCore: ["react", "react-dom"],
+  reactRouter: ["react-router-dom"],
+  animations: ["motion/react"],
   emailService: [path.resolve(__dirname, "src/services/emailService.ts")],
   smsService: [path.resolve(__dirname, "src/services/smsService.ts")],
 }

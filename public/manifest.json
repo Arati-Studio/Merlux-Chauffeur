@@ -1,0 +1,48 @@
+{
+  "name": "Merlux Chauffeur Booking",
+  "short_name": "Merlux",
+  "description": "Premium luxury chauffeur booking and private jet transfer services in Australia.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#12131a",
+  "orientation": "portrait-primary",
+  "categories": ["travel", "transportation", "business"],
+  "icons": [
+    {
+      "src": "/assets/favicon.webp",
+      "sizes": "32x32",
+      "type": "image/webp",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/Logo.webp",
+      "sizes": "512x512",
+      "type": "image/webp",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Book a Ride",
+      "short_name": "Book",
+      "description": "Book a premium chauffeur transfer",
+      "url": "/booking",
+      "icons": [{ "src": "/assets/favicon.webp", "sizes": "32x32" }]
+    },
+    {
+      "name": "View Luxury Fleet",
+      "short_name": "Fleet",
+      "description": "Explore the Merlux private fleet",
+      "url": "/fleet",
+      "icons": [{ "src": "/assets/favicon.webp", "sizes": "32x32" }]
+    },
+    {
+      "name": "Special Offers",
+      "short_name": "Offers",
+      "description": "View current exclusive VIP airport and tour offers",
+      "url": "/offers",
+      "icons": [{ "src": "/assets/favicon.webp", "sizes": "32x32" }]
+    }
+  ]
+}
