@@ -27,8 +27,6 @@ export default defineConfig(({ mode }) => {
       chunkSizeWarningLimit: 1500,
 
       rollupOptions: {
-        // ✅ merge everything here
-        external: ["react-helmet-async"],
         output: {
 manualChunks: {
   vendor: ["react", "react-dom"],

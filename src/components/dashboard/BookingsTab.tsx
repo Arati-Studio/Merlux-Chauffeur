@@ -3229,30 +3229,6 @@ export default function BookingsTab({
                 )}
 
                 <div className="space-y-4">
-                  {/* Schedule details */}
-                  <div>
-                    <h4 className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-2">Schedule Outbound & Return</h4>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="p-3 bg-white/5 rounded-xl border border-white/5">
-                        <p className="text-[8px] uppercase tracking-widest text-[#93c5fd] font-bold mb-1">Pick Up Path</p>
-                        <p className="text-[10px] text-white font-bold">{viewingBooking.date} at {formatTimeToAMPM(viewingBooking.time)}</p>
-                      </div>
-                      {viewingBooking.isReturn ? (
-                        <div className="p-3 bg-gold/10 rounded-xl border border-gold/20 animate-in fade-in duration-300">
-                          <p className="text-[8px] uppercase tracking-widest text-gold font-bold mb-1">Return Trip</p>
-                          <p className="text-[10px] text-gold font-bold">
-                            {viewingBooking.returnDate ? `${viewingBooking.returnDate} at ${formatTimeToAMPM(viewingBooking.returnTime)}` : 'Requested (Unscheduled)'}
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="p-3 bg-white/5 rounded-xl border border-white/5 opacity-50">
-                          <p className="text-[8px] uppercase tracking-widest text-white/30 font-bold mb-1">Return Trip</p>
-                          <p className="text-[10px] text-white/40 italic">One-Way Only</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
                   {viewingBooking.waypoints?.length > 0 && (
                     <div>
                       <h4 className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-2">Waypoints</h4>
