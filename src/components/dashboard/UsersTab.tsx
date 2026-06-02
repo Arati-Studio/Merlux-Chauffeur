@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Search, X, UserPlus, Users, Shield, Car, User, Mail, Phone, MapPin,
   Calendar, DollarSign, XCircle, CalendarCog, MessageSquare, Star,
-  CheckCircle, AlertCircle, Award, PiggyBank, Activity, Clock, Edit2, Trash2, Save, Loader2, Ban
+  CheckCircle, AlertCircle, Award, PiggyBank, Activity, Clock, Edit2, Trash2, Save, Loader2, Ban, Eye
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { db, handleFirestoreError, OperationType } from '../../lib/firebase';
@@ -162,12 +162,39 @@ export default function UsersTab({
   const [editingUser, setEditingUser] = useState<any>(null);
   const [showUserModal, setShowUserModal] = useState(false);
   const [isCreatingUser, setIsCreatingUser] = useState(false);
+  const [viewingDriverDocs, setViewingDriverDocs] = useState<any>(null);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [zoomImage, setZoomImage] = useState<{ src: string, title: string } | null>(null);
+
+  const handleUpdateVerificationStatus = async (userId: string, newStatus: string) => {
+    setIsUpdatingStatus(true);
+    try {
+      await updateDoc(doc(db, 'users', userId), {
+        driverVerificationStatus: newStatus,
+        updatedAt: serverTimestamp()
+      });
+      showDashboardNotice('success', `Verification status changed to ${newStatus} successfully.`);
+      // Update local state if the user was updated
+      if (viewingDriverDocs && viewingDriverDocs.id === userId) {
+        setViewingDriverDocs((prev: any) => ({ ...prev, driverVerificationStatus: newStatus }));
+      }
+    } catch (err: any) {
+      console.error('Error updating verification status:', err);
+      showDashboardNotice('error', err.message || 'Failed to update verification status.');
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
 
   if (!isAdmin) return null;
 
   const handleUpdateUser = async (userId: string, data: any) => {
     try {
       const sanitizedData = { ...data, id: userId };
+      if (sanitizedData.role === 'driver') {
+        sanitizedData.driverLicenseNumber = sanitizedData.license || '';
+        sanitizedData.driverLicense = sanitizedData.license || '';
+      }
       await setDoc(doc(db, 'users', userId), {
         ...sanitizedData,
         updatedAt: serverTimestamp()
@@ -456,7 +483,7 @@ export default function UsersTab({
                   )}
                 </div>
 
-                <div className="flex flex-col">
+                <div className="flex flex-col min-w-0 flex-1">
                   <h4 className="text-[14px] font-bold font-display text-white group-hover:text-gold transition-colors flex items-center justify-between gap-2 w-full min-w-0">
                     <span className="truncate leading-tight">
                       {u.name || "No Name"}
@@ -469,6 +496,24 @@ export default function UsersTab({
                       </span>
                     )}
                   </h4>
+                  {u.role === "driver" && (() => {
+                    const isExpired = (u.driverLicenseExpiry && new Date(u.driverLicenseExpiry) < new Date()) || 
+                                      (u.vehicleInsuranceExpiry && new Date(u.vehicleInsuranceExpiry) < new Date());
+                    const showRejected = isExpired || u.driverVerificationStatus === 'rejected';
+                    const statusText = isExpired ? 'Update Needed / Expired' : (u.driverVerificationStatus || 'pending');
+                    return (
+                      <div className="mt-1 flex items-center">
+                        <span className={cn(
+                          "text-[9px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded border leading-none shrink-0",
+                          showRejected ? "bg-red-500/10 text-red-400 border-red-500/20" :
+                          u.driverVerificationStatus === 'approved' ? "bg-green-500/10 text-green-400 border-green-500/20" :
+                          "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                        )}>
+                          Docs: {statusText}
+                        </span>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
               <span className={cn(
@@ -662,19 +707,31 @@ export default function UsersTab({
             <div className="pt-4 border-t border-white/5 flex items-center gap-2">
               <button
                 onClick={() => {
-                  setEditingUser(u);
+                  setEditingUser({
+                    ...u,
+                    license: u.driverLicenseNumber || u.license || u.driverLicense || ''
+                  });
                   setShowUserModal(true);
                 }}
                 className="flex-1 px-3 py-2 border border-blue-500/30 bg-blue-500/5 text-blue-400 hover:bg-blue-500/20 hover:border-blue-500 transition-all rounded-xl flex items-center justify-center gap-2"
               >
-                <Edit2 size={14} />
+                <Edit2 size={12} />
                 <span className="text-[10px] font-bold uppercase tracking-widest">Edit</span>
               </button>
+              {u.role === 'driver' && (
+                <button
+                  onClick={() => setViewingDriverDocs(u)}
+                  className="flex-1 px-3 py-2 border border-gold/30 bg-gold/5 text-gold hover:bg-gold/20 hover:border-gold transition-all rounded-xl flex items-center justify-center gap-2"
+                >
+                  <Award size={12} />
+                  <span className="text-[10px] font-bold uppercase tracking-widest">Docs</span>
+                </button>
+              )}
               <button
                 onClick={() => handleDeleteUser(u.id)}
                 className="flex-1 px-3 py-2 border border-red-500/30 bg-red-500/5 text-red-400 hover:bg-red-500/20 hover:border-red-500 transition-all rounded-xl flex items-center justify-center gap-2"
               >
-                <Trash2 size={14} />
+                <Trash2 size={12} />
                 <span className="text-[10px] font-bold uppercase tracking-widest">Delete</span>
               </button>
             </div>
@@ -825,6 +882,219 @@ export default function UsersTab({
                     </>
                   )}
                 </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {viewingDriverDocs && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/95 backdrop-blur-md z-[110] flex items-center justify-center p-4 overflow-y-auto"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              className="w-full max-w-4xl glass p-6 md:p-8 rounded-sm border border-gold/20 my-8 shadow-2xl relative"
+            >
+              <button
+                onClick={() => setViewingDriverDocs(null)}
+                className="absolute top-4 right-4 text-white/40 hover:text-white transition-colors"
+                id="close-preview-modal"
+              >
+                <X size={24} />
+              </button>
+
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-white/15 pb-4 mb-6 gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-xl font-display text-gold">Driver Credentials Verification</h3>
+                    <span className={cn(
+                      "text-[9px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded-md border",
+                      viewingDriverDocs.driverVerificationStatus === 'approved' ? "bg-green-500/10 text-green-400 border-green-500/20" :
+                      viewingDriverDocs.driverVerificationStatus === 'rejected' ? "bg-red-500/10 text-red-400 border-red-500/20" :
+                      "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                    )}>
+                      Status: {viewingDriverDocs.driverVerificationStatus || 'pending'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-white/40 mt-1">Reviewing uploads for driver <span className="text-white font-bold">{viewingDriverDocs.name}</span> ({viewingDriverDocs.email})</p>
+                </div>
+                
+                {/* Approval Action Form */}
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] uppercase tracking-widest font-bold text-white/40">Set Status:</span>
+                  <select
+                    value={viewingDriverDocs.driverVerificationStatus || 'pending'}
+                    onChange={(e) => handleUpdateVerificationStatus(viewingDriverDocs.id, e.target.value)}
+                    disabled={isUpdatingStatus}
+                    className="bg-[#0c0c0c] border border-white/20 text-white rounded-lg px-3 py-1.5 text-xs outline-none focus:border-gold transition-all cursor-pointer font-bold uppercase custom-select"
+                  >
+                    <option value="pending">Pending Review</option>
+                    <option value="approved">Approve Documents</option>
+                    <option value="rejected">Reject Documents</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Grid of details & uploaded files */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-h-[70vh] overflow-y-auto pr-2 custom-scrollbar">
+                
+                {/* License Section */}
+                <div className="bg-white/5 border border-white/5 rounded-2xl p-5 space-y-4">
+                  <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-white">1. Driver License Document</span>
+                    <span className="text-[9px] font-mono text-white/40">{viewingDriverDocs.driverLicenseFileName || 'no-file.png'}</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 bg-black/40 p-3 rounded-xl border border-white/5">
+                    <div>
+                      <span className="text-[9px] uppercase tracking-widest text-white/40 block">License Number</span>
+                      <span className="text-xs font-bold text-white uppercase">{viewingDriverDocs.driverLicenseNumber || 'Not provided'}</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] uppercase tracking-widest text-white/40 block">Expiry Date</span>
+                      <span className={cn(
+                        "text-xs font-bold block",
+                        viewingDriverDocs.driverLicenseExpiry && new Date(viewingDriverDocs.driverLicenseExpiry) < new Date() ? "text-red-400 font-extrabold" : "text-white"
+                      )}>
+                        {viewingDriverDocs.driverLicenseExpiry || 'Not provided'}
+                        {viewingDriverDocs.driverLicenseExpiry && new Date(viewingDriverDocs.driverLicenseExpiry) < new Date() && ' (Expired)'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Document graphic/Base64 display */}
+                  {viewingDriverDocs.driverLicenseBase64 ? (
+                    <div 
+                      onClick={() => setZoomImage({ src: viewingDriverDocs.driverLicenseBase64, title: `${viewingDriverDocs.name}'s Driver License` })}
+                      className="border border-white/10 rounded-xl overflow-hidden bg-black/60 relative group min-h-[220px] flex items-center justify-center cursor-zoom-in hover:border-gold/50 transition-colors"
+                      title="Click to view full screen"
+                    >
+                      <img
+                        src={viewingDriverDocs.driverLicenseBase64}
+                        alt="License Copy"
+                        className="max-h-[300px] w-auto max-w-full object-contain mx-auto"
+                      />
+                      <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <span className="bg-gold text-black text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded shadow-lg flex items-center gap-1.5">
+                          <Eye size={12} /> Click to Expand
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="border border-dashed border-white/10 rounded-xl bg-black/20 p-8 text-center min-h-[220px] flex flex-col items-center justify-center">
+                      <AlertCircle className="w-8 h-8 text-white/20 mb-2" />
+                      <span className="text-xs text-white/40 font-semibold uppercase tracking-wider">No license document uploaded</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Insurance Section */}
+                <div className="bg-white/5 border border-white/5 rounded-2xl p-5 space-y-4">
+                  <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-white">2. Vehicle Insurance Document</span>
+                    <span className="text-[9px] font-mono text-white/40">{viewingDriverDocs.vehicleInsuranceFileName || 'no-file.png'}</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 bg-black/40 p-3 rounded-xl border border-white/5">
+                    <div>
+                      <span className="text-[9px] uppercase tracking-widest text-[#a1a1aa] block">Policy Number</span>
+                      <span className="text-xs font-bold text-white uppercase">{viewingDriverDocs.vehicleInsurancePolicy || 'Not provided'}</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] uppercase tracking-widest text-[#a1a1aa] block">Expiry Date</span>
+                      <span className={cn(
+                        "text-xs font-bold block",
+                        viewingDriverDocs.vehicleInsuranceExpiry && new Date(viewingDriverDocs.vehicleInsuranceExpiry) < new Date() ? "text-red-400 font-extrabold" : "text-white"
+                      )}>
+                        {viewingDriverDocs.vehicleInsuranceExpiry || 'Not provided'}
+                        {viewingDriverDocs.vehicleInsuranceExpiry && new Date(viewingDriverDocs.vehicleInsuranceExpiry) < new Date() && ' (Expired)'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Document graphic/Base64 display */}
+                  {viewingDriverDocs.vehicleInsuranceBase64 ? (
+                    <div 
+                      onClick={() => setZoomImage({ src: viewingDriverDocs.vehicleInsuranceBase64, title: `${viewingDriverDocs.name}'s Vehicle Insurance` })}
+                      className="border border-white/10 rounded-xl overflow-hidden bg-black/60 relative group min-h-[220px] flex items-center justify-center cursor-zoom-in hover:border-gold/50 transition-colors"
+                      title="Click to view full screen"
+                    >
+                      <img
+                        src={viewingDriverDocs.vehicleInsuranceBase64}
+                        alt="Insurance Copy"
+                        className="max-h-[300px] w-auto max-w-full object-contain mx-auto"
+                      />
+                      <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <span className="bg-gold text-black text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded shadow-lg flex items-center gap-1.5">
+                          <Eye size={12} /> Click to Expand
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="border border-dashed border-white/10 rounded-xl bg-black/20 p-8 text-center min-h-[220px] flex flex-col items-center justify-center">
+                      <AlertCircle className="w-8 h-8 text-white/20 mb-2" />
+                      <span className="text-xs text-white/40 font-semibold uppercase tracking-wider">No insurance document uploaded</span>
+                    </div>
+                  )}
+                </div>
+
+              </div>
+
+              <div className="mt-6 pt-4 border-t border-white/10 flex justify-end">
+                <button
+                  onClick={() => setViewingDriverDocs(null)}
+                  className="px-5 py-2.5 bg-white/5 border border-white/10 text-white/60 hover:text-white hover:bg-white/10 transition-all rounded-xl text-xs font-bold uppercase tracking-widest"
+                >
+                  Close Document Review
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Full Screen Image Zoom Overlay */}
+      <AnimatePresence>
+        {zoomImage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setZoomImage(null)}
+            className="fixed inset-0 bg-black/95 backdrop-blur-md z-[210] flex items-center justify-center p-4 cursor-zoom-out"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 15 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative max-w-4xl w-full bg-[#050510] border border-gold/20 rounded-2xl overflow-hidden shadow-2xl p-4 flex flex-col items-center"
+            >
+              <button
+                onClick={() => setZoomImage(null)}
+                className="absolute top-4 right-4 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-full p-2 transition-colors cursor-pointer z-10"
+                id="close-lightbox"
+              >
+                <XCircle size={20} />
+              </button>
+
+              <div className="w-full border-b border-white/10 pb-3 mb-4 flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold uppercase tracking-widest text-gold font-display">{zoomImage.title}</h3>
+                  <p className="text-[10px] text-white/40 mt-1">Credentials verification zoom view</p>
+                </div>
+              </div>
+
+              <div className="w-full flex items-center justify-center max-h-[70vh] overflow-auto custom-scrollbar p-2">
+                <img
+                  src={zoomImage.src}
+                  alt={zoomImage.title}
+                  className="max-h-[65vh] w-auto max-w-full rounded-lg object-contain border border-white/10 shadow-lg shadow-black/80"
+                />
               </div>
             </motion.div>
           </motion.div>

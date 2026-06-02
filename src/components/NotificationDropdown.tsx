@@ -15,7 +15,7 @@ const NotificationDropdown = ({
   clearAll: () => void;
 }) => {
   return (
-    <div className="absolute right-0 top-full mt-2 w-80 bg-black border border-white/10 rounded-2xl shadow-2xl z-[1000] overflow-hidden">
+    <div className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-1.5rem)] sm:max-w-none bg-black border border-white/10 rounded-2xl shadow-2xl z-[1000] overflow-hidden">
       <div className="p-4 border-b border-white/5 flex items-center justify-between">
         <h3 className="text-sm font-bold text-white flex items-center gap-2">
           <Bell size={16} className="text-gold" /> Notifications

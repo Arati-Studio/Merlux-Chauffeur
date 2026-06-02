@@ -378,6 +378,7 @@ async function startServer() {
         { title: 'Services', slug: 'services', path: '/services' },
         { title: 'Blog', slug: 'blog', path: '/blog' },
         { title: 'Fleet', slug: 'fleet', path: '/fleet' },
+        { title: 'FAQ', slug: 'faq', path: '/faq' },
         { title: 'About', slug: 'about', path: '/about' },
         { title: 'Contact', slug: 'contact', path: '/contact' },
       ];

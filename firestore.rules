@@ -235,6 +235,30 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && (request.auth.uid == resource.data.userId || isAdmin());
     }
 
+    match /booking-chats/{chatMsgId} {
+      allow read, list: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.senderId == request.auth.uid ||
+        get(/databases/$(database)/documents/bookings/$(resource.data.bookingId)).data.userId == request.auth.uid ||
+        get(/databases/$(database)/documents/bookings/$(resource.data.bookingId)).data.driverId == request.auth.uid
+      );
+      allow create: if isAuthenticated() && (
+        isAdmin() ||
+        get(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)).data.userId == request.auth.uid ||
+        get(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)).data.driverId == request.auth.uid
+      ) && (
+        request.resource.data.bookingId is string &&
+        request.resource.data.senderId == request.auth.uid &&
+        request.resource.data.senderName is string &&
+        request.resource.data.senderRole is string &&
+        request.resource.data.message is string &&
+        request.resource.data.message.size() > 0 &&
+        request.resource.data.message.size() <= 2000 &&
+        request.resource.data.createdAt == request.time
+      );
+      allow update, delete: if isAdmin();
+    }
+
     match /messages/{messageId} {
       allow read: if isAdmin();
       allow create: if (

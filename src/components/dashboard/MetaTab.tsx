@@ -141,6 +141,8 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
   const [isSaving, setIsSaving] = useState(false);
   const [activeSubSection, setActiveSubSection] = useState<'console' | 'sitemap' | 'robots' | 'schema'>('console');
   const [editingItem, setEditingItem] = useState<any>(null);
+  const [orgSchemaEdit, setOrgSchemaEdit] = useState('');
+  const [localSchemaEdit, setLocalSchemaEdit] = useState('');
   const [previewItem, setPreviewItem] = useState<any>(null);
   const [previewDevice, setPreviewDevice] = useState<'mobile' | 'desktop'>('desktop');
   const [previewTheme, setPreviewTheme] = useState<'light' | 'dark'>('dark');
@@ -178,6 +180,7 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
     { title: 'Services', slug: 'services', path: '/services' },
     { title: 'Blog', slug: 'blog', path: '/blog' },
     { title: 'Fleet', slug: 'fleet', path: '/fleet' },
+    { title: 'FAQ', slug: 'faq', path: '/faq' },
     { title: 'About', slug: 'about', path: '/about' },
     { title: 'Contact', slug: 'contact', path: '/contact' },
   ];
@@ -422,7 +425,14 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
       setMetadataDocs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
     const unsubSettings = onSnapshot(doc(db, 'settings', 'system'), (snap) => {
-      if (snap.exists()) setSystemSettings(snap.data());
+      if (snap.exists()) {
+        const data = snap.data();
+        setSystemSettings(data);
+        if (data.schema) {
+          setOrgSchemaEdit(typeof data.schema.organization === 'string' ? data.schema.organization : JSON.stringify(data.schema.organization || '', null, 2));
+          setLocalSchemaEdit(typeof data.schema.localBusiness === 'string' ? data.schema.localBusiness : JSON.stringify(data.schema.localBusiness || '', null, 2));
+        }
+      }
       setLoading(false);
     });
 
@@ -653,6 +663,40 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
       });
       showDashboardNotice('success', 'Robots.txt updated successfully.');
     } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, 'settings/system');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleUpdateGlobalSchemas = async () => {
+    setIsSaving(true);
+    try {
+      const orgLint = orgSchemaEdit ? lintJson(orgSchemaEdit) : null;
+      const localLint = localSchemaEdit ? lintJson(localSchemaEdit) : null;
+
+      if (orgLint) {
+        showDashboardNotice('error', `Organization Schema: ${orgLint}`);
+        setIsSaving(false);
+        return;
+      }
+      if (localLint) {
+        showDashboardNotice('error', `Local Business Schema: ${localLint}`);
+        setIsSaving(false);
+        return;
+      }
+
+      const orgData = orgSchemaEdit ? JSON.parse(orgSchemaEdit) : null;
+      const localData = localSchemaEdit ? JSON.parse(localSchemaEdit) : null;
+
+      await updateDoc(doc(db, 'settings', 'system'), {
+        'schema.organization': orgData,
+        'schema.localBusiness': localData,
+        updatedAt: serverTimestamp()
+      });
+      showDashboardNotice('success', 'Global SEO schemas updated and synchronized.');
+    } catch (err: any) {
+      showDashboardNotice('error', `Schema Update Failed: ${err.message || 'Check JSON formatting'}`);
       handleFirestoreError(err, OperationType.UPDATE, 'settings/system');
     } finally {
       setIsSaving(false);
@@ -1248,7 +1292,7 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
                                   </div>
                                   <div>
                                     <p className="text-[12px] font-bold text-white mb-0.5">{item.title}</p>
-                                    <p className="text-[9px] text-white/30 font-mono truncate max-w-[150px] uppercase tracking-tight">/{item.slug}</p>
+                                    <p className="text-[9px] text-white/30 font-mono truncate max-w-[150px] tracking-tight">/{item.slug}</p>
                                   </div>
                                 </div>
                               </td>
@@ -1380,7 +1424,14 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
                                 <span className="text-[10px] text-white/30" title="Last Modified Date & Time">
                                   {lastModStr}
                                 </span>
-                                <ExternalLink size={10} className="text-white/20 group-hover:text-gold transition-colors" />
+                                <a
+                                  href={fullPageUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-white/20 group-hover:text-gold transition-colors"
+                                >
+                                  <ExternalLink size={10} />
+                                </a>
                               </div>
                             </div>
                           );
@@ -1424,7 +1475,14 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
                                 <span className="text-[10px] text-white/30" title="Last Modified Date & Time">
                                   {lastModStr}
                                 </span>
-                                <ExternalLink size={10} className="text-white/20 group-hover:text-gold transition-colors" />
+                                <a
+                                  href={absoluteUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-white/20 group-hover:text-gold transition-colors"
+                                >
+                                  <ExternalLink size={10} />
+                                </a>
                               </div>
                             </div>
                           );
@@ -1506,63 +1564,58 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
             >
               <div className="bg-white/5 p-8 rounded-3xl border border-white/5 space-y-6">
                 <div className="flex items-center justify-between border-b border-white/5 pb-4">
-                  <p className="text-[10px] text-white/40 uppercase tracking-widest">Active Structured Microdata Blocks</p>
-                  <div className="flex items-center gap-1 text-[9px] text-gold bg-gold/10 px-2 py-0.5 rounded border border-gold/15 font-mono font-bold uppercase tracking-widest">
-                    JSON-LD Enabled
+                  <div className="text-left">
+                    <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold">Site-Wide Structured Data</p>
+                    <h4 className="text-lg font-display text-white mt-1">Global Schema Management</h4>
+                  </div>
+                  <button
+                    onClick={handleUpdateGlobalSchemas}
+                    disabled={isSaving}
+                    className="btn-primary px-8 py-2.5 h-10 text-[10px] uppercase tracking-widest font-black flex items-center justify-center gap-2"
+                  >
+                    {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                    Sync Global Schemas
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3 text-gold">
+                        <Database size={18} />
+                        <h4 className="text-[10px] uppercase font-bold tracking-widest">Organization Schema</h4>
+                      </div>
+                      <span className="text-[8px] text-white/20 font-mono tracking-tighter uppercase">Organization JSON-LD</span>
+                    </div>
+                    <textarea
+                      value={orgSchemaEdit}
+                      onChange={(e) => setOrgSchemaEdit(e.target.value)}
+                      className="w-full bg-black/40 border border-white/10 rounded-2xl p-6 font-mono text-[11px] text-blue-400 outline-none focus:border-gold transition-all min-h-[400px] custom-scrollbar"
+                      placeholder='{ "@context": "https://schema.org", "@type": "Organization", ... }'
+                    />
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3 text-gold">
+                        <FileJson size={18} />
+                        <h4 className="text-[10px] uppercase font-bold tracking-widest">Local Business Schema</h4>
+                      </div>
+                      <span className="text-[8px] text-white/20 font-mono tracking-tighter uppercase">LocalBusiness JSON-LD</span>
+                    </div>
+                    <textarea
+                      value={localSchemaEdit}
+                      onChange={(e) => setLocalSchemaEdit(e.target.value)}
+                      className="w-full bg-black/40 border border-white/10 rounded-2xl p-6 font-mono text-[11px] text-green-500 outline-none focus:border-gold transition-all min-h-[400px] custom-scrollbar"
+                      placeholder='{ "@context": "https://schema.org", "@type": "LocalBusiness", ... }'
+                    />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-6">
-                  <div className="glass p-6 rounded-2xl border border-white/5 space-y-4">
-                    <div className="flex items-center gap-3 text-gold">
-                      <Database size={18} />
-                      <h4 className="text-xs uppercase font-bold tracking-widest">Main Organization Schema</h4>
-                    </div>
-                    <div className="bg-black/40 p-6 rounded-xl border border-white/5 font-mono text-[11px] text-blue-400">
-                      <code>{JSON.stringify({
-                        "@context": "https://schema.org",
-                        "@type": "Organization",
-                        "name": systemSettings?.seo?.siteName || "Merlux Chauffeur",
-                        "url": window.location.origin,
-                        "logo": systemSettings?.seo?.logo || "",
-                        "contactPoint": {
-                          "@type": "ContactPoint",
-                          "telephone": systemSettings?.contact?.phone || "",
-                          "contactType": "customer service"
-                        }
-                      }, null, 2)}</code>
-                    </div>
-                  </div>
-
-                  <div className="glass p-6 rounded-2xl border border-white/5 space-y-4">
-                    <div className="flex items-center gap-3 text-gold">
-                      <FileJson size={18} />
-                      <h4 className="text-xs uppercase font-bold tracking-widest">Local Business Schema</h4>
-                    </div>
-                    <div className="bg-black/40 p-6 rounded-xl border border-white/5 font-mono text-[11px] text-green-500">
-                      <code>{JSON.stringify({
-                        "@context": "https://schema.org",
-                        "@type": "LocalBusiness",
-                        "name": systemSettings?.seo?.siteName || "Merlux",
-                        "image": systemSettings?.seo?.logo || "",
-                        "address": {
-                          "@type": "PostalAddress",
-                          "streetAddress": systemSettings?.contact?.address || "Melbourne"
-                        },
-                        "geo": {
-                          "@type": "GeoCoordinates",
-                          "latitude": systemSettings?.contact?.lat || "-37.8136",
-                          "longitude": systemSettings?.contact?.lng || "144.9631"
-                        }
-                      }, null, 2)}</code>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4 p-4 rounded-xl bg-blue-500/5 border border-blue-500/10 mt-6">
+                <div className="flex items-center gap-4 p-5 rounded-2xl bg-blue-500/5 border border-blue-500/10 mt-6">
                   <ShieldCheck size={20} className="text-blue-500 shrink-0" />
                   <p className="text-[10px] text-blue-200/60 leading-relaxed uppercase tracking-widest">
-                    Structured data helps Google interpret page components to produce rich visual search cards in indexing queries.
+                    Defining these site-wide schemas centrally ensures consistent rich result eligibility across Google and Bing for your primary brand identity and physical location.
                   </p>
                 </div>
               </div>

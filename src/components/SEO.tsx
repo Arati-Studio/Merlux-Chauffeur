@@ -4,6 +4,7 @@ import { useLocation } from 'react-router-dom';
 import { SEO_CONFIG, type SEOProps, generateCanonicalUrl } from '../lib/seo';
 import { collection, query, where, limit, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { useSettings } from '../lib/SettingsContext';
 
 const SEO: React.FC<SEOProps> = ({
   title,
@@ -18,6 +19,7 @@ const SEO: React.FC<SEOProps> = ({
   schema,
 }) => {
   const { pathname } = useLocation();
+  const { settings } = useSettings();
   const [dbSeo, setDbSeo] = useState<{
     metaTitle?: string;
     metaDescription?: string;
@@ -110,16 +112,29 @@ const SEO: React.FC<SEOProps> = ({
       <meta name="twitter:title" content={seoTitle} />
       <meta name="twitter:description" content={seoDescription} />
       <meta name="twitter:image" content={seoImage} />
+
+      {/* Global Site-Wide Schemas */}
+      {settings?.schema?.organization && (
+        <script type="application/ld+json">
+          {JSON.stringify(settings.schema.organization)}
+        </script>
+      )}
+
+      {settings?.schema?.localBusiness && (
+        <script type="application/ld+json">
+          {JSON.stringify(settings.schema.localBusiness)}
+        </script>
+      )}
       
-      {/* Structured Data (JSON-LD) */}
+      {/* Structured Data (Page-Specific JSON-LD) */}
       {finalStructuredData && (
         <script type="application/ld+json">
           {JSON.stringify(finalStructuredData)}
         </script>
       )}
       
-      {/* Default LocalBusiness Schema if not provided */}
-      {!finalStructuredData && (
+      {/* Default LocalBusiness Schema if not provided globally or locally */}
+      {!finalStructuredData && !settings?.schema?.localBusiness && (
         <script type="application/ld+json">
           {JSON.stringify({
             "@context": "https://schema.org",

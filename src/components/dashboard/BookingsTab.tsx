@@ -14,7 +14,7 @@ import {
   CalendarArrowDown, CalendarArrowUp, RefreshCw, Blocks, Map as MapIcon,
   Globe, Mail, Phone, Eye, Star, User, UserMinus, SquarePen, AlertTriangle,
   ChevronDown, CheckSquare as CheckCloud, Route as RouteIcon, ArrowRight, Bell, CreditCard,
-  Square, SquareCheck, UserCheck, Plus, CircleX, Loader2
+  Square, SquareCheck, UserCheck, Plus, CircleX, Loader2, MessageSquare
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '../../lib/utils';
@@ -28,6 +28,8 @@ import {
 } from 'firebase/firestore';
 import { smsService } from '../../services/smsService';
 import { emailService } from '../../services/emailService';
+import BookingChat from './BookingChat';
+import ChatBadge from './ChatBadge';
 
 interface BookingsTabProps {
   isAdmin: boolean;
@@ -70,8 +72,14 @@ export default function BookingsTab({
   const [bookingCategory, setBookingCategory] = useState<'standard' | 'offer' | 'tour'>('standard');
   const [bookingViewMode, setBookingViewMode] = useState<'grid' | 'table'>('grid');
   const [bookingTimeFilter, setBookingTimeFilter] = useState<'all' | '3d' | '7d' | '30d' | 'month' | 'year'>('all');
-  const [bookingYearRange, setBookingYearRange] = useState({ start: 2024, end: 2025 });
-  const [bookingMonthRange, setBookingMonthRange] = useState({ start: '01', end: '12' });
+  const [bookingYearRange, setBookingYearRange] = useState(() => {
+    const currentYear = new Date().getFullYear();
+    return { start: currentYear, end: currentYear };
+  });
+  const [bookingMonthRange, setBookingMonthRange] = useState(() => {
+    const currentMonthStr = (new Date().getMonth() + 1).toString().padStart(2, '0');
+    return { start: currentMonthStr, end: currentMonthStr };
+  });
   const [bookingDateTypeFilter, setBookingDateTypeFilter] = useState<'pickup' | 'booking'>('pickup');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -148,7 +156,7 @@ export default function BookingsTab({
     };
   }, [user, userProfile, isAdmin, isDriver]);
 
-  const drivers = useMemo(() => allUsers.filter(u => u.role === 'driver'), [allUsers]);
+  const drivers = useMemo(() => allUsers.filter(u => u.role === 'driver' && u.driverVerificationStatus === 'approved'), [allUsers]);
 
   const handleRefresh = async () => {
     if (!user || !userProfile) return;
@@ -242,6 +250,84 @@ export default function BookingsTab({
     else if (bookingCategory === 'tour') result = result.filter(b => b.tourId || b.type === 'tour');
     else result = result.filter(b => !b.offerId && !b.tourId && b.type !== 'offer' && b.type !== 'tour');
 
+    // Helper to extract clean date objects based on selected date type
+    const getBookingDateObject = (b: any) => {
+      if (bookingDateTypeFilter === 'booking') {
+        if (b.createdAt) {
+          if (b.createdAt.seconds) {
+            return new Date(b.createdAt.seconds * 1000);
+          }
+          if (typeof b.createdAt.toDate === 'function') {
+            return b.createdAt.toDate();
+          }
+          const parsed = new Date(b.createdAt);
+          if (!isNaN(parsed.getTime())) return parsed;
+        }
+        return null;
+      } else {
+        if (b.date) {
+          // parse using string splits to prevent timezone locale offsets
+          const parts = b.date.split('-');
+          if (parts.length === 3) {
+            const year = parseInt(parts[0], 10);
+            const month = parseInt(parts[1], 10) - 1;
+            const day = parseInt(parts[2], 10);
+            return new Date(year, month, day);
+          }
+          const parsed = new Date(b.date);
+          if (!isNaN(parsed.getTime())) return parsed;
+        }
+        return null;
+      }
+    };
+
+    // Apply Time Filters
+    if (bookingTimeFilter !== 'all') {
+      const today = new Date();
+      
+      result = result.filter(b => {
+        const bDate = getBookingDateObject(b);
+        if (!bDate) return false;
+
+        if (bookingTimeFilter === '3d') {
+          // Absolute difference of booking date relative to current time <= 3 days
+          const diffTime = Math.abs(bDate.getTime() - today.getTime());
+          const diffDays = diffTime / (1000 * 60 * 60 * 24);
+          return diffDays <= 3;
+        }
+        if (bookingTimeFilter === '7d') {
+          // Absolute difference <= 7 days
+          const diffTime = Math.abs(bDate.getTime() - today.getTime());
+          const diffDays = diffTime / (1000 * 60 * 60 * 24);
+          return diffDays <= 7;
+        }
+        if (bookingTimeFilter === '30d') {
+          // Absolute difference <= 30 days
+          const diffTime = Math.abs(bDate.getTime() - today.getTime());
+          const diffDays = diffTime / (1000 * 60 * 60 * 24);
+          return diffDays <= 30;
+        }
+        if (bookingTimeFilter === 'month') {
+          // Filters by selected start & end months in the CURRENT YEAR
+          const currentYearVal = today.getFullYear();
+          const startMonthInt = parseInt(bookingMonthRange.start, 10);
+          const endMonthInt = parseInt(bookingMonthRange.end, 10);
+          
+          const y = bDate.getFullYear();
+          const m = bDate.getMonth() + 1; // 1-indexed
+
+          if (y !== currentYearVal) return false;
+          return m >= startMonthInt && m <= endMonthInt;
+        }
+        if (bookingTimeFilter === 'year') {
+          // Filters within the selected year range
+          const y = bDate.getFullYear();
+          return y >= bookingYearRange.start && y <= bookingYearRange.end;
+        }
+        return true;
+      });
+    }
+
     // Apply Search
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -263,37 +349,35 @@ export default function BookingsTab({
       let dateA = 0;
       let dateB = 0;
 
-      if (bookingDateTypeFilter === 'booking') {
-        dateA = a.createdAt?.seconds ? a.createdAt.seconds : 0;
-        dateB = b.createdAt?.seconds ? b.createdAt.seconds : 0;
-      } else {
-        // Pickup date sorting
-        try {
-          const parseDate = (item: any) => {
-            if (item.date) {
-              const d = new Date(item.date);
-              if (!isNaN(d.getTime())) return d.getTime() / 1000;
-            }
-            return 0;
-          };
-          dateA = parseDate(a);
-          dateB = parseDate(b);
-        } catch (e) {
-          dateA = 0;
-          dateB = 0;
-        }
-      }
+      const dateObjA = getBookingDateObject(a);
+      const dateObjB = getBookingDateObject(b);
+
+      if (dateObjA) dateA = dateObjA.getTime() / 1000;
+      if (dateObjB) dateB = dateObjB.getTime() / 1000;
 
       if (!dateSort) return 0;
       return dateSort === 'asc' ? dateA - dateB : dateB - dateA;
     });
 
     return result;
-  }, [bookings, bookingCategory, searchQuery, statusFilter, dateSort, bookingDateTypeFilter]);
+  }, [
+    bookings,
+    bookingCategory,
+    searchQuery,
+    statusFilter,
+    dateSort,
+    bookingDateTypeFilter,
+    bookingTimeFilter,
+    bookingYearRange,
+    bookingMonthRange
+  ]);
 
   const updateBookingStatus = async (bookingId: string, status: string, driverId?: string) => {
     try {
       const updateData: any = { status, updatedAt: serverTimestamp() };
+      if (status === 'completed') {
+        updateData.completedAt = serverTimestamp();
+      }
       if (driverId !== undefined) updateData.driverId = driverId;
       await updateDoc(doc(db, 'bookings', bookingId), updateData);
       showDashboardNotice('success', `Booking status updated to ${status}`);
@@ -356,6 +440,7 @@ export default function BookingsTab({
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [viewingBooking, setViewingBooking] = useState<any>(null);
   const [showViewModal, setShowViewModal] = useState(false);
+  const [chatBooking, setChatBooking] = useState<any | null>(null);
   const [showDistanceBreakdown, setShowDistanceBreakdown] = useState(false);
   const [showWaypointsPopup, setShowWaypointsPopup] = useState<string | null>(null);
   const [showExtrasPopup, setShowExtrasPopup] = useState<string | null>(null);
@@ -393,6 +478,23 @@ export default function BookingsTab({
     localDrivers.forEach(u => userMap.set(u.id, u));
     return Array.from(userMap.values());
   }, [allUsers, localDrivers]);
+
+  const isChatAllowed = (booking: any) => {
+    if (isAdmin) return true;
+    if (booking.status !== 'completed') return true;
+    
+    // Check completedAt or updatedAt as fallback
+    const finishedAt = booking.completedAt || booking.updatedAt;
+    if (!finishedAt) return true;
+    
+    try {
+      const completedDate = finishedAt.toDate ? finishedAt.toDate() : new Date(finishedAt);
+      const diffDays = (Date.now() - completedDate.getTime()) / (1000 * 60 * 60 * 24);
+      return diffDays < 15;
+    } catch (e) {
+      return true;
+    }
+  };
 
   const handleSendEarlyAlert = async (booking: any) => {
     try {
@@ -851,6 +953,7 @@ export default function BookingsTab({
             <AnimatePresence>
               {isFiltersExpanded && (
                 <motion.div
+                  key="filters-expanded-container"
                   initial={{ opacity: 0, x: -20, width: 0 }}
                   animate={{ opacity: 1, x: 0, width: '100%' }}
                   exit={{ opacity: 0, x: -20, width: 0 }}
@@ -895,21 +998,6 @@ export default function BookingsTab({
                         </>
                       );
                     })()}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedBookings([]);
-                        setIsBookingsSelectionMode(false);
-                      }}
-                      className={cn(
-                        "px-3 py-1.5 rounded-lg transition-all flex items-center gap-2",
-                        !isBookingsSelectionMode ? "bg-white/10 text-white" : "text-white/40 hover:text-white"
-                      )}
-                      title="Select None"
-                    >
-                      <XSquare size={14} />
-                      <span className="hidden md:inline text-[10px] uppercase font-black tracking-widest">None</span>
-                    </button>
                   </div>
 
 
@@ -940,7 +1028,7 @@ export default function BookingsTab({
 
                   {/* Year range select */}
                   {bookingTimeFilter === 'year' && (
-                    <div className="flex items-center gap-2 bg-black/20 p-1 rounded-xl border border-white/10 h-9">
+                    <div className="flex items-center gap-1.5 bg-black/20 p-1 rounded-xl border border-white/10 h-9">
                       {/* start year */}
                       <select
                         value={bookingYearRange.start}
@@ -950,10 +1038,11 @@ export default function BookingsTab({
                             start: parseInt(e.target.value),
                           }))
                         }
-                        className="bg-transparent text-[10px] text-white/70 outline-none px-1 cursor-pointer"
+                        className="custom-select bg-transparent text-[10px] text-white/70 border-none outline-none pl-1.5 pr-6 cursor-pointer font-bold"
+                        style={{ backgroundPosition: 'right 0.35rem center', backgroundSize: '0.65rem' }}
                       >
                         {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map((y) => (
-                          <option key={y} value={y} className="bg-black">
+                          <option key={y} value={y} className="bg-black text-white">
                             {y}
                           </option>
                         ))}
@@ -968,10 +1057,11 @@ export default function BookingsTab({
                             end: parseInt(e.target.value),
                           }))
                         }
-                        className="bg-transparent text-[10px] text-white/70 outline-none px-1 cursor-pointer"
+                        className="custom-select bg-transparent text-[10px] text-white/70 border-none outline-none pl-1.5 pr-6 cursor-pointer font-bold"
+                        style={{ backgroundPosition: 'right 0.35rem center', backgroundSize: '0.65rem' }}
                       >
                         {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map((y) => (
-                          <option key={y} value={y} className="bg-black">
+                          <option key={y} value={y} className="bg-black text-white">
                             {y}
                           </option>
                         ))}
@@ -981,26 +1071,68 @@ export default function BookingsTab({
 
                   {/* Month range inputs */}
                   {bookingTimeFilter === 'month' && (
-                    <div className="flex items-center gap-2 bg-black/20 p-1 rounded-xl border border-white/10 h-9">
-                      <input
-                        type="month"
+                    <div className="flex items-center gap-1.5 bg-black/20 p-1 rounded-xl border border-white/10 h-9">
+                      <select
                         value={bookingMonthRange.start}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (val) setBookingMonthRange((prev) => ({ ...prev, start: val }));
-                        }}
-                        className="bg-transparent text-[10px] text-white/70 outline-none px-1 cursor-pointer [color-scheme:dark]"
-                      />
+                        onChange={(e) =>
+                          setBookingMonthRange((prev) => ({
+                            ...prev,
+                            start: e.target.value,
+                          }))
+                        }
+                        className="custom-select bg-transparent text-[10px] text-white/70 border-none outline-none pl-1.5 pr-6 cursor-pointer font-bold"
+                        style={{ backgroundPosition: 'right 0.35rem center', backgroundSize: '0.65rem' }}
+                      >
+                        {[
+                          { val: '01', label: 'Jan' },
+                          { val: '02', label: 'Feb' },
+                          { val: '03', label: 'Mar' },
+                          { val: '04', label: 'Apr' },
+                          { val: '05', label: 'May' },
+                          { val: '06', label: 'Jun' },
+                          { val: '07', label: 'Jul' },
+                          { val: '08', label: 'Aug' },
+                          { val: '09', label: 'Sep' },
+                          { val: '10', label: 'Oct' },
+                          { val: '11', label: 'Nov' },
+                          { val: '12', label: 'Dec' },
+                        ].map((m) => (
+                          <option key={m.val} value={m.val} className="bg-black text-white">
+                            {m.label}
+                          </option>
+                        ))}
+                      </select>
                       <span className="text-white/20 text-[10px]">-</span>
-                      <input
-                        type="month"
+                      <select
                         value={bookingMonthRange.end}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (val) setBookingMonthRange((prev) => ({ ...prev, end: val }));
-                        }}
-                        className="bg-transparent text-[10px] text-white/70 outline-none px-1 cursor-pointer [color-scheme:dark]"
-                      />
+                        onChange={(e) =>
+                          setBookingMonthRange((prev) => ({
+                            ...prev,
+                            end: e.target.value,
+                          }))
+                        }
+                        className="custom-select bg-transparent text-[10px] text-white/70 border-none outline-none pl-1.5 pr-6 cursor-pointer font-bold"
+                        style={{ backgroundPosition: 'right 0.35rem center', backgroundSize: '0.65rem' }}
+                      >
+                        {[
+                          { val: '01', label: 'Jan' },
+                          { val: '02', label: 'Feb' },
+                          { val: '03', label: 'Mar' },
+                          { val: '04', label: 'Apr' },
+                          { val: '05', label: 'May' },
+                          { val: '06', label: 'Jun' },
+                          { val: '07', label: 'Jul' },
+                          { val: '08', label: 'Aug' },
+                          { val: '09', label: 'Sep' },
+                          { val: '10', label: 'Oct' },
+                          { val: '11', label: 'Nov' },
+                          { val: '12', label: 'Dec' },
+                        ].map((m) => (
+                          <option key={m.val} value={m.val} className="bg-black text-white">
+                            {m.label}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   )}
 
@@ -1330,6 +1462,7 @@ export default function BookingsTab({
                       <AnimatePresence>
                         {showWaypointsPopup === booking.id && booking.waypoints?.length > 0 && (
                           <motion.div
+                            key="waypoints-popup"
                             initial={{ opacity: 0, y: 10, scale: 0.95 }}
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             exit={{ opacity: 0, y: 10, scale: 0.95 }}
@@ -1483,6 +1616,7 @@ export default function BookingsTab({
                       <AnimatePresence>
                         {showNotesPopup === booking.id && (booking.purpose || booking.notes) && (
                           <motion.div
+                            key="notes-popup"
                             initial={{ opacity: 0, y: 10, scale: 0.95 }}
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             exit={{ opacity: 0, y: 10, scale: 0.95 }}
@@ -1604,7 +1738,7 @@ export default function BookingsTab({
                         </div>
 
                         {/* Right side: Route button */}
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-row items-center gap-2">         
                           {(isAdmin || isDriver) && booking.status === 'accepted' && (
                             <button
                               onClick={() => handleSendEarlyAlert(booking)}
@@ -1711,6 +1845,19 @@ export default function BookingsTab({
                   {isAdmin ? (
                     booking.status === 'completed' || booking.status === 'cancelled' ? (
                       <>
+                        {isChatAllowed(booking) && (
+                          <div className="flex-1 flex gap-1">
+                            <button
+                              onClick={() => setChatBooking(booking)}
+                              className="flex-1 p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-500 hover:bg-amber-500 hover:text-black transition-all flex items-center justify-center gap-2 relative shadow-lg shadow-amber-500/5 group"
+                              title="Secure Live Chat"
+                            >
+                              <MessageSquare size={16} />
+                              <span className="text-[10px] font-bold uppercase tracking-widest">Chat</span>
+                              <ChatBadge bookingId={booking.id} user={user} userProfile={userProfile} />
+                            </button>
+                          </div>
+                        )}
                         <button
                           onClick={() => {
                             setViewingBooking(booking);
@@ -1742,51 +1889,113 @@ export default function BookingsTab({
                           <span className="text-[10px] font-bold uppercase tracking-widest">Delete</span>
                         </button>
                       </>
+                    ) : booking.status === 'pending' ? (
+                      <div className="flex items-center gap-2 w-full">
+                        {isChatAllowed(booking) && (
+                          <button
+                            onClick={() => setChatBooking(booking)}
+                            className="flex-1 h-10 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-500 hover:bg-amber-500 hover:text-black transition-all flex items-center justify-center relative shadow-lg shadow-amber-500/5 group"
+                            title="Secure Live Chat"
+                          >
+                            <MessageSquare size={16} />
+                            <ChatBadge bookingId={booking.id} user={user} userProfile={userProfile} />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => updateBookingStatus(booking.id, 'confirmed')}
+                          className="flex-1 h-10 border border-green-500/20 bg-green-500/5 rounded-xl text-green-400 hover:bg-green-500/10 transition-all flex items-center justify-center"
+                          title="Confirm"
+                        >
+                          <CheckCircle size={16} />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setViewingBooking(booking);
+                            setShowViewModal(true);
+                          }}
+                          className="flex-1 h-10 bg-gold/5 border border-gold/20 rounded-xl text-gold hover:bg-gold/10 transition-all flex items-center justify-center"
+                          title="View"
+                        >
+                          <Eye size={16} />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditingBooking(booking);
+                            setShowBookingModal(true);
+                          }}
+                          className="flex-1 h-10 bg-blue-500/5 border border-blue-500/20 rounded-xl text-blue-400 hover:bg-blue-500/10 transition-all flex items-center justify-center"
+                          title="Edit"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                        <button
+                          onClick={() => setConfirmDelete({ type: 'booking', id: booking.id })}
+                          className="flex-1 h-10 bg-red-500/5 border border-red-500/20 rounded-xl text-red-500 hover:bg-red-500/10 transition-all flex items-center justify-center"
+                          title="Delete"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     ) : (
                       <>
-                        {booking.status === 'pending' && (
-                          <button
-                            onClick={() => updateBookingStatus(booking.id, 'confirmed')}
-                            className="w-10 h-10 border border-green-500/20 bg-green-500/5 rounded-xl text-green-400 hover:bg-green-500/10 transition-all flex items-center justify-center shrink-0"
-                            title="Confirm"
-                          >
-                            <CheckCircle size={16} />
-                          </button>
+                        {isChatAllowed(booking) && (
+                           <div className="flex items-center gap-1 shrink-0">
+                             <button
+                               onClick={() => setChatBooking(booking)}
+                               className="w-10 h-10 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-500 hover:bg-amber-500 hover:text-black transition-all flex items-center justify-center shrink-0 relative shadow-lg shadow-amber-500/5"
+                               title="Secure Live Chat"
+                             >
+                               <MessageSquare size={16} />
+                               <ChatBadge bookingId={booking.id} user={user} userProfile={userProfile} />
+                             </button>
+                           </div>
                         )}
                         {booking.status === 'confirmed' && (
-                          <button
-                            onClick={() => updateBookingStatus(booking.id, 'pending')}
-                            className="w-10 h-10 border border-white/20 bg-white/5 rounded-xl text-white hover:bg-white/10 transition-all flex items-center justify-center shrink-0"
-                            title="Unconfirm"
-                          >
-                            <CircleX size={16} />
-                          </button>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              onClick={() => updateBookingStatus(booking.id, 'pending')}
+                              className="w-10 h-10 border border-white/20 bg-white/5 rounded-xl text-white hover:bg-white/10 transition-all flex items-center justify-center"
+                              title="Unconfirm"
+                            >
+                              <CircleX size={16} />
+                            </button>
+                          </div>
                         )}
                         {booking.status !== 'cancelled' && booking.status !== 'completed' && booking.status !== 'pending' && (
-                          <div className="flex-1 relative min-w-0 h-10">
-                            <select
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                if (!val) {
-                                  updateBookingStatus(booking.id, 'confirmed', '');
-                                } else {
-                                  updateBookingStatus(booking.id, 'assigned', val);
-                                }
-                              }}
-                              value={booking.driverId || ''}
-                              className="w-full h-full bg-white/5 border border-white/10 rounded-xl px-3 text-[10px] text-white/80 outline-none focus:border-gold transition-all appearance-none truncate font-bold tracking-widest pr-8"
-                            >
-                              <option value="" className="bg-black">Assign Driver</option>
-                              {drivers.map((driver, dIdx) => {
-                                const stats = driverStats[driver.id] || { avgRating: '0', completedCount: 0, rejectedCount: 0 };
-                                return (
-                                  <option key={`assign-driver-${driver.id}-${idx}-${dIdx}`} value={driver.id} className="bg-black">
-                                    {driver.name} ({stats.avgRating}★, {stats.completedCount}✓, {stats.rejectedCount}✗)
-                                  </option>
-                                );
-                              })}
-                            </select>
-                            <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none" />
+                          <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                            <div className="flex-1 relative min-w-0 h-10">
+                              <select
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (!val) {
+                                    updateBookingStatus(booking.id, 'confirmed', '');
+                                  } else {
+                                    updateBookingStatus(booking.id, 'assigned', val);
+                                  }
+                                }}
+                                value={booking.driverId || ''}
+                                className="w-full h-full bg-white/5 border border-white/10 rounded-xl px-3 text-[10px] text-white/80 outline-none focus:border-gold transition-all appearance-none truncate font-bold tracking-widest pr-8"
+                              >
+                                <option value="" className="bg-black">Assign Driver</option>
+                                {(() => {
+                                  const dropdownDrivers = [...drivers];
+                                  if (booking.driverId && !dropdownDrivers.some(d => d.id === booking.driverId)) {
+                                    const currentAssignedDriver = allUsers.find(u => u.id === booking.driverId);
+                                    if (currentAssignedDriver) dropdownDrivers.push(currentAssignedDriver);
+                                  }
+                                  return dropdownDrivers.map((driver, dIdx) => {
+                                    const stats = driverStats[driver.id] || { avgRating: '0', completedCount: 0, rejectedCount: 0 };
+                                    const isNotApproved = driver.driverVerificationStatus !== 'approved';
+                                    return (
+                                      <option key={`assign-driver-${driver.id}-${idx}-${dIdx}`} value={driver.id} className="bg-black">
+                                        {driver.name} {isNotApproved ? "(Unverified/Reverified Needed)" : ""} ({stats.avgRating}★, {stats.completedCount}✓, {stats.rejectedCount}✗)
+                                      </option>
+                                    );
+                                  });
+                                })()}
+                              </select>
+                              <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none" />
+                            </div>
                           </div>
                         )}
                         <button
@@ -1811,7 +2020,7 @@ export default function BookingsTab({
                         </button>
                         <button
                           onClick={() => setConfirmDelete({ type: 'booking', id: booking.id })}
-                          className="w-10 h-10 bg-red-500/5 border border-red-500/20 rounded-xl text-red-400 hover:bg-red-500/10 transition-all flex items-center justify-center shrink-0"
+                          className="w-10 h-10 bg-red-500/5 border border-red-500/20 rounded-xl text-red-500 hover:bg-red-500/10 transition-all flex items-center justify-center shrink-0"
                           title="Delete"
                         >
                           <Trash2 size={16} />
@@ -1820,7 +2029,18 @@ export default function BookingsTab({
                     )
                   ) : !isDriver && booking.userId === user?.uid ? (
                     booking.status === 'pending' ? (
-                      <div className="grid grid-cols-3 gap-1.5 w-full">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 w-full">
+                        {booking.driverId && isChatAllowed(booking) && (
+                          <button
+                            onClick={() => setChatBooking(booking)}
+                            className="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-500 hover:bg-amber-500 hover:text-black transition-all flex items-center justify-center gap-2 relative"
+                            title="Secure Live Chat"
+                          >
+                            <MessageSquare size={16} />
+                            <span className="text-[10px] font-bold uppercase tracking-widest hidden sm:inline text-amber-500">Chat</span>
+                            <ChatBadge bookingId={booking.id} user={user} userProfile={userProfile} />
+                          </button>
+                        )}
                         <button
                           onClick={() => {
                             setViewingBooking(booking);
@@ -1856,7 +2076,18 @@ export default function BookingsTab({
                         </button>
                       </div>
                     ) : (
-                      <>
+                      <div className="flex items-center gap-1.5 w-full">
+                        {isChatAllowed(booking) && (
+                           <button
+                             onClick={() => setChatBooking(booking)}
+                             className="flex-1 p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-500 hover:bg-amber-500 hover:text-black transition-all flex items-center justify-center gap-2 relative shadow-lg shadow-amber-500/5"
+                             title="Secure Live Chat"
+                           >
+                             <MessageSquare size={16} />
+                             <span className="text-[10px] font-bold uppercase tracking-widest">Chat</span>
+                             <ChatBadge bookingId={booking.id} user={user} userProfile={userProfile} />
+                           </button>
+                        )}
                         <button
                           onClick={() => {
                             setViewingBooking(booking);
@@ -1874,9 +2105,9 @@ export default function BookingsTab({
                           title="Contact Us"
                         >
                           <Mail size={16} className="text-gold" />
-                          <span className="text-[10px] font-bold uppercase tracking-widest">Contact Us</span>
+                          <span className="text-[10px] font-bold uppercase tracking-widest">Contact</span>
                         </button>
-                      </>
+                      </div>
                     )
                   ) : null}
 
@@ -1884,6 +2115,16 @@ export default function BookingsTab({
                     <div className="space-y-2 w-full">
                       {booking.status === 'assigned' && (
                         <div className="flex gap-2 w-full">
+                          {isChatAllowed(booking) && (
+                            <button
+                              onClick={() => setChatBooking(booking)}
+                              className="px-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-500 hover:bg-amber-500 hover:text-black transition-all flex items-center justify-center relative"
+                              title="Secure Live Chat"
+                            >
+                              <MessageSquare size={16} />
+                              <ChatBadge bookingId={booking.id} user={user} userProfile={userProfile} />
+                            </button>
+                          )}
                           <button
                             onClick={() => updateBookingStatus(booking.id, 'accepted')}
                             className="flex-1 bg-green-500 text-white py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-green-600 transition-all"
@@ -1901,6 +2142,16 @@ export default function BookingsTab({
 
                       {booking.status === 'accepted' && (
                         <div className="flex gap-2 w-full">
+                          {isChatAllowed(booking) && (
+                            <button
+                              onClick={() => setChatBooking(booking)}
+                              className="px-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-500 hover:bg-amber-500 hover:text-black transition-all flex items-center justify-center relative"
+                              title="Secure Live Chat"
+                            >
+                              <MessageSquare size={16} />
+                              <ChatBadge bookingId={booking.id} user={user} userProfile={userProfile} />
+                            </button>
+                          )}
                           <button
                             onClick={() => updateBookingStatus(booking.id, 'completed')}
                             className="flex-1 bg-gold text-black py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-white transition-all"
@@ -2085,14 +2336,22 @@ export default function BookingsTab({
                               className="w-full bg-black/40 border border-white/10 rounded-lg pl-2 pr-8 py-1.5 text-[10px] text-white/60 outline-none focus:border-gold transition-all appearance-none cursor-pointer hover:bg-white/5"
                             >
                               <option value="" className="bg-black">Assign Driver...</option>
-                              {drivers.map(driver => {
-                                const stats = driverStats[driver.id] || { avgRating: '0', completedCount: 0, rejectedCount: 0 };
-                                return (
-                                  <option key={`opt-${booking.id}-${driver.id}`} value={driver.id} className="bg-black">
-                                    {driver.name} ({stats.avgRating}★, {stats.completedCount}✓, {stats.rejectedCount}✗)
-                                  </option>
-                                );
-                              })}
+                              {(() => {
+                                const dropdownDrivers = [...drivers];
+                                if (booking.driverId && !dropdownDrivers.some(d => d.id === booking.driverId)) {
+                                  const currentAssignedDriver = allUsers.find(u => u.id === booking.driverId);
+                                  if (currentAssignedDriver) dropdownDrivers.push(currentAssignedDriver);
+                                }
+                                return dropdownDrivers.map(driver => {
+                                  const stats = driverStats[driver.id] || { avgRating: '0', completedCount: 0, rejectedCount: 0 };
+                                  const isNotApproved = driver.driverVerificationStatus !== 'approved';
+                                  return (
+                                    <option key={`opt-${booking.id}-${driver.id}`} value={driver.id} className="bg-black">
+                                      {driver.name} {isNotApproved ? "(Unverified/Reverified Needed)" : ""} ({stats.avgRating}★, {stats.completedCount}✓, {stats.rejectedCount}✗)
+                                    </option>
+                                  );
+                                });
+                              })()}
                             </select>
                             <ChevronDown size={10} className="absolute right-2 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none" />
                           </div>
@@ -2100,61 +2359,177 @@ export default function BookingsTab({
                       </div>
                     </td>
                     <td className="px-6 py-5 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        {(isAdmin || isDriver) && booking.status === 'accepted' && (
-                          <button
-                            onClick={() => handleSendEarlyAlert(booking)}
-                            className="p-2 bg-gold/10 text-gold rounded-lg hover:bg-gold hover:text-black transition-all"
-                            title="Send Early Pickup Alert"
-                          >
-                            <Bell size={14} />
-                          </button>
-                        )}
-                        {(isAdmin || isDriver || booking.userId === user?.uid) && (
-                          <button
-                            onClick={() => {
-                              setViewingBooking(booking);
-                              setShowViewModal(true);
-                            }}
-                            className="p-2 bg-white/5 text-gold rounded-lg hover:bg-gold hover:text-black transition-all"
-                            title="View Details"
-                          >
-                            <Eye size={14} />
-                          </button>
-                        )}
-
-                        {!isAdmin && !isDriver && booking.userId === user?.uid && booking.status !== 'pending' && (
-                          <button
-                            onClick={() => navigate('/contact')}
-                            className="p-2 bg-white/5 text-white rounded-lg hover:bg-white hover:text-black transition-all"
-                            title="Contact Us"
-                          >
-                            <Mail size={14} className="text-gold" />
-                          </button>
+                      <div className="flex flex-col items-end gap-1.5">
+                        {/* Completed Rides special placement: Chat icon BEFORE View button (Chat button first), placed below primary row */}
+                        {!isAdmin && booking.status === 'completed' && isChatAllowed(booking) && (
+                           <div className="flex items-center justify-end gap-2 mb-2">
+                              {booking.driverId && (
+                                <button
+                                  onClick={() => setChatBooking(booking)}
+                                  className="p-2 bg-amber-500/10 text-amber-500 rounded-lg hover:bg-amber-500 hover:text-black transition-all cursor-pointer relative"
+                                  title="Secure Live Chat"
+                                >
+                                  <MessageSquare size={14} />
+                                  <ChatBadge bookingId={booking.id} user={user} userProfile={userProfile} />
+                                </button>
+                              )}
+                              {(isAdmin || isDriver || booking.userId === user?.uid) && (
+                                <button
+                                  onClick={() => {
+                                    setViewingBooking(booking);
+                                    setShowViewModal(true);
+                                  }}
+                                  className="p-2 bg-white/5 text-gold rounded-lg hover:bg-gold hover:text-black transition-all"
+                                  title="View Details"
+                                >
+                                  <Eye size={14} />
+                                </button>
+                              )}
+                           </div>
                         )}
 
-                        {isAdmin ? (
-                          <>
+                        <div className="flex items-center justify-end gap-2 mt-1">
+                          {/* Driver Assigned Section (Accepted) - Alert and Route Only */}
+                          {!isAdmin && booking.status === 'accepted' && (
+                            <>
+                               {(isAdmin || isDriver) && (
+                                 <button
+                                   onClick={() => handleSendEarlyAlert(booking)}
+                                   className="p-2 bg-gold/10 text-gold rounded-lg hover:bg-gold hover:text-black transition-all"
+                                   title="Send Early Pickup Alert"
+                                 >
+                                   <Bell size={14} />
+                                 </button>
+                               )}
+                               <button
+                                 onClick={() => {
+                                   setRouteBooking(booking);
+                                   setShowRouteModal(true);
+                                 }}
+                                 className="p-2 bg-blue-500/10 text-blue-400 rounded-lg hover:bg-gold hover:text-black transition-all"
+                                 title="View Route"
+                               >
+                                 <RouteIcon size={14} />
+                               </button>
+                            </>
+                          )}
+
+                          {/* Confirmed/Pending Section - Chat and View */}
+                          {!isAdmin && (booking.status === 'confirmed' || booking.status === 'pending' || booking.status === 'assigned') && (
+                            <>
+                               {booking.driverId && isChatAllowed(booking) && (
+                                 <button
+                                   onClick={() => setChatBooking(booking)}
+                                   className="p-2 bg-amber-500/10 text-amber-500 rounded-lg hover:bg-amber-500 hover:text-black transition-all cursor-pointer relative shadow-lg shadow-amber-500/5"
+                                   title="Secure Live Chat"
+                                 >
+                                   <MessageSquare size={14} />
+                                   <ChatBadge bookingId={booking.id} user={user} userProfile={userProfile} />
+                                 </button>
+                               )}
+                               <button
+                                 onClick={() => {
+                                   setViewingBooking(booking);
+                                   setShowViewModal(true);
+                                 }}
+                                 className="p-2 bg-white/5 text-gold rounded-lg hover:bg-gold hover:text-black transition-all"
+                                 title="View Details"
+                               >
+                                 <Eye size={14} />
+                               </button>
+                            </>
+                          )}
+
+                          {!isAdmin && !isDriver && booking.userId === user?.uid && (booking.status === 'cancelled' || booking.status === 'completed') && (
                             <button
-                              onClick={() => {
-                                setEditingBooking(booking);
-                                setShowBookingModal(true);
-                              }}
-                              className="p-2 bg-white/5 text-blue-400 rounded-lg hover:bg-blue-500 hover:text-white transition-all shadow-lg shadow-blue-500/5"
-                              title="Edit"
+                              onClick={() => navigate('/contact')}
+                              className="p-2 bg-white/5 text-white rounded-lg hover:bg-white hover:text-black transition-all"
+                              title="Contact Us"
                             >
-                              <Edit2 size={14} />
+                              <Mail size={14} className="text-gold" />
                             </button>
-                            <button
-                              onClick={() => setConfirmDelete({ type: 'booking', id: booking.id })}
-                              className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all shadow-lg shadow-red-500/5"
-                              title="Delete"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </>
-                        ) : isDriver && booking.driverId === user?.uid ? (
-                          <div className="flex gap-1">
+                          )}
+
+                          {isAdmin ? (
+                            <div className="flex flex-col items-end gap-1.5">
+                              {/* Action Row - Chat First */}
+                              <div className="flex items-center gap-1.5">
+                                {isChatAllowed(booking) && (
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      onClick={() => setChatBooking(booking)}
+                                      className="p-2 bg-amber-500/10 text-amber-500 rounded-lg hover:bg-amber-500 hover:text-black transition-all cursor-pointer relative shadow-lg shadow-amber-500/5 order-first"
+                                      title="Secure Live Chat"
+                                    >
+                                      <MessageSquare size={14} />
+                                      <ChatBadge bookingId={booking.id} user={user} userProfile={userProfile} />
+                                    </button>
+                                  </div>
+                                )}
+                                <button
+                                  onClick={() => {
+                                    setViewingBooking(booking);
+                                    setShowViewModal(true);
+                                  }}
+                                  className="p-2 bg-white/5 text-gold rounded-lg hover:bg-gold hover:text-black transition-all"
+                                  title="View Details"
+                                >
+                                  <Eye size={14} />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setEditingBooking(booking);
+                                    setShowBookingModal(true);
+                                  }}
+                                  className="p-2 bg-white/5 text-blue-400 rounded-lg hover:bg-blue-500 hover:text-white transition-all shadow-lg shadow-blue-500/5"
+                                  title="Edit"
+                                >
+                                  <Edit2 size={14} />
+                                </button>
+                                <button
+                                  onClick={() => setConfirmDelete({ type: 'booking', id: booking.id })}
+                                  className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all shadow-lg shadow-red-500/5"
+                                  title="Delete"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+
+                              {/* Special Tools Below Actions */}
+                              {booking.status === 'accepted' && (
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  <button
+                                    onClick={() => handleSendEarlyAlert(booking)}
+                                    className="p-2 bg-gold/10 text-gold rounded-lg hover:bg-gold hover:text-black transition-all"
+                                    title="Send Early Pickup Alert"
+                                  >
+                                    <Bell size={14} />
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setRouteBooking(booking);
+                                      setShowRouteModal(true);
+                                    }}
+                                    className="p-2 bg-blue-500/10 text-blue-400 rounded-lg hover:bg-gold hover:text-black transition-all"
+                                    title="View Route"
+                                  >
+                                    <RouteIcon size={14} />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          ) : isDriver && booking.driverId === user?.uid ? (
+                          <div className="flex items-center gap-1.5">
+                            {isChatAllowed(booking) && (
+                               <button
+                                 onClick={() => setChatBooking(booking)}
+                                 className="p-2 bg-amber-500/10 text-amber-500 rounded-lg hover:bg-amber-500 hover:text-black transition-all cursor-pointer relative shadow-lg shadow-amber-500/5"
+                                 title="Secure Live Chat"
+                               >
+                                 <MessageSquare size={14} />
+                                 <ChatBadge bookingId={booking.id} user={user} userProfile={userProfile} />
+                               </button>
+                            )}
                             {booking.status === 'assigned' && (
                               <>
                                 <button onClick={() => updateBookingStatus(booking.id, 'accepted')} className="p-2 bg-green-500/10 text-green-500 rounded-lg h-9 w-9 flex items-center justify-center hover:bg-green-500 hover:text-white transition-all"><CheckCircle size={14} /></button>
@@ -2162,35 +2537,56 @@ export default function BookingsTab({
                               </>
                             )}
                             {booking.status === 'accepted' && (
-                              <button onClick={() => updateBookingStatus(booking.id, 'completed')} className="px-3 py-1.5 h-9 bg-gold text-black rounded-lg text-[9px] font-black uppercase tracking-[0.2em] hover:bg-white transition-all">Complete</button>
+                              <button onClick={() => updateBookingStatus(booking.id, 'completed')} className="px-3 py-1.5 h-9 bg-gold text-black rounded-lg text-[9px] font-black uppercase tracking-[0.2em] hover:bg-white transition-all">Complete Ride</button>
                             )}
                           </div>
                         ) : !isDriver && booking.userId === user?.uid ? (
-                          booking.status === 'pending' && (
-                            <>
-                              <button
-                                onClick={() => {
-                                  setEditingBooking(booking);
-                                  setShowBookingModal(true);
-                                }}
-                                className="p-2 bg-white/5 text-blue-400 rounded-lg hover:bg-blue-500 hover:text-white transition-all shadow-lg shadow-blue-500/5"
-                                title="Edit"
-                              >
-                                <Edit2 size={14} />
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setCancellingBookingId(booking.id);
-                                  setCancellationReasonInput('');
-                                }}
-                                className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all"
-                                title="Cancel"
-                              >
-                                <XCircle size={14} />
-                              </button>
-                            </>
-                          )
+                          <div className="flex items-center gap-1.5">
+                            {isChatAllowed(booking) && (
+                               <button
+                                 onClick={() => setChatBooking(booking)}
+                                 className="p-2 bg-amber-500/10 text-amber-500 rounded-lg hover:bg-amber-500 hover:text-black transition-all cursor-pointer relative shadow-lg shadow-amber-500/5"
+                                 title="Secure Live Chat"
+                               >
+                                 <MessageSquare size={14} />
+                                 <ChatBadge bookingId={booking.id} user={user} userProfile={userProfile} />
+                               </button>
+                            )}
+                            {booking.status === 'pending' ? (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    setEditingBooking(booking);
+                                    setShowBookingModal(true);
+                                  }}
+                                  className="p-2 bg-white/5 text-blue-400 rounded-lg hover:bg-blue-500 hover:text-white transition-all shadow-lg shadow-blue-500/5"
+                                  title="Edit"
+                                >
+                                  <Edit2 size={14} />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setCancellingBookingId(booking.id);
+                                    setCancellationReasonInput('');
+                                  }}
+                                  className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all"
+                                  title="Cancel"
+                                >
+                                  <XCircle size={14} />
+                                </button>
+                              </>
+                            ) : (
+                               <button
+                                 onClick={() => navigate('/contact')}
+                                 className="p-2 bg-white/5 text-white rounded-lg hover:bg-white hover:text-black transition-all"
+                                 title="Contact Us"
+                               >
+                                 <Mail size={14} className="text-gold" />
+                               </button>
+                            )}
+                          </div>
                         ) : null}
+                        </div>
                       </div>
                     </td>
                   </tr>
@@ -2205,6 +2601,7 @@ export default function BookingsTab({
         {/* Cancellation Reason Modal */}
         {cancellingBookingId && (
           <motion.div
+            key="cancellation-reason-modal"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -2262,6 +2659,7 @@ export default function BookingsTab({
         {/* Rating Modal */}
         {ratingBooking && (
           <motion.div
+            key="rating-modal"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -2340,6 +2738,7 @@ export default function BookingsTab({
         {/* Booking Modal (Edit) */}
         {showBookingModal && (
           <motion.div
+            key="booking-edit-modal"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -2400,6 +2799,45 @@ export default function BookingsTab({
                     />
                   </div>
                 </div>
+
+                {/* Return Trip Details (Editable ONLY if originally requested) */}
+                {(() => {
+                  const originalBooking = bookings.find(b => b.id === editingBooking?.id);
+                  const wasReturnOriginally = originalBooking?.isReturn || false;
+
+                  if (!wasReturnOriginally) return null;
+
+                  return (
+                    <div className="p-4 bg-gold/5 rounded-2xl border border-gold/20 space-y-4 animate-in fade-in duration-300">
+                      <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-gold">Return Trip Schedule</span>
+                        <span className="text-[8px] bg-gold/10 text-gold px-2 py-0.5 rounded border border-gold/20 font-bold uppercase tracking-widest font-mono">Originally Requested</span>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4 pt-1">
+                        <div>
+                          <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-1 block">Return Date</label>
+                          <input
+                            type="date"
+                            min={editingBooking?.date || new Date().toISOString().split('T')[0]}
+                            value={editingBooking?.returnDate || ''}
+                            onChange={(e) => setEditingBooking({ ...editingBooking, returnDate: e.target.value })}
+                            className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-gold transition-all text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-1 block">Return Time</label>
+                          <input
+                            type="time"
+                            value={editingBooking?.returnTime || ''}
+                            onChange={(e) => setEditingBooking({ ...editingBooking, returnTime: e.target.value })}
+                            className="w-full bg-[#050505] border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-gold transition-all text-white"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -2503,6 +2941,7 @@ export default function BookingsTab({
         {/* View Booking Modal (Details) */}
         {showViewModal && viewingBooking && (
           <motion.div
+            key="booking-view-modal"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -2511,7 +2950,7 @@ export default function BookingsTab({
             <motion.div
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
-              className="w-full max-w-lg glass p-4 md:p-8 rounded-sm border border-gold/20 max-h-[95vh] md:max-h-[90vh] overflow-y-auto custom-scrollbar"
+              className="w-full max-w-lg glass p-4 md:p-8 rounded-2xl border border-gold/20 max-h-[95vh] md:max-h-[90vh] overflow-y-auto custom-scrollbar"
             >
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-xl font-display text-gold">Booking Details</h3>
@@ -2790,6 +3229,30 @@ export default function BookingsTab({
                 )}
 
                 <div className="space-y-4">
+                  {/* Schedule details */}
+                  <div>
+                    <h4 className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-2">Schedule Outbound & Return</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="p-3 bg-white/5 rounded-xl border border-white/5">
+                        <p className="text-[8px] uppercase tracking-widest text-[#93c5fd] font-bold mb-1">Pick Up Path</p>
+                        <p className="text-[10px] text-white font-bold">{viewingBooking.date} at {formatTimeToAMPM(viewingBooking.time)}</p>
+                      </div>
+                      {viewingBooking.isReturn ? (
+                        <div className="p-3 bg-gold/10 rounded-xl border border-gold/20 animate-in fade-in duration-300">
+                          <p className="text-[8px] uppercase tracking-widest text-gold font-bold mb-1">Return Trip</p>
+                          <p className="text-[10px] text-gold font-bold">
+                            {viewingBooking.returnDate ? `${viewingBooking.returnDate} at ${formatTimeToAMPM(viewingBooking.returnTime)}` : 'Requested (Unscheduled)'}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="p-3 bg-white/5 rounded-xl border border-white/5 opacity-50">
+                          <p className="text-[8px] uppercase tracking-widest text-white/30 font-bold mb-1">Return Trip</p>
+                          <p className="text-[10px] text-white/40 italic">One-Way Only</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
                   {viewingBooking.waypoints?.length > 0 && (
                     <div>
                       <h4 className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-2">Waypoints</h4>
@@ -2966,39 +3429,60 @@ export default function BookingsTab({
                         </div>
                       </div>
                     ) : viewingBooking.status === 'completed' ? (
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-gold/10 flex items-center justify-center">
-                              <Star size={14} className="text-gold fill-gold" />
+                      <div className="space-y-4">
+                        {/* Driver details shown even for completed rides as requested */}
+                        <div className="flex items-center justify-between pb-3 border-b border-white/5 animate-in fade-in duration-300">
+                          <div className="flex items-center gap-3 w-full">
+                            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-purple-500/10 text-purple-400">
+                              <Truck size={20} />
                             </div>
-                            <div>
-                              <p className="text-[8px] text-white/30 font-black tracking-widest">
-                                Feedback for {drivers.find(d => d.id === viewingBooking.driverId)?.name || 'Unknown Driver'}
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[9px] font-black uppercase tracking-[0.2em] mb-0.5 text-purple-400">
+                                Chauffeur Assigned
                               </p>
-                              <div className="flex items-center gap-0.5">
-                                {[...Array(5)].map((_, i) => (
-                                  <Star key={i} size={10} className={cn("fill-current", i < (viewingBooking.rating || 0) ? "text-gold" : "text-white/10")} />
-                                ))}
+                              <p className="text-xs font-bold text-white truncate">
+                                {consolidatedUsers.find(d => d.id === viewingBooking.driverId)?.name || 'No Dispatch'}
+                                {consolidatedUsers.find(d => d.id === viewingBooking.driverId)?.phone && ` | ${consolidatedUsers.find(d => d.id === viewingBooking.driverId)?.phone}`}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Feedback / Rating Details */}
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-gold/10 flex items-center justify-center">
+                                <Star size={14} className="text-gold fill-gold" />
+                              </div>
+                              <div>
+                                <p className="text-[8px] text-white/30 font-black tracking-widest">
+                                  Feedback for {consolidatedUsers.find(d => d.id === viewingBooking.driverId)?.name || 'Unknown Driver'}
+                                </p>
+                                <div className="flex items-center gap-0.5">
+                                  {[...Array(5)].map((_, i) => (
+                                    <Star key={i} size={10} className={cn("fill-current", i < (viewingBooking.rating || 0) ? "text-gold" : "text-white/10")} />
+                                  ))}
+                                </div>
                               </div>
                             </div>
+                            {!isAdmin && !isDriver && (
+                              <button
+                                onClick={() => setRatingBooking(viewingBooking)}
+                                className="p-1.5 bg-white/5 hover:bg-gold/10 rounded-lg transition-all"
+                              >
+                                <SquarePen size={12} className="text-white/40" />
+                              </button>
+                            )}
                           </div>
-                          {!isAdmin && !isDriver && (
-                            <button
-                              onClick={() => setRatingBooking(viewingBooking)}
-                              className="p-1.5 bg-white/5 hover:bg-gold/10 rounded-lg transition-all"
-                            >
-                              <SquarePen size={12} className="text-white/40" />
-                            </button>
+                          {viewingBooking.feedback && (
+                            <div className="bg-black/20 rounded-xl p-3 border border-white/5">
+                              <p className="text-[10px] text-white/60 italic leading-relaxed">
+                                "{viewingBooking.feedback}"
+                              </p>
+                            </div>
                           )}
                         </div>
-                        {viewingBooking.feedback && (
-                          <div className="bg-black/20 rounded-xl p-3 border border-white/5">
-                            <p className="text-[10px] text-white/60 italic leading-relaxed">
-                              "{viewingBooking.feedback}"
-                            </p>
-                          </div>
-                        )}
                       </div>
                     ) : (
                       <div className="flex items-center justify-between">
@@ -3011,8 +3495,8 @@ export default function BookingsTab({
                               {viewingBooking.driverId ? 'Chauffeur Assigned' : 'Awaiting Assignment'}
                             </p>
                             <p className="text-xs font-bold text-white truncate">
-                              {drivers.find(d => d.id === viewingBooking.driverId)?.name || 'No Dispatch'}
-                              {drivers.find(d => d.id === viewingBooking.driverId)?.phone && ` | ${drivers.find(d => d.id === viewingBooking.driverId)?.phone}`}
+                              {consolidatedUsers.find(d => d.id === viewingBooking.driverId)?.name || 'No Dispatch'}
+                              {consolidatedUsers.find(d => d.id === viewingBooking.driverId)?.phone && ` | ${consolidatedUsers.find(d => d.id === viewingBooking.driverId)?.phone}`}
                             </p>
                           </div>
                           {isAdmin && !viewingBooking.driverId && (
@@ -3096,9 +3580,61 @@ export default function BookingsTab({
           </motion.div>
         )}
 
+        {/* Dynamic Booking Chat Modal (Separate Window) */}
+        <AnimatePresence>
+          {chatBooking && (
+            <motion.div
+              key="booking-chat-modal"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[150] flex items-center justify-center p-4"
+            >
+              <motion.div
+                initial={{ scale: 0.9, y: 20 }}
+                animate={{ scale: 1, y: 0 }}
+                exit={{ scale: 0.9, y: 20 }}
+                className="w-full max-w-xl glass p-5 md:p-6 rounded-2xl border border-gold/20 flex flex-col relative max-h-[90vh] overflow-hidden"
+              >
+                <div className="flex justify-between items-center mb-4">
+                  <div>
+                    <h3 className="text-sm font-display font-medium text-gold tracking-wide flex items-center gap-2">
+                      <MessageSquare size={16} />
+                      Secure Dispatch & Chat
+                    </h3>
+                    <p className="text-[9px] text-white/40 font-mono mt-0.5">Booking Reference: #{chatBooking.id.substring(0, 8).toUpperCase()}</p>
+                  </div>
+                  <button
+                    onClick={() => setChatBooking(null)}
+                    className="text-white/40 hover:text-white bg-white/5 hover:bg-white/10 p-2 rounded-xl transition-all cursor-pointer"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-hidden rounded-xl">
+                  <BookingChat
+                    bookingId={chatBooking.id}
+                    user={user}
+                    userProfile={userProfile}
+                    isAdmin={isAdmin}
+                    showDashboardNotice={showDashboardNotice}
+                  />
+                </div>
+
+                <div className="mt-3 text-[10px] text-white/30 text-center leading-relaxed">
+                  <span className="font-bold text-gold/80 block mb-0.5">Coordination Notice:</span>
+                  This chat channel is monitored in real-time by dispatch and is archived for security and service quality.
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Route Modal */}
         {showRouteModal && routeBooking && (
           <motion.div
+            key="booking-route-modal"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}

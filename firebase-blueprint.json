@@ -467,9 +467,28 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["name", "email", "subject", "message", "status", "createdAt"]
+    },
+    "BookingChat": {
+      "title": "Booking Chat",
+      "description": "A chat message exchanged between customer, driver, and/or admin for a specific booking.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "bookingId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "senderRole": { "type": "string", "enum": ["customer", "driver", "admin"] },
+        "message": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["bookingId", "senderId", "senderName", "senderRole", "message", "createdAt"]
     }
   },
   "firestore": {
+    "/booking-chats/{chatMsgId}": {
+      "schema": "BookingChat",
+      "description": "Messages exchanged for bookings in real time."
+    },
     "/users/{userId}": {
       "schema": "User",
       "description": "User profiles."

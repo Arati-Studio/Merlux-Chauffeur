@@ -350,13 +350,18 @@ export default function Booking() {
         return {
           base: 0,
           distance: 0,
-          extras: 0,
           waypoints: 0,
+          returnPrice: 0,
+          extras: 0,
           tax: 0,
           discount: 0,
           stripe: 0,
-          total: 0,
           net: 0,
+          gross: 0,
+          total: 0,
+          addonTotal: 0,
+          appliedAddons: [],
+          rangeCalcs: [],
         };
 
       const distanceKm = parseFloat(distance.replace(/[^\d.]/g, "")) || 0;

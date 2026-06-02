@@ -316,7 +316,6 @@ export default function AnalyticsTab({
                 { id: '30d', label: '30D' },
                 { id: 'month', label: 'Monthly' },
                 { id: 'year', label: 'Yearly' },
-                { id: 'all', label: 'All' },
               ].map((f) => (
                 <button
                   key={f.id}

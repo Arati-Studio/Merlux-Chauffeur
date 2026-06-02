@@ -1,13 +1,13 @@
 import fs from 'fs';
 import path from 'path';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, getDocs, orderBy, query, where } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, orderBy, query, where, limit, startAfter } from 'firebase/firestore';
 import dotenv from 'dotenv';
 
 // Load environment variables
 dotenv.config();
 
-let SITE_URL = process.env.VITE_SITE_URL || 'https://merlux.com.au';
+let SITE_URL = process.env.VITE_SITE_URL || 'https://merlux.au';
 if (!SITE_URL.startsWith('http')) {
   SITE_URL = `https://${SITE_URL}`;
 }
@@ -43,6 +43,7 @@ const STATIC_PAGES = [
   { title: 'Fleet', slug: 'fleet', path: '/fleet' },
   { title: 'About', slug: 'about', path: '/about' },
   { title: 'Contact', slug: 'contact', path: '/contact' },
+  { title: 'Faq', slug: 'faq', path: '/faq' },
 ];
 
 const getRouteSlug = (item: any) => {
@@ -62,24 +63,6 @@ const getFullPath = (item: any) => {
   const routeSlug = getRouteSlug(item);
   if (routeSlug === 'home') return '/';
   return `/${routeSlug}`;
-};
-
-const getTimestampSeconds = (val: any): number => {
-  if (!val) return 0;
-  if (typeof val === 'number') return val;
-  if (val.seconds !== undefined) return val.seconds;
-  if (val._seconds !== undefined) return val._seconds;
-  if (val.toDate && typeof val.toDate === 'function') {
-    return Math.floor(val.toDate().getTime() / 1000);
-  }
-  if (val instanceof Date) {
-    return Math.floor(val.getTime() / 1000);
-  }
-  if (typeof val === 'string') {
-    const d = new Date(val);
-    return isNaN(d.getTime()) ? 0 : Math.floor(d.getTime() / 1000);
-  }
-  return 0;
 };
 
 const formatDate = (val: any): string => {
@@ -102,216 +85,266 @@ const formatDate = (val: any): string => {
   return new Date().toISOString().split('T')[0];
 };
 
-async function generateSitemap() {
-  console.log('🚀 Starting Sitemap Generation matching MetaTab.tsx logic exactly...');
-  
-  try {
-    // 1. Fetch collections from Firestore
-    const [pagesSnap, blogsSnap, offersSnap, toursSnap, metadataSnap] = await Promise.all([
-      getDocs(collection(db, 'pages')),
-      getDocs(collection(db, 'blogs')),
-      getDocs(collection(db, 'offers')),
-      getDocs(collection(db, 'tours')),
-      getDocs(collection(db, 'metadata'))
-    ]);
+// Scalable helper to stream collections in batch segments to optimize memory
+async function* streamCollection(collectionName: string, batchSize = 100) {
+  let lastDoc: any = null;
+  let hasMore = true;
 
-    const pages = pagesSnap.docs.map(doc => ({ id: doc.id, type: 'Page', ...doc.data() } as any));
-    const blogs = blogsSnap.docs.map(doc => ({ id: doc.id, type: 'Blog', ...doc.data() } as any));
-    const offers = offersSnap.docs.map(doc => ({ id: doc.id, type: 'Offer', ...doc.data() } as any));
-    const tours = toursSnap.docs.map(doc => ({ id: doc.id, type: 'Tour', ...doc.data() } as any));
-    const metadataDocs = metadataSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
-
-    const sortItems = (arr: any[]) => {
-      arr.sort((a, b) => getTimestampSeconds(b.createdAt) - getTimestampSeconds(a.createdAt));
-    };
-
-    sortItems(pages);
-    sortItems(blogs);
-    sortItems(offers);
-    sortItems(tours);
-
-    console.log(`📊 Loaded counts - Pages: ${pages.length}, Blogs: ${blogs.length}, Offers: ${offers.length}, Tours: ${tours.length}`);
-
-    const items: any[] = [];
-    const dynamicSlugs = new Set<string>();
-
-    // 1. Pages (dynamic)
-    pages.forEach((p: any) => {
-      const slugKey = (p.slug || '').toLowerCase();
-      dynamicSlugs.add(slugKey);
-
-      const routeSlug = p.slug || 'home';
-      const docOverride = metadataDocs.find((d: any) => d.slug === routeSlug || d.id === routeSlug.replace(/\//g, '_'));
-
-      items.push({
-        id: p.id,
-        title: p.title,
-        slug: p.slug || '',
-        type: 'Page',
-        noindex: p.active === false || (docOverride?.noindex !== undefined ? docOverride.noindex : (p.noindex || false)),
-        active: p.active !== false,
-        updatedAt: docOverride?.updatedAt || p.updatedAt || p.createdAt || null,
-        createdAt: p.createdAt || null
-      });
-    });
-
-    // 2. Static Pages
-    STATIC_PAGES.forEach((sp: any) => {
-      const slugKey = sp.slug.toLowerCase();
-      const isCovered = dynamicSlugs.has(slugKey);
-
-      if (!isCovered) {
-        const routeSlug = sp.slug || 'home';
-        const docOverride = metadataDocs.find((d: any) => d.slug === routeSlug || d.id === routeSlug.replace(/\//g, '_'));
-
-        items.push({
-          id: `static-${sp.slug || 'home'}`,
-          title: sp.title,
-          slug: sp.slug,
-          type: 'Page',
-          isStaticSystemPage: true,
-          isVirtual: true,
-          noindex: docOverride?.noindex !== undefined ? docOverride.noindex : false,
-          active: true,
-          updatedAt: docOverride?.updatedAt || null,
-          createdAt: null
-        });
-      } else {
-        const index = items.findIndex((p: any) => p.type === 'Page' && String(p.slug).toLowerCase() === slugKey);
-        if (index !== -1) {
-          items[index].isStaticSystemPage = true;
-          items[index].title = sp.title;
-          const routeSlug = sp.slug || 'home';
-          const docOverride = metadataDocs.find((d: any) => d.slug === routeSlug || d.id === routeSlug.replace(/\//g, '_'));
-          if (docOverride?.updatedAt) {
-            items[index].updatedAt = docOverride.updatedAt;
-          }
-        }
-      }
-    });
-
-    // 3. Blogs
-    blogs.forEach((b: any) => {
-      const routeSlug = `blog/${b.slug}`;
-      const docOverride = metadataDocs.find((d: any) => d.slug === routeSlug || d.id === routeSlug.replace(/\//g, '_'));
-
-      items.push({
-        id: b.id,
-        title: b.title,
-        slug: b.slug,
-        type: 'Blog',
-        noindex: b.active === false || (docOverride?.noindex !== undefined ? docOverride.noindex : (b.noindex || false)),
-        active: b.active !== false,
-        updatedAt: docOverride?.updatedAt || b.updatedAt || b.createdAt || null,
-        createdAt: b.createdAt || null
-      });
-    });
-
-    // 4. Offers
-    offers.forEach((o: any) => {
-      const routeSlug = `offers/${o.slug}`;
-      const docOverride = metadataDocs.find((d: any) => d.slug === routeSlug || d.id === routeSlug.replace(/\//g, '_'));
-
-      items.push({
-        id: o.id,
-        title: o.title || o.name || 'Special Offer',
-        slug: o.slug,
-        type: 'Offer',
-        noindex: o.active === false || (docOverride?.noindex !== undefined ? docOverride.noindex : (o.noindex || false)),
-        active: o.active !== false,
-        updatedAt: docOverride?.updatedAt || o.updatedAt || o.createdAt || null,
-        createdAt: o.createdAt || null
-      });
-    });
-
-    // 5. Tours
-    tours.forEach((t: any) => {
-      const routeSlug = `tours/${t.slug}`;
-      const docOverride = metadataDocs.find((d: any) => d.slug === routeSlug || d.id === routeSlug.replace(/\//g, '_'));
-
-      items.push({
-        id: t.id,
-        title: t.title || t.name || 'Tour',
-        slug: t.slug,
-        type: 'Tour',
-        noindex: t.active === false || (docOverride?.noindex !== undefined ? docOverride.noindex : (t.noindex || false)),
-        active: t.active !== false,
-        updatedAt: docOverride?.updatedAt || t.updatedAt || t.createdAt || null,
-        createdAt: t.createdAt || null
-      });
-    });
-
-    const uniqueItems: any[] = [];
-    const seenKeys = new Set<string>();
-    items.forEach((item: any) => {
-      const itemKey = `${item.type}-${item.id || 'unnamed'}`;
-      if (!seenKeys.has(itemKey)) {
-        seenKeys.add(itemKey);
-        uniqueItems.push(item);
-      }
-    });
-
-    interface SitemapEntry {
-      path: string;
-      lastmod: string;
-      changefreq: string;
-      priority: string;
+  while (hasMore) {
+    let q;
+    if (lastDoc) {
+      q = query(collection(db, collectionName), startAfter(lastDoc), limit(batchSize));
+    } else {
+      q = query(collection(db, collectionName), limit(batchSize));
     }
+    const snap = await getDocs(q);
+    if (snap.empty) {
+      hasMore = false;
+      break;
+    }
+    yield snap.docs;
+    lastDoc = snap.docs[snap.docs.length - 1];
+    if (snap.docs.length < batchSize) {
+      hasMore = false;
+    }
+  }
+}
 
-    const sitemapEntries: SitemapEntry[] = [];
-    const registeredPaths = new Set<string>();
+const writeUrlEntry = (stream: fs.WriteStream, path: string, lastmod: string, changefreq: string, priority: string) => {
+  stream.write(`  <url>
+    <loc>${SITE_URL}${path}</loc>
+    <lastmod>${lastmod}</lastmod>
+    <changefreq>${changefreq}</changefreq>
+    <priority>${priority}</priority>
+  </url>\n`);
+};
 
-    // 1. Process Static Pages
-    STATIC_PAGES.forEach((page: any) => {
-      const mergedItem = uniqueItems.find((c: any) => c.type === 'Page' && String(c.slug).toLowerCase() === page.slug.toLowerCase());
-      if (mergedItem?.noindex) {
-        return;
-      }
-      const cleanPath = page.path || '/';
-      if (!registeredPaths.has(cleanPath)) {
-        registeredPaths.add(cleanPath);
-        const lastmod = formatDate(mergedItem?.updatedAt || mergedItem?.createdAt);
-        sitemapEntries.push({
-          path: cleanPath,
-          lastmod,
-          changefreq: cleanPath === '/' ? 'daily' : 'weekly',
-          priority: cleanPath === '/' ? '1.0' : '0.8',
-        });
-      }
-    });
+async function generateSitemap() {
+  console.log('🚀 Starting Scalable Streaming Sitemap Generation Matching MetaTab.tsx Dynamic Rules...');
 
-    // 2. Process Dynamic Content
-    const dynamicItems = uniqueItems.filter((c: any) => !c.noindex && !c.isStaticSystemPage);
-    dynamicItems.forEach((item: any) => {
-      const cleanPath = getFullPath(item);
-      if (!registeredPaths.has(cleanPath)) {
-        registeredPaths.add(cleanPath);
-        const lastmod = formatDate(item.updatedAt || item.createdAt);
-        sitemapEntries.push({
-          path: cleanPath,
-          lastmod,
-          changefreq: cleanPath === '/' ? 'daily' : 'weekly',
-          priority: cleanPath === '/' ? '1.0' : '0.8',
-        });
-      }
-    });
-
-    // Build XML
-    const sitemapXml = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${sitemapEntries.map(entry => `  <url>
-    <loc>${SITE_URL}${entry.path}</loc>
-    <lastmod>${entry.lastmod}</lastmod>
-    <changefreq>${entry.changefreq}</changefreq>
-    <priority>${entry.priority}</priority>
-  </url>`).join('\n')}
-</urlset>`;
-
+  try {
     if (!fs.existsSync(PUBLIC_DIR)) fs.mkdirSync(PUBLIC_DIR, { recursive: true });
     if (!fs.existsSync(DIST_DIR)) fs.mkdirSync(DIST_DIR, { recursive: true });
 
-    fs.writeFileSync(path.join(PUBLIC_DIR, 'sitemap.xml'), sitemapXml);
-    fs.writeFileSync(path.join(DIST_DIR, 'sitemap.xml'), sitemapXml);
+    const tempPublicPath = path.join(PUBLIC_DIR, 'sitemap.xml.tmp');
+    const writeStream = fs.createWriteStream(tempPublicPath, { encoding: 'utf8' });
+
+    // Header structure
+    writeStream.write('<?xml version="1.0" encoding="UTF-8"?>\n');
+    writeStream.write('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n');
+
+    // 1. Accumulate metadata overrides in a memory-efficient Map
+    console.log('📦 Loading metadata overrides incrementally...');
+    const metadataMap = new Map<string, { noindex?: boolean; updatedAt?: any }>();
+    for await (const docs of streamCollection('metadata', 200)) {
+      (docs as any[]).forEach((doc: any) => {
+        const data = doc.data() as any;
+        const slugVal = (data.slug || '').toLowerCase();
+        const idVal = doc.id.toLowerCase();
+        const record = {
+          noindex: data.noindex,
+          updatedAt: data.updatedAt
+        };
+        if (slugVal) {
+          metadataMap.set(slugVal, record);
+        }
+        if (idVal) {
+          metadataMap.set(idVal, record);
+        }
+      });
+    }
+
+    const getMetadataOverride = (routeSlug: string) => {
+      const normSlug = (routeSlug || '').toLowerCase();
+      const replaced = normSlug.replace(/\//g, '_');
+      let override = metadataMap.get(normSlug);
+      if (!override && replaced) {
+        override = metadataMap.get(replaced);
+      }
+      return override;
+    };
+
+    // Tracking for static pages and already processed paths to guarantee uniqueness
+    interface StaticPageStatus {
+      isCovered: boolean;
+      noindex?: boolean;
+      updatedAt?: any;
+      createdAt?: any;
+    }
+
+    const staticPagesStatus = new Map<string, StaticPageStatus>();
+    STATIC_PAGES.forEach(sp => {
+      staticPagesStatus.set(sp.slug.toLowerCase(), {
+        isCovered: false,
+        noindex: false,
+        updatedAt: null,
+        createdAt: null
+      });
+    });
+
+    const registeredPaths = new Set<string>();
+
+    // 2. Stream and process the Dynamic 'pages' collection
+    console.log('📄 Processing dynamic pages streaming...');
+    for await (const docs of streamCollection('pages', 100)) {
+      (docs as any[]).forEach((doc: any) => {
+        const p = { id: doc.id, type: 'Page', ...(doc.data() as any) } as any;
+        const slugKey = (p.slug || '').toLowerCase();
+        const routeSlug = p.slug || 'home';
+        const docOverride = getMetadataOverride(routeSlug);
+        const noindex = p.active === false || (docOverride?.noindex !== undefined ? docOverride.noindex : (p.noindex || false));
+        const active = p.active !== false;
+        const updatedAt = docOverride?.updatedAt || p.updatedAt || p.createdAt || null;
+        const createdAt = p.createdAt || null;
+
+        // If this page covers a static system route, record it to merge at the end
+        if (staticPagesStatus.has(slugKey)) {
+          staticPagesStatus.set(slugKey, {
+            isCovered: true,
+            noindex,
+            updatedAt,
+            createdAt
+          });
+        } else {
+          // If purely custom dynamic page, write it immediately
+          const cleanPath = getFullPath(p);
+          if (!registeredPaths.has(cleanPath)) {
+            registeredPaths.add(cleanPath);
+            if (!noindex && active) {
+              const lastmod = formatDate(updatedAt || createdAt);
+              writeUrlEntry(writeStream, cleanPath, lastmod, cleanPath === '/' ? 'daily' : 'weekly', cleanPath === '/' ? '1.0' : '0.8');
+            }
+          }
+        }
+      });
+    }
+
+    // 3. Stream 'blogs' collection
+    console.log('✍️ Processing blog posts streaming...');
+    for await (const docs of streamCollection('blogs', 100)) {
+      (docs as any[]).forEach((doc: any) => {
+        const b = { id: doc.id, type: 'Blog', ...(doc.data() as any) } as any;
+        const routeSlug = `blog/${b.slug}`;
+        const docOverride = getMetadataOverride(routeSlug);
+        const noindex = b.active === false || (docOverride?.noindex !== undefined ? docOverride.noindex : (b.noindex || false));
+        const active = b.active !== false;
+        const updatedAt = docOverride?.updatedAt || b.updatedAt || b.createdAt || null;
+        const createdAt = b.createdAt || null;
+
+        const cleanPath = getFullPath(b);
+        if (!registeredPaths.has(cleanPath)) {
+          registeredPaths.add(cleanPath);
+          if (!noindex && active) {
+            const lastmod = formatDate(updatedAt || createdAt);
+            writeUrlEntry(writeStream, cleanPath, lastmod, 'weekly', '0.8');
+          }
+        }
+      });
+    }
+
+    // 4. Stream 'offers' collection
+    console.log('🏷️ Processing promo offers streaming...');
+    for await (const docs of streamCollection('offers', 100)) {
+      (docs as any[]).forEach((doc: any) => {
+        const o = { id: doc.id, type: 'Offer', ...(doc.data() as any) } as any;
+        const routeSlug = `offers/${o.slug}`;
+        const docOverride = getMetadataOverride(routeSlug);
+        const noindex = o.active === false || (docOverride?.noindex !== undefined ? docOverride.noindex : (o.noindex || false));
+        const active = o.active !== false;
+        const updatedAt = docOverride?.updatedAt || o.updatedAt || o.createdAt || null;
+        const createdAt = o.createdAt || null;
+
+        const cleanPath = getFullPath(o);
+        if (!registeredPaths.has(cleanPath)) {
+          registeredPaths.add(cleanPath);
+          if (!noindex && active) {
+            const lastmod = formatDate(updatedAt || createdAt);
+            writeUrlEntry(writeStream, cleanPath, lastmod, 'weekly', '0.8');
+          }
+        }
+      });
+    }
+
+    // 5. Stream 'tours' collection
+    console.log('🗺️ Processing private tours streaming...');
+    for await (const docs of streamCollection('tours', 100)) {
+      (docs as any[]).forEach((doc: any) => {
+        const t = { id: doc.id, type: 'Tour', ...(doc.data() as any) } as any;
+        const routeSlug = `tours/${t.slug}`;
+        const docOverride = getMetadataOverride(routeSlug);
+        const noindex = t.active === false || (docOverride?.noindex !== undefined ? docOverride.noindex : (t.noindex || false));
+        const active = t.active !== false;
+        const updatedAt = docOverride?.updatedAt || t.updatedAt || t.createdAt || null;
+        const createdAt = t.createdAt || null;
+
+        const cleanPath = getFullPath(t);
+        if (!registeredPaths.has(cleanPath)) {
+          registeredPaths.add(cleanPath);
+          if (!noindex && active) {
+            const lastmod = formatDate(updatedAt || createdAt);
+            writeUrlEntry(writeStream, cleanPath, lastmod, 'weekly', '0.8');
+          }
+        }
+      });
+    }
+
+    // 6. Process and append STATIC_PAGES with correct merges
+    console.log('⚙️ Appending processed static system pages...');
+    STATIC_PAGES.forEach((page: any) => {
+      const slugKey = page.slug.toLowerCase();
+      const status = staticPagesStatus.get(slugKey);
+      
+      let noindex = false;
+      let updatedAt = null;
+      let createdAt = null;
+
+      if (status) {
+        if (status.isCovered) {
+          if (status.noindex) return; // ignore static page if it is marked as noindex via the covering page
+          updatedAt = status.updatedAt;
+          createdAt = status.createdAt;
+        } else {
+          // If uncovered virtual static page, see metadata override
+          const routeSlug = page.slug || 'home';
+          const docOverride = getMetadataOverride(routeSlug);
+          if (docOverride?.noindex === true) return;
+          updatedAt = docOverride?.updatedAt || null;
+        }
+      }
+
+      const cleanPath = page.path || '/';
+      if (!registeredPaths.has(cleanPath)) {
+        registeredPaths.add(cleanPath);
+        const lastmod = formatDate(updatedAt || createdAt);
+        writeUrlEntry(
+          writeStream,
+          cleanPath,
+          lastmod,
+          cleanPath === '/' ? 'daily' : 'weekly',
+          cleanPath === '/' ? '1.0' : '0.8'
+        );
+      }
+    });
+
+    // Close XML tags and finalize the writing
+    writeStream.write('</urlset>');
+    writeStream.end();
+
+    // Promisify the writeStream flush
+    await new Promise<void>((resolve, reject) => {
+      writeStream.on('finish', () => resolve());
+      writeStream.on('error', (err) => reject(err));
+    });
+
+    // Move completed sitemap into public/ and dist/
+    fs.copyFileSync(tempPublicPath, path.join(PUBLIC_DIR, 'sitemap.xml'));
+    fs.copyFileSync(tempPublicPath, path.join(DIST_DIR, 'sitemap.xml'));
+    
+    // Safely cleanup temporary file
+    try {
+      fs.unlinkSync(tempPublicPath);
+    } catch (e) {}
+
     console.log('✨ sitemap.xml generated successfully in public/ and dist/');
 
     // Generate Robots.txt
