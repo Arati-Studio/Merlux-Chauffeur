@@ -196,7 +196,7 @@ export default function RouteMap({ booking, onClose }: RouteMapProps) {
       <div className="h-full min-h-[450px] md:min-h-[600px] flex items-center justify-center bg-black/40 backdrop-blur-sm">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="w-8 h-8 text-gold animate-spin" />
-          <p className="text-gold text-[10px] items-center uppercase tracking-widest font-black">Initialising Engine...</p>
+          <p className="text-gold text-[10px] items-center uppercase tracking-widest font-black">Initialising Route...</p>
         </div>
       </div>
     );

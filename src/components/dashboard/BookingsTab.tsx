@@ -290,7 +290,7 @@ export default function BookingsTab({
     // Apply Time Filters
     if (bookingTimeFilter !== 'all') {
       const today = new Date();
-      
+
       result = result.filter(b => {
         const bDate = getBookingDateObject(b);
         if (!bDate) return false;
@@ -318,7 +318,7 @@ export default function BookingsTab({
           const currentYearVal = today.getFullYear();
           const startMonthInt = parseInt(bookingMonthRange.start, 10);
           const endMonthInt = parseInt(bookingMonthRange.end, 10);
-          
+
           const y = bDate.getFullYear();
           const m = bDate.getMonth() + 1; // 1-indexed
 
@@ -490,11 +490,11 @@ export default function BookingsTab({
   const isChatAllowed = (booking: any) => {
     if (isAdmin) return true;
     if (booking.status !== 'completed') return true;
-    
+
     // Check completedAt or updatedAt as fallback
     const finishedAt = booking.completedAt || booking.updatedAt;
     if (!finishedAt) return true;
-    
+
     try {
       const completedDate = finishedAt.toDate ? finishedAt.toDate() : new Date(finishedAt);
       const diffDays = (Date.now() - completedDate.getTime()) / (1000 * 60 * 60 * 24);
@@ -1058,7 +1058,7 @@ export default function BookingsTab({
                         className="custom-select bg-transparent text-[10px] text-white/70 border-none outline-none pl-1.5 pr-6 cursor-pointer font-bold"
                         style={{ backgroundPosition: 'right 0.35rem center', backgroundSize: '0.65rem' }}
                       >
-                        {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map((y) => (
+                        {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 2 + i).map((y) => (
                           <option key={y} value={y} className="bg-black text-white">
                             {y}
                           </option>
@@ -1077,7 +1077,7 @@ export default function BookingsTab({
                         className="custom-select bg-transparent text-[10px] text-white/70 border-none outline-none pl-1.5 pr-6 cursor-pointer font-bold"
                         style={{ backgroundPosition: 'right 0.35rem center', backgroundSize: '0.65rem' }}
                       >
-                        {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map((y) => (
+                        {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 2 + i).map((y) => (
                           <option key={y} value={y} className="bg-black text-white">
                             {y}
                           </option>
@@ -1755,7 +1755,7 @@ export default function BookingsTab({
                         </div>
 
                         {/* Right side: Route button */}
-                        <div className="flex flex-row items-center gap-2">         
+                        <div className="flex flex-row items-center gap-2">
                           {(isAdmin || isDriver) && booking.status === 'accepted' && (
                             <button
                               onClick={() => handleSendEarlyAlert(booking)}
@@ -1870,7 +1870,7 @@ export default function BookingsTab({
                               title="Secure Live Chat"
                             >
                               <MessageSquare size={16} />
-                              <span className="text-[10px] font-bold uppercase tracking-widest">Chat</span>
+                              <span className="hidden lg:inline text-[10px] font-bold uppercase tracking-widest">Chat</span>
                               <ChatBadge bookingId={booking.id} user={user} userProfile={userProfile} />
                             </button>
                           </div>
@@ -1884,7 +1884,7 @@ export default function BookingsTab({
                           title="View Details"
                         >
                           <Eye size={16} />
-                          <span className="text-[10px] font-bold uppercase tracking-widest">View</span>
+                          <span className="hidden lg:inline text-[10px] font-bold uppercase tracking-widest">View</span>
                         </button>
                         <button
                           onClick={() => {
@@ -1895,7 +1895,7 @@ export default function BookingsTab({
                           title="Edit Booking"
                         >
                           <Edit2 size={16} />
-                          <span className="text-[10px] font-bold uppercase tracking-widest">Edit</span>
+                          <span className="hidden lg:inline text-[10px] font-bold uppercase tracking-widest">Edit</span>
                         </button>
                         <button
                           onClick={() => setConfirmDelete({ type: 'booking', id: booking.id })}
@@ -1903,7 +1903,7 @@ export default function BookingsTab({
                           title="Delete Booking"
                         >
                           <Trash2 size={16} />
-                          <span className="text-[10px] font-bold uppercase tracking-widest">Delete</span>
+                          <span className="hidden lg:inline text-[10px] font-bold uppercase tracking-widest">Delete</span>
                         </button>
                       </>
                     ) : booking.status === 'pending' ? (
@@ -1956,16 +1956,16 @@ export default function BookingsTab({
                     ) : (
                       <>
                         {isChatAllowed(booking) && (
-                           <div className="flex items-center gap-1 shrink-0">
-                             <button
-                               onClick={() => setChatBooking(booking)}
-                               className="w-10 h-10 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-500 hover:bg-amber-500 hover:text-black transition-all flex items-center justify-center shrink-0 relative shadow-lg shadow-amber-500/5"
-                               title="Secure Live Chat"
-                             >
-                               <MessageSquare size={16} />
-                               <ChatBadge bookingId={booking.id} user={user} userProfile={userProfile} />
-                             </button>
-                           </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              onClick={() => setChatBooking(booking)}
+                              className="w-10 h-10 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-500 hover:bg-amber-500 hover:text-black transition-all flex items-center justify-center shrink-0 relative shadow-lg shadow-amber-500/5"
+                              title="Secure Live Chat"
+                            >
+                              <MessageSquare size={16} />
+                              <ChatBadge bookingId={booking.id} user={user} userProfile={userProfile} />
+                            </button>
+                          </div>
                         )}
                         {booking.status === 'confirmed' && (
                           <div className="flex items-center gap-1.5 shrink-0">
@@ -2095,15 +2095,15 @@ export default function BookingsTab({
                     ) : (
                       <div className="flex items-center gap-1.5 w-full">
                         {isChatAllowed(booking) && (
-                           <button
-                             onClick={() => setChatBooking(booking)}
-                             className="flex-1 p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-500 hover:bg-amber-500 hover:text-black transition-all flex items-center justify-center gap-2 relative shadow-lg shadow-amber-500/5"
-                             title="Secure Live Chat"
-                           >
-                             <MessageSquare size={16} />
-                             <span className="text-[10px] font-bold uppercase tracking-widest">Chat</span>
-                             <ChatBadge bookingId={booking.id} user={user} userProfile={userProfile} />
-                           </button>
+                          <button
+                            onClick={() => setChatBooking(booking)}
+                            className="flex-1 p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-500 hover:bg-amber-500 hover:text-black transition-all flex items-center justify-center gap-2 relative shadow-lg shadow-amber-500/5"
+                            title="Secure Live Chat"
+                          >
+                            <MessageSquare size={16} />
+                            <span className="text-[10px] font-bold uppercase tracking-widest">Chat</span>
+                            <ChatBadge bookingId={booking.id} user={user} userProfile={userProfile} />
+                          </button>
                         )}
                         <button
                           onClick={() => {
@@ -2379,81 +2379,81 @@ export default function BookingsTab({
                       <div className="flex flex-col items-end gap-1.5">
                         {/* Completed Rides special placement: Chat icon BEFORE View button (Chat button first), placed below primary row */}
                         {!isAdmin && booking.status === 'completed' && isChatAllowed(booking) && (
-                           <div className="flex items-center justify-end gap-2 mb-2">
-                              {booking.driverId && (
-                                <button
-                                  onClick={() => setChatBooking(booking)}
-                                  className="p-2 bg-amber-500/10 text-amber-500 rounded-lg hover:bg-amber-500 hover:text-black transition-all cursor-pointer relative"
-                                  title="Secure Live Chat"
-                                >
-                                  <MessageSquare size={14} />
-                                  <ChatBadge bookingId={booking.id} user={user} userProfile={userProfile} />
-                                </button>
-                              )}
-                              {(isAdmin || isDriver || booking.userId === user?.uid) && (
-                                <button
-                                  onClick={() => {
-                                    setViewingBooking(booking);
-                                    setShowViewModal(true);
-                                  }}
-                                  className="p-2 bg-white/5 text-gold rounded-lg hover:bg-gold hover:text-black transition-all"
-                                  title="View Details"
-                                >
-                                  <Eye size={14} />
-                                </button>
-                              )}
-                           </div>
+                          <div className="flex items-center justify-end gap-2 mb-2">
+                            {booking.driverId && (
+                              <button
+                                onClick={() => setChatBooking(booking)}
+                                className="p-2 bg-amber-500/10 text-amber-500 rounded-lg hover:bg-amber-500 hover:text-black transition-all cursor-pointer relative"
+                                title="Secure Live Chat"
+                              >
+                                <MessageSquare size={14} />
+                                <ChatBadge bookingId={booking.id} user={user} userProfile={userProfile} />
+                              </button>
+                            )}
+                            {(isAdmin || isDriver || booking.userId === user?.uid) && (
+                              <button
+                                onClick={() => {
+                                  setViewingBooking(booking);
+                                  setShowViewModal(true);
+                                }}
+                                className="p-2 bg-white/5 text-gold rounded-lg hover:bg-gold hover:text-black transition-all"
+                                title="View Details"
+                              >
+                                <Eye size={14} />
+                              </button>
+                            )}
+                          </div>
                         )}
 
                         <div className="flex items-center justify-end gap-2 mt-1">
                           {/* Driver Assigned Section (Accepted) - Alert and Route Only */}
                           {!isAdmin && booking.status === 'accepted' && (
                             <>
-                               {(isAdmin || isDriver) && (
-                                 <button
-                                   onClick={() => handleSendEarlyAlert(booking)}
-                                   className="p-2 bg-gold/10 text-gold rounded-lg hover:bg-gold hover:text-black transition-all"
-                                   title="Send Early Pickup Alert"
-                                 >
-                                   <Bell size={14} />
-                                 </button>
-                               )}
-                               <button
-                                 onClick={() => {
-                                   setRouteBooking(booking);
-                                   setShowRouteModal(true);
-                                 }}
-                                 className="p-2 bg-blue-500/10 text-blue-400 rounded-lg hover:bg-gold hover:text-black transition-all"
-                                 title="View Route"
-                               >
-                                 <RouteIcon size={14} />
-                               </button>
+                              {(isAdmin || isDriver) && (
+                                <button
+                                  onClick={() => handleSendEarlyAlert(booking)}
+                                  className="p-2 bg-gold/10 text-gold rounded-lg hover:bg-gold hover:text-black transition-all"
+                                  title="Send Early Pickup Alert"
+                                >
+                                  <Bell size={14} />
+                                </button>
+                              )}
+                              <button
+                                onClick={() => {
+                                  setRouteBooking(booking);
+                                  setShowRouteModal(true);
+                                }}
+                                className="p-2 bg-blue-500/10 text-blue-400 rounded-lg hover:bg-gold hover:text-black transition-all"
+                                title="View Route"
+                              >
+                                <RouteIcon size={14} />
+                              </button>
                             </>
                           )}
 
                           {/* Confirmed/Pending Section - Chat and View */}
                           {!isAdmin && (booking.status === 'confirmed' || booking.status === 'pending' || booking.status === 'assigned') && (
                             <>
-                               {booking.driverId && isChatAllowed(booking) && (
-                                 <button
-                                   onClick={() => setChatBooking(booking)}
-                                   className="p-2 bg-amber-500/10 text-amber-500 rounded-lg hover:bg-amber-500 hover:text-black transition-all cursor-pointer relative shadow-lg shadow-amber-500/5"
-                                   title="Secure Live Chat"
-                                 >
-                                   <MessageSquare size={14} />
-                                   <ChatBadge bookingId={booking.id} user={user} userProfile={userProfile} />
-                                 </button>
-                               )}
-                               <button
-                                 onClick={() => {
-                                   setViewingBooking(booking);
-                                   setShowViewModal(true);
-                                 }}
-                                 className="p-2 bg-white/5 text-gold rounded-lg hover:bg-gold hover:text-black transition-all"
-                                 title="View Details"
-                               >
-                                 <Eye size={14} />
-                               </button>
+                              {booking.driverId && isChatAllowed(booking) && (
+                                <button
+                                  onClick={() => setChatBooking(booking)}
+                                  className="p-2 bg-amber-500/10 text-amber-500 rounded-lg hover:bg-amber-500 hover:text-black transition-all cursor-pointer relative shadow-lg shadow-amber-500/5"
+                                  title="Secure Live Chat"
+                                >
+                                  <MessageSquare size={14} />
+                                  <ChatBadge bookingId={booking.id} user={user} userProfile={userProfile} />
+                                </button>
+                              )}
+                              <button
+                                onClick={() => {
+                                  setViewingBooking(booking);
+                                  setShowViewModal(true);
+                                }}
+                                className="p-2 bg-white/5 text-gold rounded-lg hover:bg-gold hover:text-black transition-all"
+                                title="View Details"
+                              >
+                                <Eye size={14} />
+                              </button>
                             </>
                           )}
 
@@ -2536,73 +2536,73 @@ export default function BookingsTab({
                               )}
                             </div>
                           ) : isDriver && booking.driverId === user?.uid ? (
-                          <div className="flex items-center gap-1.5">
-                            {isChatAllowed(booking) && (
-                               <button
-                                 onClick={() => setChatBooking(booking)}
-                                 className="p-2 bg-amber-500/10 text-amber-500 rounded-lg hover:bg-amber-500 hover:text-black transition-all cursor-pointer relative shadow-lg shadow-amber-500/5"
-                                 title="Secure Live Chat"
-                               >
-                                 <MessageSquare size={14} />
-                                 <ChatBadge bookingId={booking.id} user={user} userProfile={userProfile} />
-                               </button>
-                            )}
-                            {booking.status === 'assigned' && (
-                              <>
-                                <button onClick={() => updateBookingStatus(booking.id, 'accepted')} className="p-2 bg-green-500/10 text-green-500 rounded-lg h-9 w-9 flex items-center justify-center hover:bg-green-500 hover:text-white transition-all"><CheckCircle size={14} /></button>
-                                <button onClick={() => updateBookingStatus(booking.id, 'rejected')} className="p-2 bg-red-500/10 text-red-500 rounded-lg h-9 w-9 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all"><X size={14} /></button>
-                              </>
-                            )}
-                            {booking.status === 'accepted' && (
-                              <button onClick={() => updateBookingStatus(booking.id, 'completed')} className="px-3 py-1.5 h-9 bg-gold text-black rounded-lg text-[9px] font-black uppercase tracking-[0.2em] hover:bg-white transition-all">Complete Ride</button>
-                            )}
-                          </div>
-                        ) : !isDriver && booking.userId === user?.uid ? (
-                          <div className="flex items-center gap-1.5">
-                            {isChatAllowed(booking) && (
-                               <button
-                                 onClick={() => setChatBooking(booking)}
-                                 className="p-2 bg-amber-500/10 text-amber-500 rounded-lg hover:bg-amber-500 hover:text-black transition-all cursor-pointer relative shadow-lg shadow-amber-500/5"
-                                 title="Secure Live Chat"
-                               >
-                                 <MessageSquare size={14} />
-                                 <ChatBadge bookingId={booking.id} user={user} userProfile={userProfile} />
-                               </button>
-                            )}
-                            {booking.status === 'pending' ? (
-                              <>
+                            <div className="flex items-center gap-1.5">
+                              {isChatAllowed(booking) && (
                                 <button
-                                  onClick={() => {
-                                    setEditingBooking(booking);
-                                    setShowBookingModal(true);
-                                  }}
-                                  className="p-2 bg-white/5 text-blue-400 rounded-lg hover:bg-blue-500 hover:text-white transition-all shadow-lg shadow-blue-500/5"
-                                  title="Edit"
+                                  onClick={() => setChatBooking(booking)}
+                                  className="p-2 bg-amber-500/10 text-amber-500 rounded-lg hover:bg-amber-500 hover:text-black transition-all cursor-pointer relative shadow-lg shadow-amber-500/5"
+                                  title="Secure Live Chat"
                                 >
-                                  <Edit2 size={14} />
+                                  <MessageSquare size={14} />
+                                  <ChatBadge bookingId={booking.id} user={user} userProfile={userProfile} />
                                 </button>
+                              )}
+                              {booking.status === 'assigned' && (
+                                <>
+                                  <button onClick={() => updateBookingStatus(booking.id, 'accepted')} className="p-2 bg-green-500/10 text-green-500 rounded-lg h-9 w-9 flex items-center justify-center hover:bg-green-500 hover:text-white transition-all"><CheckCircle size={14} /></button>
+                                  <button onClick={() => updateBookingStatus(booking.id, 'rejected')} className="p-2 bg-red-500/10 text-red-500 rounded-lg h-9 w-9 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all"><X size={14} /></button>
+                                </>
+                              )}
+                              {booking.status === 'accepted' && (
+                                <button onClick={() => updateBookingStatus(booking.id, 'completed')} className="px-3 py-1.5 h-9 bg-gold text-black rounded-lg text-[9px] font-black uppercase tracking-[0.2em] hover:bg-white transition-all">Complete Ride</button>
+                              )}
+                            </div>
+                          ) : !isDriver && booking.userId === user?.uid ? (
+                            <div className="flex items-center gap-1.5">
+                              {isChatAllowed(booking) && (
                                 <button
-                                  onClick={() => {
-                                    setCancellingBookingId(booking.id);
-                                    setCancellationReasonInput('');
-                                  }}
-                                  className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all"
-                                  title="Cancel"
+                                  onClick={() => setChatBooking(booking)}
+                                  className="p-2 bg-amber-500/10 text-amber-500 rounded-lg hover:bg-amber-500 hover:text-black transition-all cursor-pointer relative shadow-lg shadow-amber-500/5"
+                                  title="Secure Live Chat"
                                 >
-                                  <XCircle size={14} />
+                                  <MessageSquare size={14} />
+                                  <ChatBadge bookingId={booking.id} user={user} userProfile={userProfile} />
                                 </button>
-                              </>
-                            ) : (
-                               <button
-                                 onClick={() => navigate('/contact')}
-                                 className="p-2 bg-white/5 text-white rounded-lg hover:bg-white hover:text-black transition-all"
-                                 title="Contact Us"
-                               >
-                                 <Mail size={14} className="text-gold" />
-                               </button>
-                            )}
-                          </div>
-                        ) : null}
+                              )}
+                              {booking.status === 'pending' ? (
+                                <>
+                                  <button
+                                    onClick={() => {
+                                      setEditingBooking(booking);
+                                      setShowBookingModal(true);
+                                    }}
+                                    className="p-2 bg-white/5 text-blue-400 rounded-lg hover:bg-blue-500 hover:text-white transition-all shadow-lg shadow-blue-500/5"
+                                    title="Edit"
+                                  >
+                                    <Edit2 size={14} />
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setCancellingBookingId(booking.id);
+                                      setCancellationReasonInput('');
+                                    }}
+                                    className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all"
+                                    title="Cancel"
+                                  >
+                                    <XCircle size={14} />
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  onClick={() => navigate('/contact')}
+                                  className="p-2 bg-white/5 text-white rounded-lg hover:bg-white hover:text-black transition-all"
+                                  title="Contact Us"
+                                >
+                                  <Mail size={14} className="text-gold" />
+                                </button>
+                              )}
+                            </div>
+                          ) : null}
                         </div>
                       </div>
                     </td>
@@ -2764,7 +2764,7 @@ export default function BookingsTab({
             <motion.div
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
-              className="w-full max-w-md glass p-4 md:p-8 rounded-sm border border-gold/20 max-h-[95vh] md:max-h-[90vh] overflow-y-auto custom-scrollbar"
+              className="w-full max-w-md md:max-w-2xl glass p-4 md:p-8 rounded-2xl border border-gold/20 max-h-[95vh] md:max-h-[90vh] overflow-y-auto custom-scrollbar"
             >
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-xl font-display text-gold">Edit Booking</h3>
@@ -2830,7 +2830,7 @@ export default function BookingsTab({
                         <span className="text-[10px] font-black uppercase tracking-wider text-gold">Return Trip Schedule</span>
                         <span className="text-[8px] bg-gold/10 text-gold px-2 py-0.5 rounded border border-gold/20 font-bold uppercase tracking-widest font-mono">Originally Requested</span>
                       </div>
-                      
+
                       <div className="grid grid-cols-2 gap-4 pt-1">
                         <div>
                           <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-1 block">Return Date</label>
@@ -2855,12 +2855,6 @@ export default function BookingsTab({
                     </div>
                   );
                 })()}
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    {/* Location fields removed from Edit Modal as per request */}
-                  </div>
-                </div>
 
                 <div>
                   <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-1 block">Additional Info</label>
@@ -3110,7 +3104,7 @@ export default function BookingsTab({
                               {viewingBooking.priceBreakdown.appliedAddons.map((addon: any, aIdx: number) => (
                                 <div key={`addon-view-modal-${addon.id || 'na'}-${addon.name || 'unnamed'}-${aIdx}`} className="flex justify-between items-center text-gold/60">
                                   <span className="text-[10px] uppercase tracking-widest font-bold">
-                                    {addon.name} 
+                                    {addon.name}
                                     <span className="text-[8px] opacity-40 ml-1">({addon.target})</span>
                                   </span>
                                   <span className="text-xs font-bold">
@@ -3808,14 +3802,14 @@ export default function BookingsTab({
                       className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all"
                       title="Cancel"
                     ><XCircle size={16} /></button>
-                    
+
                     <div className="relative">
                       <button
                         onClick={() => setShowDriverBulkAssign(!showDriverBulkAssign)}
                         className="p-2 bg-purple-500/10 text-purple-400 rounded-lg hover:bg-purple-500 hover:text-white transition-all"
                         title="Assign Driver"
                       ><Truck size={16} /></button>
-                      
+
                       {showDriverBulkAssign && (
                         <div className="absolute bottom-full right-0 mb-3 w-56 bg-black/95 p-3 rounded-2xl border border-gold/30 shadow-2xl z-[110] flex flex-col gap-2 max-h-[300px] overflow-y-auto custom-scrollbar backdrop-blur-xl">
                           <div className="text-[8px] uppercase tracking-[0.2em] text-gold px-2 py-1 font-bold border-b border-white/5 mb-1">Assign Chauffeur</div>
