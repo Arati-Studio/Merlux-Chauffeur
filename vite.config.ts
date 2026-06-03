@@ -30,22 +30,26 @@ export default defineConfig(({ mode }) => {
         output: {
           manualChunks(id) {
             if (id.includes("node_modules")) {
-              if (id.includes("react-router-dom")) return "reactRouter";
-              if (id.includes("react") || id.includes("react-dom"))
+              if (id.includes("lucide-react")) return "lucide";
+              if (
+                id.includes("node_modules/react-dom/") ||
+                id.includes("node_modules/react/") ||
+                id.includes("node_modules/scheduler/") ||
+                id.includes("node_modules/react-is/")
+              ) {
                 return "reactCore";
+              }
               if (id.includes("motion")) return "animations";
               if (id.includes("firebase")) return "firebase";
               if (id.includes("recharts")) return "recharts";
-              if (id.includes("@stripe") || id.includes("stripe-js"))
-                return "stripe";
+              if (id.includes("@stripe") || id.includes("stripe-js")) return "stripe";
               if (id.includes("twilio")) return "twilio";
               if (id.includes("@react-google-maps")) return "googleMaps";
               if (id.includes("@google/genai")) return "genai";
               if (id.includes("date-fns")) return "dateFns";
-              if (id.includes("lucide-react")) return "lucide";
               return "vendor";
             }
-          },
+          }
         },
       },
     },
