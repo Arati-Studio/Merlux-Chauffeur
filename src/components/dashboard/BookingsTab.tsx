@@ -26,8 +26,14 @@ import {
   getDoc, collection, query, where, orderBy, onSnapshot, limit,
   addDoc, getDocs
 } from 'firebase/firestore';
-import { smsService } from '../../services/smsService';
-import { emailService } from '../../services/emailService';
+const getServices = async () => {
+  const [{ smsService }, { emailService }] = await Promise.all([
+    import('../../services/smsService'),
+    import('../../services/emailService')
+  ]);
+  return { smsService, emailService };
+};
+
 import BookingChat from './BookingChat';
 import ChatBadge from './ChatBadge';
 
@@ -388,6 +394,7 @@ export default function BookingsTab({
         if (bookingSnap.exists()) {
           const bookingData = { id: bookingId, ...bookingSnap.data(), ...updateData };
           const eventName = `status_${status}`;
+          const { smsService, emailService } = await getServices();
           await Promise.all([
             smsService.notify(eventName, bookingData),
             emailService.notify(eventName, bookingData)
@@ -422,6 +429,7 @@ export default function BookingsTab({
             ...updateData
           };
           const eventName = 'status_cancelled';
+          const { smsService, emailService } = await getServices();
           await Promise.all([
             smsService.notify(eventName, bookingData),
             emailService.notify(eventName, bookingData)
@@ -499,6 +507,7 @@ export default function BookingsTab({
   const handleSendEarlyAlert = async (booking: any) => {
     try {
       const driver = consolidatedUsers.find(u => u.id === booking.driverId);
+      const { smsService, emailService } = await getServices();
       await Promise.all([
         smsService.notify('pickup_early_alert', {
           ...booking,
@@ -543,6 +552,7 @@ export default function BookingsTab({
       for (const booking of upcomingBookings) {
         try {
           const driver = consolidatedUsers.find(u => u.id === booking.driverId);
+          const { smsService, emailService } = await getServices();
 
           await Promise.all([
             smsService.notify('pickup_early_alert', {
@@ -603,6 +613,7 @@ export default function BookingsTab({
                 cancellationReason: 'Booking Pickup date passed'
               };
 
+              const { smsService, emailService } = await getServices();
               await Promise.all([
                 smsService.notify('status_cancelled', updatedBookingData),
                 emailService.notify('status_cancelled', updatedBookingData)
@@ -629,6 +640,7 @@ export default function BookingsTab({
             };
 
             if (diffDays === 14 && !booking.alert14DaySent) {
+              const { smsService, emailService } = await getServices();
               await Promise.all([
                 smsService.notify('pending_ride_alert_14d', bookingRefData),
                 emailService.notify('pending_ride_alert_14d', bookingRefData)
@@ -639,6 +651,7 @@ export default function BookingsTab({
               });
               console.log(`Sent 14-day admin alert for booking ${booking.id}`);
             } else if (diffDays === 7 && !booking.alert7DaySent) {
+              const { smsService, emailService } = await getServices();
               await Promise.all([
                 smsService.notify('pending_ride_alert_7d', bookingRefData),
                 emailService.notify('pending_ride_alert_7d', bookingRefData)
@@ -690,6 +703,7 @@ export default function BookingsTab({
             };
 
             // Dispatch SMS and Email alerts with cancellation details
+            const { smsService, emailService } = await getServices();
             await Promise.all([
               smsService.notify('status_cancelled', bookingData),
               emailService.notify('status_cancelled', bookingData)
@@ -731,6 +745,7 @@ export default function BookingsTab({
             ratingValue: rating,
             ratingComment: comment
           };
+          const { emailService } = await getServices();
           await emailService.notify('booking_feedback', bookingData);
         }
       } catch (notifyErr) {
@@ -763,6 +778,7 @@ export default function BookingsTab({
           if (bookingSnap.exists()) {
             const bookingData = { id, ...bookingSnap.data(), status };
             const eventName = `status_${status}`;
+            const { smsService, emailService } = await getServices();
             await Promise.all([
               smsService.notify(eventName, bookingData),
               emailService.notify(eventName, bookingData)
@@ -796,6 +812,7 @@ export default function BookingsTab({
           if (bookingSnap.exists()) {
             const bookingData = { id, ...bookingSnap.data(), driverId, status };
             const eventName = `status_${status}`;
+            const { smsService, emailService } = await getServices();
             await Promise.all([
               smsService.notify(eventName, bookingData),
               emailService.notify(eventName, bookingData)

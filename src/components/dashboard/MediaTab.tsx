@@ -4,7 +4,7 @@ import { Plus, Image, FileUp, Copy, Edit2, Eye, Trash2, X, Upload, Save, Loader2
 import { db, storage, handleFirestoreError, OperationType } from '../../lib/firebase';
 import { collection, doc, addDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
-import { cn } from '../../lib/utils';
+import { cn, getAssetPath } from '../../lib/utils';
 
 interface MediaTabProps {
   storageUsageBytes: number;
@@ -154,7 +154,7 @@ const MediaTab: React.FC<MediaTabProps> = ({
             <div className="aspect-square flex items-center justify-center overflow-hidden bg-black/40">
               {media.type?.startsWith('image/') ? (
                 <img
-                  src={media.url}
+                  src={getAssetPath(media.url)}
                   alt={media.alt || media.name}
                   className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                   referrerPolicy="no-referrer"

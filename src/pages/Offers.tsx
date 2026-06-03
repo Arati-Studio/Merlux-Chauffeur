@@ -7,7 +7,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { useJsApiLoader, Autocomplete } from '@react-google-maps/api';
 import { FormNotice, type NoticeType } from '../components/FormNotice';
 import { db, auth } from '../lib/firebase';
-import { cn } from '../lib/utils';
+import { cn, getAssetPath } from '../lib/utils';
 import Logo from '../components/layout/Logo';
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_ID } from '../lib/google-maps';
 import LoginInline from '../components/LoginInline';
@@ -420,7 +420,7 @@ export default function Offers() {
       <SEO 
         title={selectedPackage ? selectedPackage.title : 'Special Luxury Offers'}
         description={selectedPackage ? (selectedPackage.seoDescription || selectedPackage.description) : 'Curated luxury chauffeur packages and special offers.'}
-        ogImage={selectedPackage?.image}
+        ogImage={getAssetPath(selectedPackage?.image)}
         structuredData={selectedPackage ? {
           "@context": "https://schema.org",
           "@type": "Offer",
@@ -630,7 +630,7 @@ export default function Offers() {
                             >
                               <div className="h-48 relative overflow-hidden shrink-0">
                                 <img
-                                  src={pkg.image || `https://picsum.photos/seed/${pkg.id}/800/500`}
+                                  src={getAssetPath(pkg.image) || `https://picsum.photos/seed/${pkg.id}/800/500`}
                                   alt={pkg.title}
                                   referrerPolicy="no-referrer"
                                   className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110 opacity-70 group-hover:opacity-100"
@@ -753,7 +753,7 @@ export default function Offers() {
                         >
                           <div className="w-full md:w-64 aspect-[16/10] overflow-hidden rounded-2xl relative shrink-0">
                             <img
-                              src={fleet.image || `https://picsum.photos/seed/${fleet.type}/400/250`}
+                              src={getAssetPath(fleet.image) || `https://picsum.photos/seed/${fleet.type}/400/250`}
                               alt={fleet.type}
                               referrerPolicy="no-referrer"
                               className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
@@ -1123,7 +1123,7 @@ export default function Offers() {
                           <div className="hidden md:block">
                             <div className="w-48 h-48 rounded-[2rem] border border-gold/20 p-2 bg-gradient-to-br from-gold/5 to-transparent">
                               <img
-                                src={selectedFleet.image || selectedPackage.image}
+                                src={getAssetPath(selectedFleet.image || selectedPackage.image)}
                                 alt="Vehicle Selection"
                                 className="w-full h-full object-cover rounded-[1.5rem] opacity-80 group-hover:opacity-100 transition-opacity"
                                 referrerPolicy="no-referrer"

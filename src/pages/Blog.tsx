@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom';
 import { db } from '../lib/firebase';
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 import SEO from '../components/SEO';
-import { formatDate } from '../lib/utils';
+import { formatDate, getAssetPath } from '../lib/utils';
 
 const CATEGORIES = ["All", "Travel Tips", "Business", "Weddings", "Tours", "Industry", "Safety"];
 
@@ -142,7 +142,7 @@ export default function Blog() {
               >
                 <Link to={`/blog/${post.slug}`} className="block overflow-hidden rounded-3xl mb-6 aspect-[16/10] relative">
                   <img
-                    src={post.featuredImage || post.image || null}
+                    src={getAssetPath(post.featuredImage || post.image || null)}
                     alt={post.title}
                     className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                     referrerPolicy="no-referrer"

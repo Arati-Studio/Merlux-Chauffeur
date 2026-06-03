@@ -3,8 +3,6 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { CheckCircle, Loader2, Home, Calendar, Star } from 'lucide-react';
 import SEO from '../components/SEO';
-import { smsService } from '../services/smsService';
-import { emailService } from '../services/emailService';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, addDoc, serverTimestamp, query, where, getDoc, doc, setDoc, onSnapshot, updateDoc } from 'firebase/firestore';
 
@@ -95,6 +93,10 @@ export default function PaymentSuccess() {
           });
           
           // Trigger Notifications
+          const [{ smsService }, { emailService }] = await Promise.all([
+            import('../services/smsService'),
+            import('../services/emailService')
+          ]);
           smsService.notify("booking_created", { ...bookingData, id: sessionId, status: 'confirmed' });
           emailService.notify("booking_created", { ...bookingData, id: sessionId, status: 'confirmed' });
 
@@ -129,6 +131,7 @@ export default function PaymentSuccess() {
 
       // Submit feedback also Notify via Email
       try {
+        const { emailService } = await import('../services/emailService');
         const updatedBookingData = {
           id: bookingId,
           ...bookingDoc,

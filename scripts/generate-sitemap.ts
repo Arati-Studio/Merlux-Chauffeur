@@ -168,6 +168,11 @@ async function generateSitemap() {
     let maxLastmodOffer = formatDate(null);
     let maxLastmodTour = formatDate(null);
 
+    let pageCount = 0;
+    let blogCount = 0;
+    let offerCount = 0;
+    let tourCount = 0;
+
     const writeUrlEntryWithTracking = (
       stream: fs.WriteStream, 
       path: string, 
@@ -197,12 +202,16 @@ async function generateSitemap() {
       });
 
       if (category === 'page') {
+        pageCount++;
         maxLastmodPage = lastmod > maxLastmodPage ? lastmod : maxLastmodPage;
       } else if (category === 'blog') {
+        blogCount++;
         maxLastmodBlog = lastmod > maxLastmodBlog ? lastmod : maxLastmodBlog;
       } else if (category === 'offer') {
+        offerCount++;
         maxLastmodOffer = lastmod > maxLastmodOffer ? lastmod : maxLastmodOffer;
       } else if (category === 'tour') {
+        tourCount++;
         maxLastmodTour = lastmod > maxLastmodTour ? lastmod : maxLastmodTour;
       }
     };
@@ -448,17 +457,19 @@ async function generateSitemap() {
     indexStream.write('<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n');
 
     const subSitemapFiles = [
-      { name: 'page-sitemap.xml', lastmod: maxLastmodPage },
-      { name: 'blog-sitemap.xml', lastmod: maxLastmodBlog },
-      { name: 'offer-sitemap.xml', lastmod: maxLastmodOffer },
-      { name: 'tours-sitemap.xml', lastmod: maxLastmodTour }
+      { name: 'page-sitemap.xml', lastmod: maxLastmodPage, count: pageCount },
+      { name: 'blog-sitemap.xml', lastmod: maxLastmodBlog, count: blogCount },
+      { name: 'offer-sitemap.xml', lastmod: maxLastmodOffer, count: offerCount },
+      { name: 'tours-sitemap.xml', lastmod: maxLastmodTour, count: tourCount }
     ];
 
     subSitemapFiles.forEach(file => {
-      indexStream.write(`  <sitemap>
+      if (file.count > 0) {
+        indexStream.write(`  <sitemap>
     <loc>${SITE_URL}/${file.name}</loc>
     <lastmod>${file.lastmod}</lastmod>
   </sitemap>\n`);
+      }
     });
 
     indexStream.write('</sitemapindex>');
@@ -469,6 +480,27 @@ async function generateSitemap() {
       indexStream.on('error', (err) => reject(err));
     });
 
+    console.log('📄 Generating a single flat sitemap.xml as direct fallback...');
+    const flatSitemapTempPath = path.join(PUBLIC_DIR, 'sitemap.xml.tmp');
+    const flatSitemapStream = fs.createWriteStream(flatSitemapTempPath, { encoding: 'utf8' });
+    flatSitemapStream.write('<?xml version="1.0" encoding="UTF-8"?>\n');
+    flatSitemapStream.write('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n');
+    sitemapHtmlEntries.forEach(entry => {
+      flatSitemapStream.write(`  <url>
+    <loc>${SITE_URL}${entry.path}</loc>
+    <lastmod>${entry.lastmod}</lastmod>
+    <changefreq>${entry.changefreq}</changefreq>
+    <priority>${entry.priority}</priority>
+  </url>\n`);
+    });
+    flatSitemapStream.write('</urlset>');
+    flatSitemapStream.end();
+
+    await new Promise<void>((resolve, reject) => {
+      flatSitemapStream.on('finish', () => resolve());
+      flatSitemapStream.on('error', (err) => reject(err));
+    });
+
     // Move completed sitemaps into public/ and dist/
     const filesToCopy = [
       { temp: pageTempPath, name: 'page-sitemap.xml' },
@@ -476,7 +508,7 @@ async function generateSitemap() {
       { temp: offerTempPath, name: 'offer-sitemap.xml' },
       { temp: toursTempPath, name: 'tours-sitemap.xml' },
       { temp: indexTempPath, name: 'sitemap_index.xml' },
-      { temp: indexTempPath, name: 'sitemap.xml' } // Copy index as sitemap.xml for legacy compatibility
+      { temp: flatSitemapTempPath, name: 'sitemap.xml' } // Dynamic flat sitemap containing all URLs
     ];
 
     filesToCopy.forEach(f => {

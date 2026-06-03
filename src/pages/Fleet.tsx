@@ -4,6 +4,7 @@ import { User, Briefcase, Check, Star, Navigation } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { db } from '../lib/firebase';
 import { collection, getDocs, orderBy, query } from 'firebase/firestore';
+import { cn, getAssetPath } from '../lib/utils';
 import SEO from '../components/SEO';
 
 const DEFAULT_FLEET = [
@@ -17,7 +18,6 @@ const DEFAULT_FLEET = [
     img: 'https://images.unsplash.com/photo-1618843479313-40f8afb4b4d8?q=80&w=2070&auto=format&fit=crop',
     excerpt: 'Perfect for corporate travel and airport transfers for up to 3 passengers.'
   },
-  // ... other defaults if needed, but we prefer Firestore
 ];
 
 export default function Fleet() {
@@ -92,7 +92,7 @@ export default function Fleet() {
                       <div className="absolute -inset-2 md:-inset-4 bg-gold/10 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
                       <div className="relative w-full aspect-video overflow-hidden rounded-[1.5rem] md:rounded-[2.5rem] border border-white/10 group-hover:border-gold/30 transition-colors">
                         <img
-                          src={car.img || car.image}
+                          src={getAssetPath(car.img || car.image)}
                           alt={car.name}
                           className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                           referrerPolicy="no-referrer"
@@ -228,8 +228,4 @@ export default function Fleet() {
       </div>
     </div>
   );
-}
-
-function cn(...inputs: any[]) {
-  return inputs.filter(Boolean).join(' ');
 }

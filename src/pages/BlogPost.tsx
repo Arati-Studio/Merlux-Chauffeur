@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Calendar, User, ArrowLeft, Clock, Share2, Loader2, ArrowRight, Map, Gift, Shield } from 'lucide-react';
 import { useSettings } from '../lib/SettingsContext';
 import { generateDescriptionFromContent } from '../lib/seo';
-import { formatDate } from '../lib/utils';
+import { formatDate, getAssetPath } from '../lib/utils';
 import Comments from '../components/Comments';
 import { FormNotice, NoticeType } from '../components/FormNotice';
 import SEO from '../components/SEO';
@@ -160,14 +160,14 @@ export default function BlogPost() {
         title={post.metaTitle || post.title}
         description={post.metaDescription || post.excerpt || generateDescriptionFromContent(post.content)}
         keywords={Array.isArray(post.keywords) ? post.keywords.join(', ') : post.keywords}
-        ogImage={post.featuredImage || post.image}
+        ogImage={getAssetPath(post.featuredImage || post.image)}
         ogType="article"
         noindex={post.noindex}
         structuredData={{
           "@context": "https://schema.org",
           "@type": "BlogPosting",
           "headline": post.title,
-          "image": [post.featuredImage || post.image],
+          "image": [getAssetPath(post.featuredImage || post.image)],
           "datePublished": post.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
           "author": [{
             "@type": "Organization",
@@ -179,7 +179,7 @@ export default function BlogPost() {
       {/* Back Button and Featured Image Hero */}
       <section className="relative h-[70vh] w-full overflow-hidden">
         <img
-          src={post.featuredImage || post.image}
+          src={getAssetPath(post.featuredImage || post.image)}
           alt={post.title}
           className="w-full h-full object-cover"
           referrerPolicy="no-referrer"
@@ -282,7 +282,7 @@ export default function BlogPost() {
                   {relatedPosts.map((r, i) => (
                     <Link key={r.id} to={`/blog/${r.slug}`} className="group">
                       <div className="aspect-[4/5] rounded-3xl overflow-hidden mb-6 relative">
-                        <img src={r.featuredImage} alt={r.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                        <img src={getAssetPath(r.featuredImage)} alt={r.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
                         <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-all" />
                         <div className="absolute bottom-6 left-6 right-6">
                           <span className="text-gold text-[8px] uppercase tracking-widest font-bold mb-2 block">{r.category}</span>

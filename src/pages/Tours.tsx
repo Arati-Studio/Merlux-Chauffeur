@@ -7,7 +7,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { useJsApiLoader, Autocomplete } from '@react-google-maps/api';
 import { FormNotice, type NoticeType } from '../components/FormNotice';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
-import { cn } from '../lib/utils';
+import { cn, getAssetPath } from '../lib/utils';
 import Logo from '../components/layout/Logo';
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_ID } from '../lib/google-maps';
 import LoginInline from '../components/LoginInline';
@@ -571,7 +571,7 @@ export default function Tours() {
       <SEO
         title={selectedTour ? selectedTour.title : 'Private Tours Melbourne'}
         description={selectedTour ? (selectedTour.seoDescription || selectedTour.shortDescription) : 'Luxury private tours in Melbourne and Victoria.'}
-        ogImage={selectedTour?.image || selectedTour?.featuredImage}
+        ogImage={getAssetPath(selectedTour?.image || selectedTour?.featuredImage)}
         structuredData={selectedTour ? {
           "@context": "https://schema.org",
           "@type": "Service",
@@ -791,7 +791,7 @@ export default function Tours() {
                       {/* Main Image Preview */}
                       <div className="w-full h-[320px] sm:h-[360px] rounded-[2.5rem] overflow-hidden relative group shadow-2xl">
                         <img
-                          src={mainImage || selectedTour.image || selectedTour.featuredImage}
+                          src={getAssetPath(mainImage || selectedTour.image || selectedTour.featuredImage)}
                           alt={selectedTour.title}
                           className="w-full h-full object-cover transition-all duration-700"
                         />
@@ -826,7 +826,7 @@ export default function Tours() {
                                     : "border-white/5 opacity-60 hover:opacity-100"
                                 )}
                               >
-                                <img src={img} className="w-full h-full object-cover" />
+                                <img src={getAssetPath(img)} className="w-full h-full object-cover" />
                               </button>
                             ))}
                         </div>
@@ -908,7 +908,7 @@ export default function Tours() {
                                       </div>
                                       {step.image && (
                                         <div className="w-full md:w-48 aspect-video rounded-2xl overflow-hidden border border-white/10 shrink-0 shadow-2xl">
-                                          <img src={step.image} className="w-full h-full object-cover" />
+                                          <img src={getAssetPath(step.image)} className="w-full h-full object-cover" />
                                         </div>
                                       )}
                                     </div>
@@ -1045,7 +1045,7 @@ export default function Tours() {
                       className="group bg-white/5 border border-white/10 rounded-[2rem] overflow-hidden hover:border-gold/50 transition-all duration-700 cursor-pointer relative"
                     >
                       <div className="aspect-[14/9] overflow-hidden relative">
-                        <img src={tour.image || null} alt={tour.title} className="w-full h-full object-cover transition-transform duration-[1.5s] group-hover:scale-110" referrerPolicy="no-referrer" />
+                        <img src={getAssetPath(tour.image) || null} alt={tour.title} className="w-full h-full object-cover transition-transform duration-[1.5s] group-hover:scale-110" referrerPolicy="no-referrer" />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 group-hover:opacity-40 transition-opacity" />
                         {tour.promoTag && (
                           <div className="absolute top-4 left-4 bg-gold text-black px-4 py-1.5 rounded-full font-bold text-[8px] uppercase tracking-widest border border-white/20">
@@ -1171,7 +1171,7 @@ export default function Tours() {
                             )}
                           >
                             <div className="aspect-[21/9] rounded-2xl overflow-hidden relative">
-                              <img src={f.image || "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&q=80"} className="w-full h-full object-cover transition-transform duration-[1s] group-hover:scale-110" />
+                              <img src={getAssetPath(f.image) || "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&q=80"} className="w-full h-full object-cover transition-transform duration-[1s] group-hover:scale-110" />
                               <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
 
                               {/* Category Badge Top Right */}
@@ -1321,7 +1321,7 @@ export default function Tours() {
                             </p>
                             <div className="flex items-center gap-4">
                               <div className="w-16 h-16 rounded-xl overflow-hidden border border-white/10 shrink-0 shadow-lg">
-                                <img src={selectedFleet.image} className="w-full h-full object-cover" />
+                                <img src={getAssetPath(selectedFleet.image)} className="w-full h-full object-cover" />
                               </div>
                               <div>
                                 <p className="text-base font-display text-white leading-tight">
@@ -1698,7 +1698,7 @@ export default function Tours() {
                       <div className="space-y-4 mb-10 glass p-6 rounded-3xl border border-white/5">
                         <div className="flex items-center gap-4 border-b border-white/5 pb-3">
                           <div className="w-12 h-12 rounded-xl overflow-hidden border border-white/10">
-                            <img src={selectedFleet.image} className="w-full h-full object-cover" />
+                            <img src={getAssetPath(selectedFleet.image)} className="w-full h-full object-cover" />
                           </div>
                           <div>
                             <p className="text-[8px] uppercase tracking-widest text-white/30 font-bold">Elite Fleet</p>

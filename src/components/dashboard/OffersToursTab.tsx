@@ -7,7 +7,7 @@ import {
   Plus as PlusIcon, Trash2 as TrashIcon, Info as InfoIcon,
   LayoutGrid as LayoutGridIcon, RefreshCw, Download
 } from 'lucide-react';
-import { cn } from '../../lib/utils';
+import { cn, getAssetPath } from '../../lib/utils';
 import { db, handleFirestoreError, OperationType } from '../../lib/firebase';
 import { collection, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, setDoc, query, onSnapshot, orderBy } from 'firebase/firestore';
 
@@ -496,7 +496,7 @@ const OffersToursTab: React.FC<OffersToursTabProps> = ({
                   <div key={tour.id || `tour-${idx}`} className={cn("glass rounded-2xl overflow-hidden border transition-all flex flex-col group relative", (selectedTours || []).includes(tour.id) ? "border-gold shadow-[0_0_15px_rgba(212,175,55,0.2)]" : "border-white/5 hover:border-gold/30")}>
                     <div className="relative h-40 group rounded overflow-hidden shadow-lg">
                       <img
-                        src={tour.image || "https://picsum.photos/seed/tour/600/300"}
+                        src={getAssetPath(tour.image) || "https://picsum.photos/seed/tour/600/300"}
                         alt={tour.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                         referrerPolicy="no-referrer"
@@ -656,7 +656,7 @@ const OffersToursTab: React.FC<OffersToursTabProps> = ({
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
-                              <img src={tour.image || 'https://picsum.photos/seed/tour/60/60'} alt={tour.title} className="w-12 h-12 rounded-lg object-cover" />
+                              <img src={getAssetPath(tour.image || tour.featuredImage) || 'https://picsum.photos/seed/tour/60/60'} alt={tour.title} className="w-12 h-12 rounded-lg object-cover" />
                               <div>
                                 <p className="text-sm font-bold text-white mb-0.5 flex items-center gap-2">
                                   {tour.title}
@@ -934,7 +934,7 @@ const OffersToursTab: React.FC<OffersToursTabProps> = ({
 
                   <div className="h-40 relative">
                     <img
-                      src={offer.image || 'https://picsum.photos/seed/offer/600/300'}
+                      src={getAssetPath(offer.image) || 'https://picsum.photos/seed/offer/600/300'}
                       alt={offer.title}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     />
@@ -1089,7 +1089,7 @@ const OffersToursTab: React.FC<OffersToursTabProps> = ({
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
-                              <img src={offer.image || 'https://picsum.photos/seed/offer/60/60'} alt={offer.title} className="w-12 h-12 rounded-lg object-cover" />
+                              <img src={getAssetPath(offer.image) || 'https://picsum.photos/seed/offer/60/60'} alt={offer.title} className="w-12 h-12 rounded-lg object-cover" />
                               <div>
                                 <p className="text-sm font-bold text-white mb-0.5">{offer.title}</p>
                                 <p className="text-[10px] text-white/50 line-clamp-1">"{offer.description}"</p>

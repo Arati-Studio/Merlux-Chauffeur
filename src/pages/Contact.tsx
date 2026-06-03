@@ -4,7 +4,6 @@ import { Mail, Phone, MapPin, Send, Clock, Globe, MessageSquare, Loader2, CheckC
 import { useSettings } from '../lib/SettingsContext';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { emailService } from '../services/emailService';
 import SEO from '../components/SEO';
 
 export default function Contact() {
@@ -45,6 +44,7 @@ export default function Contact() {
 
       // 2. Dispatch inquiry emails to the Contact Email and the Customer
       try {
+        const { emailService } = await import('../services/emailService');
         const targetEmail = contact.email || contact.bookingEmail || 'bookings@merlux.com.au';
         
         // Admin notification email html

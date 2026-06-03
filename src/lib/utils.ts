@@ -52,3 +52,16 @@ export function formatDate(date: any): string {
 
   return '';
 }
+
+export function getAssetPath(path: string | null | undefined): string {
+  if (!path) return '';
+  if (path.startsWith('http') || path.startsWith('data:')) return path;
+  
+  let formatted = path;
+  if (!path.startsWith('/')) {
+    formatted = '/' + path;
+  }
+  
+  // Encode spaces for robustness
+  return formatted.replace(/ /g, '%20');
+}

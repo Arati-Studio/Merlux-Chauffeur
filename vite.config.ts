@@ -24,17 +24,28 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       // Raise warning threshold (optional)
-      chunkSizeWarningLimit: 1500,
+      chunkSizeWarningLimit: 600,
 
       rollupOptions: {
         output: {
-manualChunks: {
-  reactCore: ["react", "react-dom"],
-  reactRouter: ["react-router-dom"],
-  animations: ["motion/react"],
-  emailService: [path.resolve(__dirname, "src/services/emailService.ts")],
-  smsService: [path.resolve(__dirname, "src/services/smsService.ts")],
-}
+          manualChunks(id) {
+            if (id.includes("node_modules")) {
+              if (id.includes("react-router-dom")) return "reactRouter";
+              if (id.includes("react") || id.includes("react-dom"))
+                return "reactCore";
+              if (id.includes("motion")) return "animations";
+              if (id.includes("firebase")) return "firebase";
+              if (id.includes("recharts")) return "recharts";
+              if (id.includes("@stripe") || id.includes("stripe-js"))
+                return "stripe";
+              if (id.includes("twilio")) return "twilio";
+              if (id.includes("@react-google-maps")) return "googleMaps";
+              if (id.includes("@google/genai")) return "genai";
+              if (id.includes("date-fns")) return "dateFns";
+              if (id.includes("lucide-react")) return "lucide";
+              return "vendor";
+            }
+          },
         },
       },
     },

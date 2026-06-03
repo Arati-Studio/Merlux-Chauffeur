@@ -7,11 +7,10 @@ import {
   Map as MapIcon, UserCheck, Users, CircleArrowOutUpRight
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import { cn, formatDate } from '../lib/utils';
+import { cn, formatDate, getAssetPath } from '../lib/utils';
 import { useSettings } from '../lib/SettingsContext';
 import { collection, getDocs, query, limit, orderBy, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { emailService } from '../services/emailService';
 import * as Icons from 'lucide-react';
 import SEO from '../components/SEO';
 
@@ -109,6 +108,7 @@ export default function Home() {
 
       // 2. Dispatch inquiry emails to the Contact Email and the Customer
       try {
+        const { emailService } = await import('../services/emailService');
         const targetEmail = contact.email || contact.bookingEmail || 'bookings@merlux.com.au';
         
         // Admin notification email html
@@ -567,7 +567,7 @@ export default function Home() {
                 >
                   <div className="rounded-[3rem] overflow-hidden h-full relative group border border-white/10 hover:border-gold/30 transition-colors">
                     <img
-                      src={fleetList[currentFleet]?.images?.[0] || fleetList[currentFleet]?.img}
+                      src={getAssetPath(fleetList[currentFleet]?.images?.[0] || fleetList[currentFleet]?.img)}
                       alt={fleetList[currentFleet]?.name}
                       onError={handleImageError}
                       className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
@@ -680,7 +680,7 @@ export default function Home() {
                   {/* Image */}
                   <div className="h-52 relative overflow-hidden">
                     <img
-                      src={blog.image || blog.img}
+                      src={getAssetPath(blog.image || blog.img)}
                       alt={blog.title}
                       onError={handleImageError}
                       className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
@@ -747,7 +747,7 @@ export default function Home() {
                 >
                   <div className="aspect-[14/9] overflow-hidden relative">
                     <img
-                      src={tour.image || tour.img || "https://images.unsplash.com/photo-1506973035872-a4ec16b8e8d9?q=80&w=2070&auto=format&fit=crop"}
+                      src={getAssetPath(tour.image || tour.img || "https://images.unsplash.com/photo-1506973035872-a4ec16b8e8d9?q=80&w=2070&auto=format&fit=crop")}
                       alt={tour.title || tour.name}
                       onError={handleImageError}
                       className="w-full h-full object-cover transition-transform duration-[1.5s] group-hover:scale-110"

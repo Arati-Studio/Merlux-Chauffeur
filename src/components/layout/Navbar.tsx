@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Home, Gift, MapPin, Briefcase, MoreHorizontal, User, CalendarDays, LogOut, ChevronDown, LogIn, ShieldCheck, Truck, UserCircle, LayoutDashboard } from 'lucide-react';
+import { Home, Gift, MapPin, Briefcase, MoreHorizontal, User, CalendarDays, LogOut, ChevronDown, LogIn, ShieldCheck, Truck, UserCircle, LayoutDashboard, Search } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { cn } from '../../lib/utils';
 import { auth, db } from '../../lib/firebase';
@@ -353,6 +353,18 @@ export default function Navbar() {
             )}
 
             <div className="flex items-center md:gap-4 lg:gap-6">
+              <button 
+                id="navbar-search-trigger"
+                onClick={() => window.dispatchEvent(new Event('open-search-dialog'))}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-white/70 hover:text-gold hover:border-gold/50 hover:bg-white/[0.08] transition-all text-[9px] lg:text-xs font-bold uppercase tracking-wider cursor-pointer"
+                title="Search Site (Ctrl+K)"
+              >
+                <Search size={14} className="text-gold" />
+                <span className="hidden lg:inline flex items-center gap-1">
+                  <span>Search</span>
+                </span>
+              </button>
+
               {user ? (
                 <div className="flex items-center gap-2 lg:gap-4">
                   <div className="relative group">
@@ -406,6 +418,15 @@ export default function Navbar() {
 
           {/* Mobile Header Actions */}
           <div className="flex items-center gap-3 md:hidden">
+            <button
+              id="mobile-search-trigger"
+              onClick={() => window.dispatchEvent(new Event('open-search-dialog'))}
+              className="border border-gold/40 rounded-md p-1.5 shadow-sm bg-black/60 text-gold hover:bg-gold hover:text-black transition-colors cursor-pointer"
+              title="Search Site"
+            >
+              <Search size={16} />
+            </button>
+
             {user ? (
               <Link
                 to="/app"
