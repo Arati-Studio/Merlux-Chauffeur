@@ -152,6 +152,16 @@ export default function Offers() {
   }, []);
 
   useEffect(() => {
+    if (systemSettings) {
+      if (systemSettings.allowStripeCardPayment === false && systemSettings.allowCashPayment !== false && paymentMethod === 'stripe') {
+        setPaymentMethod('cash');
+      } else if (systemSettings.allowCashPayment === false && systemSettings.allowStripeCardPayment !== false && paymentMethod === 'cash') {
+        setPaymentMethod('stripe');
+      }
+    }
+  }, [systemSettings, paymentMethod]);
+
+  useEffect(() => {
     const q = query(collection(db, 'offers'), where('active', '==', true));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const parsedOffers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -1198,27 +1208,32 @@ export default function Offers() {
 
                         <div className="mt-12 space-y-6">
                           <h3 className="text-gold text-xs uppercase tracking-widest font-bold">Secure Payment Method</h3>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            {[
-                              { id: 'stripe', label: 'Stripe Pay', sub: 'Instant Update', icon: CreditCard },
-                              { id: 'cash', label: 'Cash Payment', sub: 'Pay on Arrival', icon: Banknote }
-                            ].map((p) => (
-                              <button
-                                key={p.id}
-                                onClick={() => setPaymentMethod(p.id as any)}
-                                className={cn(
-                                  "p-6 rounded-2xl border transition-all text-left group",
-                                  paymentMethod === p.id ? "bg-gold border-gold" : "bg-white/5 border-white/10 hover:border-gold/50"
-                                )}
-                              >
-                                <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center mb-4 transition-all", paymentMethod === p.id ? "bg-black text-gold" : "bg-white/5 text-white/20 group-hover:text-gold")}>
-                                  <p.icon size={18} />
-                                </div>
-                                <p className={cn("text-[9px] uppercase font-bold tracking-widest", paymentMethod === p.id ? "text-black" : "text-white/30")}>{p.label}</p>
-                                <p className={cn("text-[8px] uppercase font-bold opacity-40", paymentMethod === p.id ? "text-black" : "text-gold")}>{p.sub}</p>
-                              </button>
-                            ))}
-                          </div>
+                          {(() => {
+                            const paymentMethodsList = [
+                              ...(systemSettings?.allowStripeCardPayment !== false ? [{ id: 'stripe', label: 'Stripe Pay', sub: 'Instant Update', icon: CreditCard }] : []),
+                              ...(systemSettings?.allowCashPayment !== false ? [{ id: 'cash', label: 'Cash Payment', sub: 'Pay on Arrival', icon: Banknote }] : [])
+                            ];
+                            return (
+                              <div className={cn("grid gap-4", paymentMethodsList.length === 1 ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2")}>
+                                {paymentMethodsList.map((p) => (
+                                  <button
+                                    key={p.id}
+                                    onClick={() => setPaymentMethod(p.id as any)}
+                                    className={cn(
+                                      "p-6 rounded-2xl border transition-all text-left group",
+                                      paymentMethod === p.id ? "bg-gold border-gold" : "bg-white/5 border-white/10 hover:border-gold/50"
+                                    )}
+                                  >
+                                    <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center mb-4 transition-all", paymentMethod === p.id ? "bg-black text-gold" : "bg-white/5 text-white/20 group-hover:text-gold")}>
+                                      <p.icon size={18} />
+                                    </div>
+                                    <p className={cn("text-[9px] uppercase font-bold tracking-widest", paymentMethod === p.id ? "text-black" : "text-white/30")}>{p.label}</p>
+                                    <p className={cn("text-[8px] uppercase font-bold opacity-40", paymentMethod === p.id ? "text-black" : "text-gold")}>{p.sub}</p>
+                                  </button>
+                                ))}
+                              </div>
+                            );
+                          })()}
                         </div>
 
                         <div className="mt-16">

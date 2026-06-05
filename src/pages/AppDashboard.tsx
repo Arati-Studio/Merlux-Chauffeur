@@ -123,7 +123,7 @@ export default function AppDashboard() {
   const navItems = [
     { id: 'bookings', label: 'Bookings', icon: Car, roles: ['admin', 'driver', 'customer'] },
     { id: 'analytics', label: 'Analytics', icon: BarChart3, roles: ['admin', 'driver', 'customer'] },
-    { id: 'calendar', label: 'Calendar', icon: CalendarRange, roles: ['admin'] },
+    { id: 'calendar', label: 'Calendar', icon: CalendarRange, roles: ['admin', 'driver', 'customer'] },
     { id: 'users', label: 'Users', icon: Users, roles: ['admin'] },
     { id: 'profile', label: 'Profile', icon: UserCog, roles: ['admin', 'driver', 'customer'] },
     { id: 'management', label: 'Management', icon: Settings, roles: ['admin'] },

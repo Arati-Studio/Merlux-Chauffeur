@@ -3,7 +3,7 @@ import { cn } from '../../lib/utils';
 import {
   Shield, Car, User, Loader2, Save, Mail,
   DollarSign, XCircle, CalendarCog, Users, CheckCircle, Star, AlertCircle, Award, PiggyBank, Activity, MessageSquare, Clock,
-  UploadCloud, FileText, Check, Eye
+  UploadCloud, FileText, Check, Eye, ExternalLink
 } from 'lucide-react';
 import { db, auth } from '../../lib/firebase';
 import { doc, onSnapshot, updateDoc, serverTimestamp, collection, query, where, getDocs, writeBatch, limit } from 'firebase/firestore';
@@ -41,6 +41,9 @@ export default function ProfileTab({
   const [newEmail, setNewEmail] = useState('');
   const [isUpdatingEmail, setIsUpdatingEmail] = useState(false);
 
+  // Google Products Gmail state
+  const [googleLinkGmail, setGoogleLinkGmail] = useState('');
+
   const currentProfile = localProfile || globalUserProfile;
 
   const [stats, setStats] = useState<any>(null);
@@ -55,6 +58,16 @@ export default function ProfileTab({
         if (data.name) setProfileName(data.name);
         if (data.phone) setProfilePhone(data.phone);
         if (data.address) setProfileAddress(data.address);
+        
+        // Populate google link gmail
+        if (data.googleLinkGmail) {
+          setGoogleLinkGmail(data.googleLinkGmail);
+        } else {
+          const defaultEmail = data.email || user?.email || '';
+          if (defaultEmail.toLowerCase().endsWith('@gmail.com') || defaultEmail.toLowerCase().endsWith('@googlemail.com')) {
+            setGoogleLinkGmail(defaultEmail);
+          }
+        }
         
         // Populate driver document details
         if (data.driverLicenseNumber) setDriverLicenseNumber(data.driverLicenseNumber);
@@ -244,12 +257,21 @@ export default function ProfileTab({
       return;
     }
 
+    if (googleLinkGmail) {
+      const cleanGmail = googleLinkGmail.trim().toLowerCase();
+      if (!cleanGmail.endsWith('@gmail.com') && !cleanGmail.endsWith('@googlemail.com')) {
+        showDashboardNotice('error', 'Only standard Google Gmail accounts (@gmail.com or @googlemail.com) are allowed for Google Related Product Link purposes.');
+        return;
+      }
+    }
+
     setIsUpdatingProfile(true);
     try {
       const updateData: any = {
         name: profileName,
         phone: profilePhone,
         address: profileAddress,
+        googleLinkGmail: googleLinkGmail.trim().toLowerCase(),
         updatedAt: serverTimestamp()
       };
 
@@ -895,6 +917,87 @@ export default function ProfileTab({
           </div>
         </>
       )}
+
+      {/* Divider */}
+      <div className="border-t border-white/5" />
+
+      {/* Google Products Link Gmail Settings */}
+      <div>
+        <h4 className="text-sm font-bold text-gold uppercase tracking-widest mb-6 flex items-center gap-2 font-display">
+          <CalendarCog size={16} /> Google Products Association
+        </h4>
+        <div className="space-y-4">
+          <div className="bg-gold/5 border border-gold/10 rounded-2xl p-4 flex gap-3">
+            <AlertCircle className="text-gold shrink-0 w-5 h-5 mt-0.5" />
+            <div className="space-y-1">
+              <h5 className="text-xs font-bold text-gold uppercase tracking-wider">Purpose-Specific Google Workspace Gmail</h5>
+              <p className="text-[11px] text-white/70 leading-relaxed">
+                Provide a standard Google Gmail address below to link Google related products (Google Calendar, Notes, Google Drive). <strong>Only standard Google Gmail accounts (@gmail.com or @googlemail.com) are allowed.</strong> Non-Gmail accounts are not permitted to use Google Product integrations to ensure verification and security.
+              </p>
+            </div>
+          </div>
+          <div>
+            <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-2 block">Link Purpose Gmail</label>
+            <input
+              type="text"
+              value={googleLinkGmail}
+              onChange={(e) => setGoogleLinkGmail(e.target.value)}
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-gold transition-all text-white"
+              placeholder="e.g. driver-account@gmail.com"
+            />
+          </div>
+
+          {googleLinkGmail && (googleLinkGmail.toLowerCase().endsWith('@gmail.com') || googleLinkGmail.toLowerCase().endsWith('@googlemail.com')) ? (
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 block mt-2">Linked Google Workspace Products</label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <a
+                  href="https://calendar.google.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between bg-white/5 border border-white/5 hover:border-gold/30 rounded-xl p-3 text-xs font-semibold text-white/80 hover:text-white hover:bg-white/10 transition-all group"
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                    Google Calendar
+                  </span>
+                  <ExternalLink size={12} className="text-white/40 group-hover:text-gold" />
+                </a>
+
+                <a
+                  href="https://keep.google.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between bg-white/5 border border-white/5 hover:border-gold/30 rounded-xl p-3 text-xs font-semibold text-white/80 hover:text-white hover:bg-white/10 transition-all group"
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse" />
+                    Google Notes (Keep)
+                  </span>
+                  <ExternalLink size={12} className="text-white/40 group-hover:text-gold" />
+                </a>
+
+                <a
+                  href="https://drive.google.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between bg-white/5 border border-white/5 hover:border-gold/30 rounded-xl p-3 text-xs font-semibold text-white/80 hover:text-white hover:bg-white/10 transition-all group"
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                    Google Drive
+                  </span>
+                  <ExternalLink size={12} className="text-white/40 group-hover:text-gold" />
+                </a>
+              </div>
+            </div>
+          ) : googleLinkGmail ? (
+            <div className="text-[10px] text-red-400 font-semibold uppercase tracking-wider mt-1">
+              ⚠️ Linking is disabled. Access to Workspace products is restricted to verified standard Gmail accounts only.
+            </div>
+          ) : null}
+        </div>
+      </div>
 
       {/* Divider */}
       <div className="border-t border-white/5" />

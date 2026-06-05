@@ -54,18 +54,23 @@ export default function Navbar() {
     const handleScroll = () => setScrolled(window.scrollY > 50);
     window.addEventListener('scroll', handleScroll);
 
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    let unsubscribeProfile: (() => void) | null = null;
+
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
       setUser(user);
+      if (unsubscribeProfile) {
+        unsubscribeProfile();
+        unsubscribeProfile = null;
+      }
       if (user) {
-        try {
-          const userRef = doc(db, 'users', user.uid);
-          const userSnap = await getDoc(userRef);
+        const userRef = doc(db, 'users', user.uid);
+        unsubscribeProfile = onSnapshot(userRef, (userSnap) => {
           if (userSnap.exists()) {
             setUserProfile(userSnap.data());
           }
-        } catch (err) {
+        }, (err) => {
           console.error('Error fetching user profile in Navbar:', err);
-        }
+        });
       } else {
         setUserProfile(null);
       }
@@ -92,6 +97,9 @@ export default function Navbar() {
       window.removeEventListener('scroll', handleScroll);
       document.removeEventListener('mousedown', handleClickOutside);
       unsubscribe();
+      if (unsubscribeProfile) {
+        (unsubscribeProfile as any)();
+      }
       unsubscribeSettings();
     };
   }, []);

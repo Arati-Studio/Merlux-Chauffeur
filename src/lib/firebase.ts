@@ -11,7 +11,7 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = initializeFirestore(app, {
   localCache: persistentLocalCache()
-}, firebaseConfig.firestoreDatabaseId);
+}, (firebaseConfig as any).firestoreDatabaseId);
 
 export const storage = getStorage(app);
 

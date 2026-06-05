@@ -1254,7 +1254,18 @@ const OffersToursTab: React.FC<OffersToursTabProps> = ({
                       <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-1 block">Reduction Type</label>
                       <select
                         value={editingOffer?.discountType || 'percentage'}
-                        onChange={(e) => setEditingOffer({ ...editingOffer, discountType: e.target.value })}
+                        onChange={(e) => {
+                          const newType = e.target.value;
+                          const updatedFleets = (editingOffer?.fleets || []).map((f: any) => {
+                            const base = Number(f.basePrice) || 0;
+                            const dVal = Number(editingOffer?.discountValue) || 0;
+                            const salePrice = newType === 'percentage'
+                              ? Math.round(base * (1 - dVal / 100))
+                              : Math.max(0, base - dVal);
+                            return { ...f, salePrice };
+                          });
+                          setEditingOffer({ ...editingOffer, discountType: newType, fleets: updatedFleets });
+                        }}
                         className="custom-select w-full"
                       >
                         <option value="percentage">Percentage (%)</option>
@@ -1266,7 +1277,18 @@ const OffersToursTab: React.FC<OffersToursTabProps> = ({
                       <input
                         type="number"
                         value={editingOffer?.discountValue || ''}
-                        onChange={(e) => setEditingOffer({ ...editingOffer, discountValue: Number(e.target.value) })}
+                        onChange={(e) => {
+                          const dVal = Number(e.target.value);
+                          const updatedFleets = (editingOffer?.fleets || []).map((f: any) => {
+                            const base = Number(f.basePrice) || 0;
+                            const type = editingOffer?.discountType || 'percentage';
+                            const salePrice = type === 'percentage'
+                              ? Math.round(base * (1 - dVal / 100))
+                              : Math.max(0, base - dVal);
+                            return { ...f, salePrice };
+                          });
+                          setEditingOffer({ ...editingOffer, discountValue: dVal, fleets: updatedFleets });
+                        }}
                         className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-gold transition-all"
                         placeholder={editingOffer?.discountType === 'percentage' ? '15' : '20'}
                       />

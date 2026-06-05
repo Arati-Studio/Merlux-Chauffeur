@@ -173,6 +173,16 @@ export default function Tours() {
   const [selectedExtras, setSelectedExtras] = useState<Record<string, number>>({});
   const [quantity, setQuantity] = useState(1);
   const [paymentType, setPaymentType] = useState<'cash' | 'stripe'>('stripe');
+
+  useEffect(() => {
+    if (systemSettings) {
+      if (systemSettings.allowStripeCardPayment === false && systemSettings.allowCashPayment !== false && paymentType === 'stripe') {
+        setPaymentType('cash');
+      } else if (systemSettings.allowCashPayment === false && systemSettings.allowStripeCardPayment !== false && paymentType === 'cash') {
+        setPaymentType('stripe');
+      }
+    }
+  }, [systemSettings, paymentType]);
   const [expandedItinerary, setExpandedItinerary] = useState<number | null>(0);
   const [mainImage, setMainImage] = useState<string>('');
   const [details, setDetails] = useState({
@@ -1823,27 +1833,32 @@ export default function Tours() {
                   </div>
 
                   {/* Payment Selection */}
-                  <div className="grid grid-cols-2 gap-4 mb-8">
-                    {[
-                      { id: 'stripe', label: 'Digital Payment', sub: 'Instant Update', icon: CreditCard },
-                      { id: 'cash', label: 'Cash Payment', sub: 'Pay on Arrival', icon: BanknoteIcon }
-                    ].map((p: any) => (
-                      <button
-                        key={p.id}
-                        onClick={() => setPaymentType(p.id)}
-                        className={cn(
-                          "p-6 rounded-2xl border transition-all text-left group",
-                          paymentType === p.id ? "bg-gold border-gold" : "bg-white/5 border-white/10 hover:border-gold/50"
-                        )}
-                      >
-                        <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center mb-4 transition-all", paymentType === p.id ? "bg-black text-gold" : "bg-white/5 text-white/20 group-hover:text-gold")}>
-                          {p.id === 'stripe' ? <CreditCard size={18} /> : <BanknoteIcon size={18} />}
-                        </div>
-                        <p className={cn("text-[9px] uppercase font-bold tracking-widest", paymentType === p.id ? "text-black" : "text-white/30")}>{p.label}</p>
-                        <p className={cn("text-[8px] uppercase font-bold opacity-40", paymentType === p.id ? "text-black" : "text-gold")}>{p.sub}</p>
-                      </button>
-                    ))}
-                  </div>
+                  {(() => {
+                    const paymentTypesList = [
+                      ...(systemSettings?.allowStripeCardPayment !== false ? [{ id: 'stripe', label: 'Digital Payment', sub: 'Instant Update', icon: CreditCard }] : []),
+                      ...(systemSettings?.allowCashPayment !== false ? [{ id: 'cash', label: 'Cash Payment', sub: 'Pay on Arrival', icon: BanknoteIcon }] : [])
+                    ];
+                    return (
+                      <div className={cn("grid gap-4 mb-8", paymentTypesList.length === 1 ? "grid-cols-1" : "grid-cols-2")}>
+                        {paymentTypesList.map((p: any) => (
+                          <button
+                            key={p.id}
+                            onClick={() => setPaymentType(p.id)}
+                            className={cn(
+                              "p-6 rounded-2xl border transition-all text-left group",
+                              paymentType === p.id ? "bg-gold border-gold" : "bg-white/5 border-white/10 hover:border-gold/50"
+                            )}
+                          >
+                            <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center mb-4 transition-all", paymentType === p.id ? "bg-black text-gold" : "bg-white/5 text-white/20 group-hover:text-gold")}>
+                              {p.id === 'stripe' ? <CreditCard size={18} /> : <BanknoteIcon size={18} />}
+                            </div>
+                            <p className={cn("text-[9px] uppercase font-bold tracking-widest", paymentType === p.id ? "text-black" : "text-white/30")}>{p.label}</p>
+                            <p className={cn("text-[8px] uppercase font-bold opacity-40", paymentType === p.id ? "text-black" : "text-gold")}>{p.sub}</p>
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  })()}
 
                   <button
                     onClick={handleBooking}

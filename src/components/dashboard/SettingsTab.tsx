@@ -238,39 +238,109 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
       const text = await pendingImportFile.text();
       const data = JSON.parse(text);
       const batch = writeBatch(db);
-      let count = 0;
+      
+      let newCount = 0;
+      let overwriteCount = 0;
+      let skipCount = 0;
+
+      // Deep compare helper to see if the backup doc differs from existing DB doc
+      const isIdentical = (existingDoc: any, backupDoc: any) => {
+        const keysToCompare = Object.keys(backupDoc).filter(k => k !== 'updatedAt' && k !== 'createdAt' && k !== 'ratingAt');
+        for (const k of keysToCompare) {
+          let val1 = existingDoc[k];
+          let val2 = backupDoc[k];
+          
+          // Handle Firestore Timestamps safely
+          if (val1 && typeof val1 === 'object' && 'seconds' in val1) {
+            val1 = val1.seconds;
+          }
+          if (val2 && typeof val2 === 'object' && 'seconds' in val2) {
+            val2 = val2.seconds;
+          }
+          
+          if (JSON.stringify(val1) !== JSON.stringify(val2)) {
+            return false;
+          }
+        }
+        return true;
+      };
+
+      // Fetch existing documents for all collections involved in the backup payload to run comparison
+      const existingData: Record<string, any[]> = {};
+      const colIds = Object.keys(data);
+      for (const colId of colIds) {
+        try {
+          const snapshot = await getDocs(collection(db, colId));
+          existingData[colId] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        } catch (colErr) {
+          console.warn(`Could not fetch existing docs for "${colId}", assuming empty:`, colErr);
+          existingData[colId] = [];
+        }
+      }
 
       for (const [colId, docs] of Object.entries(data)) {
+        let normalizedDocs: any[] = [];
         if (colId === 'settings') {
           if (Array.isArray(docs)) {
-            for (const d of docs) {
-              const { id, ...rest } = d;
-              batch.set(doc(db, 'settings', id), { ...rest, updatedAt: serverTimestamp() });
-              count++;
-            }
+            normalizedDocs = docs;
           } else if (docs && typeof docs === 'object') {
             // Backward compatibility for legacy backup files where settings was stored as { system: { ... } }
-            for (const [docId, docData] of Object.entries(docs)) {
-              if (docData && typeof docData === 'object') {
-                batch.set(doc(db, 'settings', docId), { ...(docData as any), updatedAt: serverTimestamp() });
-                count++;
-              }
-            }
+            normalizedDocs = Object.entries(docs).map(([id, val]) => ({ id, ...(val as any) }));
           }
-          continue;
+        } else if (Array.isArray(docs)) {
+          normalizedDocs = docs;
         }
 
-        if (Array.isArray(docs)) {
-          for (const d of docs) {
-            const { id, ...rest } = d;
+        const existingColDocs = existingData[colId] || [];
+
+        for (const d of normalizedDocs) {
+          const { id, ...rest } = d;
+          if (!id) continue;
+
+          // Special Offers Auto-Calculate Sale Prices of Fleets on Import time based on discountValue & discountType
+          if (colId === 'offers') {
+            const discType = rest.discountType || 'percentage';
+            const discVal = Number(rest.discountValue) || 0;
+            if (Array.isArray(rest.fleets)) {
+              rest.fleets = rest.fleets.map((f: any) => {
+                const base = Number(f.basePrice) || 0;
+                const salePrice = discType === 'percentage'
+                  ? Math.round(base * (1 - discVal / 100))
+                  : Math.max(0, base - discVal);
+                return { ...f, salePrice };
+              });
+            }
+          }
+
+          const existingDoc = existingColDocs.find(ex => ex.id === id);
+          if (!existingDoc) {
+            // New Document
             batch.set(doc(db, colId, id), { ...rest, updatedAt: serverTimestamp() });
-            count++;
+            newCount++;
+          } else {
+            // Document exists, check if content changed
+            if (isIdentical(existingDoc, rest)) {
+              // Same exact contents -> SKIP
+              skipCount++;
+            } else {
+              // Different contents -> Overwrite
+              batch.set(doc(db, colId, id), { ...rest, updatedAt: serverTimestamp() });
+              overwriteCount++;
+            }
           }
         }
       }
 
       await batch.commit();
-      showDashboardNotice('success', `Imported ${count} documents successfully`, 'Import Complete');
+
+      const stats = { new: newCount, overwritten: overwriteCount, skipped: skipCount };
+      setImportStats(stats);
+
+      showDashboardNotice(
+        'success', 
+        `Import Completed. Created: ${newCount} | Overwritten: ${overwriteCount} | Skipped (Identical): ${skipCount}`, 
+        'Restore Complete'
+      );
       setPendingImportFile(null);
     } catch (err) {
       console.error('Import error:', err);
@@ -1856,6 +1926,74 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
               </div>
             </div>
 
+            {/* Allowed Payment Methods */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-1.5 h-4 bg-gold rounded-full" />
+                <h4 className="text-[10px] uppercase tracking-[0.2em] font-black text-white/40">
+                  Allowed Payment Methods
+                </h4>
+              </div>
+
+              <div className="flex items-center justify-between p-5 bg-white/[0.03] rounded-2xl border border-white/5 hover:border-gold/20 transition-all group">
+                <div>
+                  <p className="text-sm font-bold group-hover:text-gold transition-colors">Allow Stripe / Card Payment</p>
+                  <p className="text-[9px] text-white/30 uppercase tracking-widest font-bold mt-0.5">
+                    Enable credit & debit card payments via Stripe
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSystemSettings({
+                      ...systemSettings,
+                      allowStripeCardPayment: systemSettings?.allowStripeCardPayment !== false ? false : true,
+                    })
+                  }
+                  className={cn(
+                    "w-11 h-6 rounded-full transition-all relative shrink-0",
+                    systemSettings?.allowStripeCardPayment !== false ? "bg-gold" : "bg-white/10"
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "absolute top-1 w-4 h-4 rounded-full bg-white transition-all shadow-sm",
+                      systemSettings?.allowStripeCardPayment !== false ? "right-1" : "left-1"
+                    )}
+                  />
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between p-5 bg-white/[0.03] rounded-2xl border border-white/5 hover:border-gold/20 transition-all group">
+                <div>
+                  <p className="text-sm font-bold group-hover:text-gold transition-colors">Allow Cash Payment</p>
+                  <p className="text-[9px] text-white/30 uppercase tracking-widest font-bold mt-0.5">
+                    Enable driver-direct cash collections
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSystemSettings({
+                      ...systemSettings,
+                      allowCashPayment: systemSettings?.allowCashPayment !== false ? false : true,
+                    })
+                  }
+                  className={cn(
+                    "w-11 h-6 rounded-full transition-all relative shrink-0",
+                    systemSettings?.allowCashPayment !== false ? "bg-gold" : "bg-white/10"
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "absolute top-1 w-4 h-4 rounded-full bg-white transition-all shadow-sm",
+                      systemSettings?.allowCashPayment !== false ? "right-1" : "left-1"
+                    )}
+                  />
+                </button>
+              </div>
+            </div>
+
             {/* Financial Settings */}
             <div className="space-y-4">
               <div className="flex items-center gap-2 mb-2">
@@ -2826,7 +2964,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
                   </div>
                   <div className="flex flex-col items-center p-3 bg-white/5 rounded-xl border border-white/10">
                     <span className="text-lg font-display text-white/40">{importStats.skipped || 0}</span>
-                    <span className="text-[7px] uppercase font-black text-white/40 tracking-tighter">Cancelled</span>
+                    <span className="text-[7px] uppercase font-black text-white/40 tracking-tighter">Skipped</span>
                   </div>
                 </div>
               </div>

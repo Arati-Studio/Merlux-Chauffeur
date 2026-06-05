@@ -751,6 +751,16 @@ export default function Booking() {
   }, []);
 
   useEffect(() => {
+    if (settings) {
+      if (settings.allowStripeCardPayment === false && settings.allowCashPayment !== false && paymentMethod === "card") {
+        setPaymentMethod("cash");
+      } else if (settings.allowCashPayment === false && settings.allowStripeCardPayment !== false && paymentMethod === "cash") {
+        setPaymentMethod("card");
+      }
+    }
+  }, [settings, paymentMethod]);
+
+  useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setUser(user);
     });
@@ -3224,63 +3234,72 @@ export default function Booking() {
                         <h3 className="text-gold text-xs uppercase tracking-[0.25em] font-bold mb-6 border-b border-white/[0.06] pb-4 font-display">
                           Payment Method
                         </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <button
-                            onClick={() => setPaymentMethod("card")}
-                            className={cn(
-                              "flex items-center gap-4 p-5 rounded-xl border transition-all duration-300 text-left active:scale-[0.98]",
-                              paymentMethod === "card"
-                                ? "border-gold bg-gradient-to-br from-gold/10 to-gold/5 shadow-[0_0_20px_rgba(212,175,55,0.08)]"
-                                : "border-white/[0.06] hover:border-gold/30 hover:bg-white/[0.02] bg-black/45",
-                            )}
-                          >
-                            <div
-                              className={cn(
-                                "w-11 h-11 rounded-full flex items-center justify-center transition-all duration-300 shrink-0",
-                                paymentMethod === "card"
-                                  ? "bg-gold text-black shadow-[0_4px_15px_rgba(212,175,55,0.2)]"
-                                  : "bg-white/[0.05] text-white/60 border border-white/[0.04]",
+                        {(() => {
+                          const allowedCount = (settings?.allowStripeCardPayment !== false ? 1 : 0) + (settings?.allowCashPayment !== false ? 1 : 0);
+                          return (
+                            <div className={cn("grid gap-4", allowedCount === 1 ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2")}>
+                              {settings?.allowStripeCardPayment !== false && (
+                                <button
+                                  onClick={() => setPaymentMethod("card")}
+                                  className={cn(
+                                    "flex items-center gap-4 p-5 rounded-xl border transition-all duration-300 text-left active:scale-[0.98]",
+                                    paymentMethod === "card"
+                                      ? "border-gold bg-gradient-to-br from-gold/10 to-gold/5 shadow-[0_0_20px_rgba(212,175,55,0.08)]"
+                                      : "border-white/[0.06] hover:border-gold/30 hover:bg-white/[0.02] bg-black/45",
+                                  )}
+                                >
+                                  <div
+                                    className={cn(
+                                      "w-11 h-11 rounded-full flex items-center justify-center transition-all duration-300 shrink-0",
+                                      paymentMethod === "card"
+                                        ? "bg-gold text-black shadow-[0_4px_15px_rgba(212,175,55,0.2)]"
+                                        : "bg-white/[0.05] text-white/60 border border-white/[0.04]",
+                                    )}
+                                  >
+                                    <CreditCard size={20} />
+                                  </div>
+                                  <div>
+                                    <p className="text-sm font-bold text-white/95">
+                                      Credit/Debit Card
+                                    </p>
+                                    <p className="text-[9px] text-white/40 uppercase tracking-[0.16em] mt-0.5">
+                                      Secure via Stripe
+                                    </p>
+                                  </div>
+                                </button>
                               )}
-                            >
-                              <CreditCard size={20} />
-                            </div>
-                            <div>
-                              <p className="text-sm font-bold text-white/95">
-                                Credit/Debit Card
-                              </p>
-                              <p className="text-[9px] text-white/40 uppercase tracking-[0.16em] mt-0.5">
-                                Secure via Stripe
-                              </p>
-                            </div>
-                          </button>
 
-                          <button
-                            onClick={() => setPaymentMethod("cash")}
-                            className={cn(
-                              "flex items-center gap-4 p-5 rounded-xl border transition-all duration-300 text-left active:scale-[0.98]",
-                              paymentMethod === "cash"
-                                ? "border-gold bg-gradient-to-br from-gold/10 to-gold/5 shadow-[0_0_20px_rgba(212,175,55,0.08)]"
-                                : "border-white/[0.06] hover:border-gold/30 hover:bg-white/[0.02] bg-black/45",
-                            )}
-                          >
-                            <div
-                              className={cn(
-                                "w-11 h-11 rounded-full flex items-center justify-center transition-all duration-300 shrink-0",
-                                paymentMethod === "cash"
-                                  ? "bg-gold text-black shadow-[0_4px_15px_rgba(212,175,55,0.2)]"
-                                  : "bg-white/[0.05] text-white/60 border border-white/[0.04]",
+                              {settings?.allowCashPayment !== false && (
+                                <button
+                                  onClick={() => setPaymentMethod("cash")}
+                                  className={cn(
+                                    "flex items-center gap-4 p-5 rounded-xl border transition-all duration-300 text-left active:scale-[0.98]",
+                                    paymentMethod === "cash"
+                                      ? "border-gold bg-gradient-to-br from-gold/10 to-gold/5 shadow-[0_0_20px_rgba(212,175,55,0.08)]"
+                                      : "border-white/[0.06] hover:border-gold/30 hover:bg-white/[0.02] bg-black/45",
+                                  )}
+                                >
+                                  <div
+                                    className={cn(
+                                      "w-11 h-11 rounded-full flex items-center justify-center transition-all duration-300 shrink-0",
+                                      paymentMethod === "cash"
+                                        ? "bg-gold text-black shadow-[0_4px_15px_rgba(212,175,55,0.2)]"
+                                        : "bg-white/[0.05] text-white/60 border border-white/[0.04]",
+                                    )}
+                                  >
+                                    <Banknote size={20} />
+                                  </div>
+                                  <div>
+                                    <p className="text-sm font-bold text-white/95">Cash on Pickup</p>
+                                    <p className="text-[9px] text-white/40 uppercase tracking-[0.16em] mt-0.5">
+                                      Pay the driver
+                                    </p>
+                                  </div>
+                                </button>
                               )}
-                            >
-                              <Banknote size={20} />
                             </div>
-                            <div>
-                              <p className="text-sm font-bold text-white/95">Cash on Pickup</p>
-                              <p className="text-[9px] text-white/40 uppercase tracking-[0.16em] mt-0.5">
-                                Pay the driver
-                              </p>
-                            </div>
-                          </button>
-                        </div>
+                          );
+                        })()}
                       </div>
                     </div>
 

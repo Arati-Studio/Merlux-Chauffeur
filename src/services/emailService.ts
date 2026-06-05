@@ -86,7 +86,7 @@ export const emailService = {
       siteUrl = siteUrl.slice(0, -1);
     }
     enrichedData.siteUrl = siteUrl;
-    enrichedData.rateUrl = `${siteUrl}/payment/success?booking_id=${enrichedData.id || enrichedData.bookingId || data.id || ''}&rate=true`;
+    enrichedData.rateUrl = `${siteUrl}/app?rate_booking_id=${enrichedData.id || enrichedData.bookingId || data.id || ''}`;
     if (!enrichedData.bookingId) enrichedData.bookingId = enrichedData.id || '';
     if (!enrichedData.id) enrichedData.id = enrichedData.bookingId || '';
     if (enrichedData.vehicleId) {
