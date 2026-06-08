@@ -198,10 +198,10 @@ export default function Home() {
         <AnimatePresence mode="wait">
           <motion.div
             key={currentHero}
-            initial={{ opacity: 0, scale: 1.1 }}
-            animate={{ opacity: 0.6, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            transition={{ duration: 1.5, ease: "easeInOut" }}
+            initial={{ opacity: 0, x: "100%" }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: "-80%" }}
+            transition={{ duration: 1.5, ease: [0.16, 1, 0.3, 1] }}
             className="absolute inset-0 z-0"
           >
             <img

@@ -1159,22 +1159,64 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
     });
   };
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setIsUploading(true);
-    try {
-      const storageRef = ref(storage, `fleet/${Date.now()}_${file.name}`);
-      await uploadBytes(storageRef, file);
-      const url = await getDownloadURL(storageRef);
-      setEditingVehicle({ ...editingVehicle, img: url });
-    } catch (err) {
-      console.error('Upload error:', err);
-      showDashboardNotice('error', 'Failed to upload image. Please check your storage quota or connection.', 'Upload Error');
-    } finally {
+    
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const imgElement = new Image();
+      imgElement.src = event.target?.result as string;
+      
+      imgElement.onload = () => {
+        // High-end image compression / resizing to ensure Firestore documents remain lightweight (under 1MB)
+        const maxDim = 1024;
+        let width = imgElement.width;
+        let height = imgElement.height;
+        
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(imgElement, 0, 0, width, height);
+          const base64Url = canvas.toDataURL('image/jpeg', 0.82);
+          setEditingVehicle({ ...editingVehicle, img: base64Url });
+          showDashboardNotice('success', 'Image processed as base64 and loaded.', 'Image Uploaded');
+        } else {
+          setEditingVehicle({ ...editingVehicle, img: event.target?.result as string });
+          showDashboardNotice('success', 'Image processed and loaded.', 'Image Uploaded');
+        }
+        setIsUploading(false);
+      };
+
+      imgElement.onerror = () => {
+        setEditingVehicle({ ...editingVehicle, img: event.target?.result as string });
+        showDashboardNotice('success', 'Image processed and loaded.', 'Image Uploaded');
+        setIsUploading(false);
+      };
+    };
+
+    reader.onerror = (err) => {
+      console.error('File reading error:', err);
+      showDashboardNotice('error', 'Failed to read image file.', 'Upload Error');
       setIsUploading(false);
-    }
+    };
+
+    reader.readAsDataURL(file);
   };
   return (
     <div className="space-y-8">

@@ -245,7 +245,7 @@ export default function AppDashboard() {
         robots="noindex, nofollow"
       />
       {/* Top Navigation Bar */}
-      <header className="bg-black/50 z-250 backdrop-blur-md border-b border-white/5">
+      <header className="bg-black/50 backdrop-blur-md border-b border-white/5">
         <div className="max-w-7xl mx-auto w-full p-4 lg:px-10 lg:py-4 flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <h1 className="text-xs sm:text-sm lg:text-base font-bold tracking-[0.15em] text-white/90">
