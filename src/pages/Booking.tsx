@@ -555,11 +555,33 @@ export default function Booking() {
       // Applied Add-ons logic
       let addonTotal = 0;
       const appliedAddons: any[] = [];
+      const formatTimeString = (t: string) => {
+        if (!t) return "";
+        const parts = t.split(":");
+        if (parts.length < 2) return t;
+        let h = parseInt(parts[0], 10);
+        const m = parts[1];
+        const ampm = h >= 12 ? "PM" : "AM";
+        h = h % 12;
+        h = h ? h : 12;
+        return `${h}:${m} ${ampm}`;
+      };
+
       (priceAddons || []).forEach((addon) => {
         if (!addon.active) return;
 
         // 1. Page validation
         if (addon.applyToBooking === false) return;
+
+        // 1.5 Activation Date Range verification (auto-deactivates dynamically)
+        if (addon.activeStartDate || addon.activeEndDate) {
+          const todayLocal = new Date().toISOString().split("T")[0];
+          if (addon.activeStartDate && todayLocal < addon.activeStartDate) return;
+          if (addon.activeEndDate && todayLocal > addon.activeEndDate) return;
+        }
+
+        const satisfyDetails: string[] = [];
+        const ruleResults: { matched: boolean; details: string[] }[] = [];
 
         // 2. Location restriction (Bounding Box GPS coordinates)
         if (addon.limitLocation) {
@@ -590,18 +612,69 @@ export default function Booking() {
           const hasDropoff = dropoffCoords && typeof dropoffCoords.lat === "number" && typeof dropoffCoords.lng === "number";
 
           let locationMatch = false;
+          const matchedNames: string[] = [];
+          const getBBoxName = (lat: number, lng: number) => {
+            if (addon.bboxes && addon.bboxes.length > 0) {
+              const found = addon.bboxes.find((box: any) => {
+                const n = Number(box.north);
+                const s = Number(box.south);
+                const e = Number(box.east);
+                const w = Number(box.west);
+                const matchLat = lat >= Math.min(s, n) && lat <= Math.max(s, n);
+                const matchLng = lng >= Math.min(w, e) && lng <= Math.max(w, e);
+                return matchLat && matchLng;
+              });
+              if (found) return found.name || "Custom Range";
+            } else {
+              const n = Number(addon.bboxNorth);
+              const s = Number(addon.bboxSouth);
+              const e = Number(addon.bboxEast);
+              const w = Number(addon.bboxWest);
+              const matchLat = lat >= Math.min(s, n) && lat <= Math.max(s, n);
+              const matchLng = lng >= Math.min(w, e) && lng <= Math.max(w, e);
+              if (matchLat && matchLng) {
+                return "Default Range";
+              }
+            }
+            return null;
+          };
+
           if (addon.bboxTarget === "pickup") {
             locationMatch = !!(hasPickup && checkBBoxLocation(pickupCoords.lat, pickupCoords.lng));
+            if (locationMatch && hasPickup) {
+              const name = getBBoxName(pickupCoords.lat, pickupCoords.lng);
+              if (name) matchedNames.push(name);
+            }
           } else if (addon.bboxTarget === "dropoff") {
             locationMatch = !!(hasDropoff && checkBBoxLocation(dropoffCoords.lat, dropoffCoords.lng));
+            if (locationMatch && hasDropoff) {
+              const name = getBBoxName(dropoffCoords.lat, dropoffCoords.lng);
+              if (name) matchedNames.push(name);
+            }
           } else if (addon.bboxTarget === "both") {
             locationMatch = !!(hasPickup && hasDropoff && checkBBoxLocation(pickupCoords.lat, pickupCoords.lng) && checkBBoxLocation(dropoffCoords.lat, dropoffCoords.lng));
+            if (locationMatch && hasPickup && hasDropoff) {
+              const nameP = getBBoxName(pickupCoords.lat, pickupCoords.lng);
+              const nameD = getBBoxName(dropoffCoords.lat, dropoffCoords.lng);
+              if (nameP) matchedNames.push(nameP);
+              if (nameD && nameD !== nameP) matchedNames.push(nameD);
+            }
           } else if (addon.bboxTarget === "either") {
             const matchP = hasPickup && checkBBoxLocation(pickupCoords.lat, pickupCoords.lng);
             const matchD = hasDropoff && checkBBoxLocation(dropoffCoords.lat, dropoffCoords.lng);
             locationMatch = !!(matchP || matchD);
+            if (matchP && hasPickup) {
+              const name = getBBoxName(pickupCoords.lat, pickupCoords.lng);
+              if (name) matchedNames.push(name);
+            } else if (matchD && hasDropoff) {
+              const name = getBBoxName(dropoffCoords.lat, dropoffCoords.lng);
+              if (name) matchedNames.push(name);
+            }
           }
-          if (!locationMatch) return;
+          ruleResults.push({
+            matched: locationMatch,
+            details: matchedNames.length > 0 ? [`[${matchedNames.join(", ")}]`] : []
+          });
         }
 
         // 3. Date restriction
@@ -614,15 +687,36 @@ export default function Booking() {
           };
           const matchP = checkDate(formData.date);
           const matchR = formData.isReturn ? checkDate(formData.returnDate) : false;
-          if (!matchP && !matchR) return;
+
+          const checkedDates: string[] = [];
+          if (matchP) checkedDates.push(formData.date);
+          if (matchR) checkedDates.push(formData.returnDate);
+
+          ruleResults.push({
+            matched: matchP || matchR,
+            details: (matchP || matchR) ? [`${checkedDates.join(", ")} (Validity: ${addon.startDate} to ${addon.endDate})`] : []
+          });
         }
 
         // 4. Time restriction
         if (addon.limitTime) {
           const checkTime = (timeStr: string) => {
             if (!timeStr) return false;
-            if (addon.startTime && timeStr < addon.startTime) return false;
-            if (addon.endTime && timeStr > addon.endTime) return false;
+            const start = addon.startTime || "";
+            const end = addon.endTime || "";
+            if (start && end) {
+              if (start > end) {
+                // Overnight window (e.g., 22:00 - 05:00)
+                return timeStr >= start || timeStr <= end;
+              } else {
+                // Standard single-day window (e.g., 08:00 - 17:00)
+                return timeStr >= start && timeStr <= end;
+              }
+            } else if (start) {
+              return timeStr >= start;
+            } else if (end) {
+              return timeStr <= end;
+            }
             return true;
           };
           const matchP = checkTime(formData.time);
@@ -641,7 +735,18 @@ export default function Booking() {
             timeMatch = formData.isReturn ? (matchP || matchR) : matchP;
           }
 
-          if (!timeMatch) return;
+          const checkedTimes: string[] = [];
+          if (matchP && (target === "pickup" || target === "any" || target === "both")) {
+            checkedTimes.push(formatTimeString(formData.time));
+          }
+          if (matchR && (target === "return" || target === "any" || target === "both")) {
+            checkedTimes.push(formatTimeString(formData.returnTime));
+          }
+
+          ruleResults.push({
+            matched: timeMatch,
+            details: timeMatch ? [`${checkedTimes.join(", ")} (Range: ${addon.startTime} - ${addon.endTime})`] : []
+          });
         }
 
         // 5. Day of week restriction
@@ -660,27 +765,98 @@ export default function Booking() {
           };
           const matchP = checkDay(formData.date);
           const matchR = formData.isReturn ? checkDay(formData.returnDate) : false;
-          if (!matchP && !matchR) return;
+
+          const satisfiedDays: string[] = [];
+          const getDayName = (d: string) => {
+            try {
+              const parsedDate = new Date(d.replace(/-/g, "/"));
+              return ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][parsedDate.getDay()];
+            } catch (_) { return ""; }
+          };
+          if (matchP) satisfiedDays.push(getDayName(formData.date));
+          if (matchR) satisfiedDays.push(getDayName(formData.returnDate));
+
+          ruleResults.push({
+            matched: matchP || matchR,
+            details: (matchP || matchR) ? [`${satisfiedDays.join(", ")}`] : []
+          });
         }
 
         // 6. Fleet restriction
         if (addon.limitFleet) {
           const fleetList = addon.selectedFleet || [];
-          if (!vehicle || (!fleetList.includes(vehicle.name) && !fleetList.includes(vehicle.id))) return;
+          const matched = !!vehicle && (fleetList.includes(vehicle.name) || fleetList.includes(vehicle.id));
+          ruleResults.push({
+            matched,
+            details: matched && vehicle ? [`${vehicle.name}`] : []
+          });
         }
 
         // 7. Service restriction
         if (addon.limitService) {
           const serviceList = addon.selectedServices || [];
-          if (!formData.serviceType || !serviceList.includes(formData.serviceType)) return;
+          const matched = !!formData.serviceType && serviceList.includes(formData.serviceType);
+          ruleResults.push({
+            matched,
+            details: matched ? [`${formData.serviceType}`] : []
+          });
         }
 
         // 8. One-way / Return ride restriction
         if (addon.limitRideType) {
           const targetType = addon.rideTypeTarget || "any";
-          if (targetType === "oneway" && formData.isReturn) return;
-          if (targetType === "return" && !formData.isReturn) return;
+          let matched = true;
+          if (targetType === "oneway" && formData.isReturn) matched = false;
+          if (targetType === "return" && !formData.isReturn) matched = false;
+          ruleResults.push({
+            matched,
+            details: matched ? [`${formData.isReturn ? "Return" : "One-Way"}`] : []
+          });
         }
+
+        // 9. Extra additions / Add-ons restriction
+        if (addon.limitExtras) {
+          const matchedExtrasList = (addon.selectedExtras || []) as string[];
+          const selectedExtrasList = (formData.selectedExtras || []) as string[];
+          const matched = selectedExtrasList.some(id => {
+            const extraObj = extras.find(e => e.id === id);
+            return matchedExtrasList.includes(id) || (extraObj && matchedExtrasList.includes(extraObj.name));
+          });
+          const matchedDetailsText = selectedExtrasList
+            .map(id => {
+              const extraObj = extras.find(e => e.id === id);
+              if (matchedExtrasList.includes(id) || (extraObj && matchedExtrasList.includes(extraObj.name))) {
+                return extraObj?.name || "Extra";
+              }
+              return null;
+            })
+            .filter(Boolean) as string[];
+
+          ruleResults.push({
+            matched,
+            details: matched ? matchedDetailsText : []
+          });
+        }
+
+        // Apply AND / OR operator connection logic
+        const connectionOperator = addon.connectionOperator || "AND";
+        let finalMatch = true;
+        if (ruleResults.length > 0) {
+          if (connectionOperator === "OR") {
+            finalMatch = ruleResults.some(r => r.matched);
+          } else {
+            finalMatch = ruleResults.every(r => r.matched);
+          }
+        }
+
+        if (!finalMatch) return;
+
+        // Collect details from matched rules
+        ruleResults.forEach(r => {
+          if (r.matched) {
+            satisfyDetails.push(...r.details);
+          }
+        });
 
         let baseValue = 0;
         if (addon.target === "gross") baseValue = subtotal;
@@ -705,6 +881,8 @@ export default function Booking() {
           value: addon.value,
           operation: addon.operation,
           hideLabelInBreakdown: !!addon.hideLabelInBreakdown,
+          hideSatisfyDetails: !!addon.hideSatisfyDetails,
+          satisfyDetails
         });
       });
 
@@ -3939,13 +4117,25 @@ export default function Booking() {
                                         </div>
                                       )}
                                     {details.appliedAddons && details.appliedAddons.filter((addon: any) => !addon.hideLabelInBreakdown).length > 0 && (
-                                      <div className="space-y-1 py-1.5 border-b border-white/[0.03]">
+                                      <div className="space-y-1.5 py-1.5 border-b border-white/[0.03]">
                                         {details.appliedAddons.filter((addon: any) => !addon.hideLabelInBreakdown).map((addon: any, aIdx: number) => (
-                                          <div key={`addon-cust-${addon.id || aIdx}-${aIdx}`} className="flex justify-between items-center text-[10px] uppercase tracking-[0.16em] text-gold/60 py-1 font-display">
-                                            <span>{addon.name}</span>
-                                            <span className="font-display font-medium font-semibold">
-                                              {addon.impact > 0 ? '+' : '-'}${Math.abs(addon.impact).toFixed(2)}
-                                            </span>
+                                          <div key={`addon-cust-${addon.id || aIdx}-${aIdx}`} className="py-1">
+                                            <div className="flex justify-between items-center text-[10px] uppercase tracking-[0.16em] text-gold/60 font-display">
+                                              <span>{addon.name}</span>
+                                              <span className="font-display font-medium font-semibold">
+                                                {addon.impact > 0 ? '+' : '-'}${Math.abs(addon.impact).toFixed(2)}
+                                              </span>
+                                            </div>
+                                            {!addon.hideSatisfyDetails && addon.satisfyDetails && addon.satisfyDetails.length > 0 && (
+                                              <div className="mt-1 space-y-0.5 pl-2 border-l border-gold/20">
+                                                {addon.satisfyDetails.map((detail: string, dIdx: number) => (
+                                                  <div key={dIdx} className="text-[8px] text-white/40 normal-case font-mono tracking-wider flex items-center gap-1">
+                                                    <span className="text-gold/50">•</span>
+                                                    <span>{detail}</span>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            )}
                                           </div>
                                         ))}
                                       </div>

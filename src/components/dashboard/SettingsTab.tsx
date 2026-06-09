@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
-  Search, X, Plus, Users, Copy, Trash2, Luggage, Save, Loader2, Sparkles, Upload, Code2, Eye,
+  Search, X, Plus, Users, Copy, Trash2, Luggage, Save, Loader2, Sparkles, Upload, Code2, Eye, Power,
   Cog, List, MessageSquare, Send, Mail, Download, FileUp, AlertCircle, FileJson, CheckCircle2, Check, Pencil,
   LayoutGrid, ChevronDown, Car, Percent
 } from 'lucide-react';
@@ -43,6 +43,7 @@ const BBoxMap: React.FC<BBoxMapProps> = ({ bboxNorth, bboxSouth, bboxEast, bboxW
   const [csvInput, setCsvInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [locationName, setLocationName] = useState('');
+  const [editingBoxId, setEditingBoxId] = useState<string | null>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
 
   // Sync CSV input with props if the user is not actively typing
@@ -341,85 +342,152 @@ const BBoxMap: React.FC<BBoxMapProps> = ({ bboxNorth, bboxSouth, bboxEast, bboxW
         />
       </div>
 
-      <div className="pt-2">
-        <button
-          type="button"
-          onClick={() => {
-            if (bboxNorth && bboxSouth && bboxEast && bboxWest) {
-              const nameValue = locationName.trim() || `Range #${(bboxes || []).length + 1}`;
-              const newBox = {
-                id: Math.random().toString(36).substring(2, 11),
-                name: nameValue,
-                north: Number(bboxNorth),
-                south: Number(bboxSouth),
-                east: Number(bboxEast),
-                west: Number(bboxWest),
-              };
-              const alreadyExists = (bboxes || []).some(
-                b => b.north === newBox.north && b.south === newBox.south && b.east === newBox.east && b.west === newBox.west
-              );
-              if (alreadyExists) return;
-              const updated = [...(bboxes || []), newBox];
-              if (onBBoxesChange) onBBoxesChange(updated);
-              
-              // Clear input helper states
-              setLocationName("");
-              setSearchQuery("");
-            }
-          }}
-          disabled={!bboxNorth || !bboxSouth || !bboxEast || !bboxWest}
-          className="w-full bg-gold/10 hover:bg-gold/20 text-gold border border-gold/30 rounded-xl py-2 px-3 text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          Add Current Area Map Selection to active ranges ({bboxes?.length || 0} saved)
-        </button>
+      <div className="pt-2 flex gap-2">
+        {editingBoxId ? (
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                if (bboxNorth && bboxSouth && bboxEast && bboxWest) {
+                  const updated = (bboxes || []).map((b) => {
+                    if (b.id === editingBoxId) {
+                      return {
+                        ...b,
+                        name: locationName.trim() || b.name || `Range #${(bboxes || []).indexOf(b) + 1}`,
+                        north: Number(bboxNorth),
+                        south: Number(bboxSouth),
+                        east: Number(bboxEast),
+                        west: Number(bboxWest),
+                      };
+                    }
+                    return b;
+                  });
+                  if (onBBoxesChange) onBBoxesChange(updated);
+                  
+                  // Clear editing state
+                  setEditingBoxId(null);
+                  setLocationName("");
+                  setSearchQuery("");
+                }
+              }}
+              disabled={!bboxNorth || !bboxSouth || !bboxEast || !bboxWest}
+              className="flex-1 bg-gold text-black rounded-lg py-2 px-3 text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+            >
+              <Check className="w-3.5 h-3.5" />
+              Save Range Changes
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEditingBoxId(null);
+                setLocationName("");
+                setSearchQuery("");
+              }}
+              className="px-3 bg-white/5 hover:bg-white/10 text-white rounded-lg text-xs font-bold uppercase tracking-wider transition-all border border-white/10"
+            >
+              Cancel
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              if (bboxNorth && bboxSouth && bboxEast && bboxWest) {
+                const nameValue = locationName.trim() || `Range #${(bboxes || []).length + 1}`;
+                const newBox = {
+                  id: Math.random().toString(36).substring(2, 11),
+                  name: nameValue,
+                  north: Number(bboxNorth),
+                  south: Number(bboxSouth),
+                  east: Number(bboxEast),
+                  west: Number(bboxWest),
+                };
+                const alreadyExists = (bboxes || []).some(
+                  b => b.north === newBox.north && b.south === newBox.south && b.east === newBox.east && b.west === newBox.west
+                );
+                if (alreadyExists) return;
+                const updated = [...(bboxes || []), newBox];
+                if (onBBoxesChange) onBBoxesChange(updated);
+                
+                // Clear input helper states
+                setLocationName("");
+                setSearchQuery("");
+              }
+            }}
+            disabled={!bboxNorth || !bboxSouth || !bboxEast || !bboxWest}
+            className="w-full bg-gold/10 hover:bg-gold/20 text-gold border border-gold/30 rounded-xl py-2 px-3 text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Add Current Area Map Selection to active ranges ({bboxes?.length || 0} saved)
+          </button>
+        )}
       </div>
 
       {bboxes && bboxes.length > 0 && (
         <div className="space-y-2 pt-3 border-t border-white/5">
           <label className="text-[9px] uppercase tracking-widest font-bold text-white/40 block">Saved Bounding Box Ranges ({bboxes.length})</label>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto custom-scrollbar pr-1">
-            {bboxes.map((box, idx) => (
-              <div key={box.id || idx} className="flex items-center justify-between bg-white/[0.02] border border-white/5 rounded-xl p-3 gap-2">
-                <div className="flex flex-col text-[10px] text-white/70 font-mono">
-                  <span className="text-[8px] uppercase tracking-widest text-gold font-bold mb-1 block truncate max-w-[180px]" title={box.name || `Range #${idx + 1}`}>
-                    {box.name || `Range #${idx + 1}`}
-                  </span>
-                  <span className="text-white/40">West / South limit:</span>
-                  <span className="text-white/80">{box.west}, {box.south}</span>
-                  <span className="text-white/40 mt-0.5">East / North limit:</span>
-                  <span className="text-white/80">{box.east}, {box.north}</span>
+            {bboxes.map((box, idx) => {
+              const isBoxEditing = editingBoxId === box.id;
+              return (
+                <div
+                  key={box.id || idx}
+                  className={cn(
+                    "flex items-center justify-between border rounded-xl p-3 gap-2 transition-all duration-300",
+                    isBoxEditing
+                      ? "bg-gold/5 border-gold/40 shadow-[0_0_12px_rgba(212,175,55,0.1)]"
+                      : "bg-white/[0.02] border-white/5 hover:border-white/10"
+                  )}
+                >
+                  <div className="flex flex-col text-[10px] text-white/70 font-mono">
+                    <span className="text-[8px] uppercase tracking-widest text-gold font-bold mb-1 block truncate max-w-[180px]" title={box.name || `Range #${idx + 1}`}>
+                      {box.name || `Range #${idx + 1}`} {isBoxEditing && "(Editing)"}
+                    </span>
+                    <span className="text-white/40">West / South limit:</span>
+                    <span className="text-white/80">{box.west}, {box.south}</span>
+                    <span className="text-white/40 mt-0.5">East / North limit:</span>
+                    <span className="text-white/80">{box.east}, {box.north}</span>
+                  </div>
+                  <div className="flex flex-col gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingBoxId(box.id);
+                        setLocationName(box.name || `Range #${idx + 1}`);
+                        onChange({
+                          north: box.north,
+                          south: box.south,
+                          east: box.east,
+                          west: box.west,
+                        });
+                      }}
+                      className={cn(
+                        "p-1.5 rounded-lg transition-all flex items-center justify-center",
+                        isBoxEditing ? "bg-gold text-black-900" : "bg-white/5 hover:bg-white/10 text-white/50 hover:text-white"
+                      )}
+                      title="Edit this range segment (name & coordinates)"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updated = (bboxes || []).filter(curr => curr.id !== box.id);
+                        if (onBBoxesChange) onBBoxesChange(updated);
+                        if (editingBoxId === box.id) {
+                          setEditingBoxId(null);
+                          setLocationName("");
+                        }
+                      }}
+                      className="p-1.5 bg-red-500/5 hover:bg-red-500/10 rounded-lg text-red-400 hover:text-red-300 transition-all flex items-center justify-center"
+                      title="Delete range segment"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
-                <div className="flex flex-col gap-1.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onChange({
-                        north: box.north,
-                        south: box.south,
-                        east: box.east,
-                        west: box.west,
-                      });
-                    }}
-                    className="p-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-white/50 hover:text-white transition-all flex items-center justify-center"
-                    title="Load selection back into slider/map coordinates"
-                  >
-                    <Pencil className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const updated = (bboxes || []).filter(curr => curr.id !== box.id);
-                      if (onBBoxesChange) onBBoxesChange(updated);
-                    }}
-                    className="p-1.5 bg-red-500/5 hover:bg-red-500/10 rounded-lg text-red-400 hover:text-red-300 transition-all flex items-center justify-center"
-                    title="Delete range segment"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -554,6 +622,25 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
     };
     fetchCounts();
   }, []);
+
+  useEffect(() => {
+    if (!priceAddons || priceAddons.length === 0) return;
+    const todayLocal = new Date().toISOString().split("T")[0];
+    priceAddons.forEach(async (addon) => {
+      if (addon.active && addon.activeEndDate && todayLocal > addon.activeEndDate) {
+        try {
+          await updateDoc(doc(db, 'price-addons', addon.id), {
+            active: false,
+            updatedAt: serverTimestamp()
+          });
+          showDashboardNotice('warning', `Price add-on "${addon.name}" has been auto-deactivated because its activation validity date range has passed.`, 'Add-on Deactivated');
+        } catch (err) {
+          console.error("Failed to auto-deactivate expired price addon:", err);
+        }
+      }
+    });
+  }, [priceAddons, showDashboardNotice]);
+
   const [isSeedingTemplates, setIsSeedingTemplates] = useState(false);
   const [isSeedingEmailTemplates, setIsSeedingEmailTemplates] = useState(false);
   const [isTestingSmsId, setIsTestingSmsId] = useState<string | null>(null);
@@ -1451,6 +1538,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
         applyToOffers: data.applyToOffers !== false,
         applyToTours: data.applyToTours !== false,
         hideLabelInBreakdown: !!data.hideLabelInBreakdown,
+        hideSatisfyDetails: !!data.hideSatisfyDetails,
 
         limitLocation: !!data.limitLocation,
         bboxNorth: data.limitLocation ? (Number(data.bboxNorth) || 0) : 0,
@@ -1478,8 +1566,14 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
         limitService: !!data.limitService,
         selectedServices: data.limitService ? (data.selectedServices || []) : [],
 
+        limitExtras: !!data.limitExtras,
+        selectedExtras: data.limitExtras ? (data.selectedExtras || []) : [],
+
         limitRideType: !!data.limitRideType,
         rideTypeTarget: data.limitRideType ? (data.rideTypeTarget || 'oneway') : 'oneway',
+        activeStartDate: data.activeStartDate || '',
+        activeEndDate: data.activeEndDate || '',
+        connectionOperator: data.connectionOperator || 'AND',
       };
 
       if (!id || id === 'new') {
@@ -1514,6 +1608,20 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
         }
       }
     });
+  };
+
+  const handleTogglePriceAddonActive = async (id: string) => {
+    const addon = priceAddons.find(a => a.id === id);
+    if (!addon) return;
+    try {
+      await updateDoc(doc(db, 'price-addons', id), {
+        active: !addon.active,
+        updatedAt: serverTimestamp()
+      });
+      showDashboardNotice('success', `Price add-on "${addon.name}" is now ${!addon.active ? 'Active' : 'Inactive'}.`);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `price-addons/${id}`);
+    }
   };
 
   const handleUpdateSettings = async (settings: any) => {
@@ -2206,6 +2314,8 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
                   applyToBooking: true,
                   applyToOffers: true,
                   applyToTours: true,
+                  hideLabelInBreakdown: false,
+                  hideSatisfyDetails: false,
                   limitLocation: false,
                   bboxNorth: -37.5,
                   bboxSouth: -38.5,
@@ -2224,8 +2334,11 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
                   selectedFleet: [],
                   limitService: false,
                   selectedServices: [],
+                  limitExtras: false,
+                  selectedExtras: [],
                   limitRideType: false,
-                  rideTypeTarget: 'any'
+                  rideTypeTarget: 'any',
+                  connectionOperator: 'AND'
                 });
                 setShowPriceAddonModal(true);
               }}
@@ -2243,55 +2356,122 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
           {(priceAddons || []).filter(a =>
             a.name?.toLowerCase().includes((priceAddonsSearchQuery || '').toLowerCase())
           ).map((addon, idx) => (
-            <div key={`setting-addon-${addon.id || 'new'}-${addon.name || 'unnamed'}-${idx}`} className="glass p-6 rounded-2xl border border-white/5 hover:border-gold/30 transition-all group relative overflow-hidden">
-              <div className={cn(
-                "absolute top-0 right-0 text-white text-[8px] font-bold uppercase tracking-widest px-3 py-1 rounded-bl-xl",
-                addon.active ? "bg-green-600" : "bg-red-500"
-              )}>
-                {addon.active ? "Active" : "Inactive"}
-              </div>
-              <div className="flex justify-between items-start mb-4 mt-2">
-                <div>
-                  <h4 className="text-xl font-bold font-display text-gold mb-1">{addon.name}</h4>
-                  <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold">
-                    Target: {addon.target}
-                  </p>
+            <div key={`setting-addon-${addon.id || 'new'}-${addon.name || 'unnamed'}-${idx}`} className="glass p-6 rounded-2xl border border-white/5 hover:border-gold/30 transition-all group relative overflow-hidden flex flex-col justify-between min-h-[320px]">
+              <div>
+                <div className={cn(
+                  "absolute top-0 right-0 text-white text-[8px] font-bold uppercase tracking-widest px-3 py-1 rounded-bl-xl transition-all",
+                  addon.active ? "bg-green-600" : "bg-red-500"
+                )}>
+                  {addon.active ? "Active" : "Inactive"}
                 </div>
-                <div className="bg-gold/10 p-1.5 rounded-lg flex flex-col items-center">
-                  <p className="text-[10px] uppercase font-bold text-gold">
-                    {addon.operation === 'addition' ? '+' : '-'} {addon.type === 'percentage' ? `${addon.value}%` : `$${addon.value}`}
-                  </p>
+                <div className="flex justify-between items-start mb-4 mt-2">
+                  <div>
+                    <h4 className="text-xl font-bold font-display text-gold mb-1">{addon.name}</h4>
+                    <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold">
+                      Target: {addon.target}
+                    </p>
+                  </div>
+                  <div className="bg-gold/10 p-1.5 rounded-lg flex flex-col items-center shrink-0">
+                    <p className="text-[10px] uppercase font-bold text-gold">
+                      {addon.operation === 'addition' ? '+' : '-'} {addon.type === 'percentage' ? `${addon.value}%` : `$${addon.value}`}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Additional Details & Active Constraints */}
+                <div className="space-y-2 border-t border-b border-white/[0.05] py-4 my-4 text-xs">
+                  <div className="flex justify-between items-center text-[9px] text-white/40 tracking-wider font-bold">
+                    <span>APPLIED PAGES:</span>
+                    <span className="text-white font-mono flex gap-1 font-semibold uppercase text-[8px]">
+                      {addon.applyToBooking !== false && <span className="px-1.5 py-0.5 bg-white/5 border border-white/10 rounded-md">Booking</span>}
+                      {addon.applyToOffers !== false && <span className="px-1.5 py-0.5 bg-white/5 border border-white/10 rounded-md">Offers</span>}
+                      {addon.applyToTours !== false && <span className="px-1.5 py-0.5 bg-white/5 border border-white/10 rounded-md">Tours</span>}
+                    </span>
+                  </div>
+
+                  {(addon.activeStartDate || addon.activeEndDate) && (
+                    <div className="flex justify-between items-center text-[9px] text-white/40 tracking-wider font-bold">
+                      <span>VALIDITY RANGE:</span>
+                      <span className="text-gold font-mono text-[8px] font-bold">
+                        {addon.activeStartDate || "Anytime"} to {addon.activeEndDate || "Anytime"}
+                      </span>
+                    </div>
+                  )}
+
+                  {(addon.limitLocation || addon.limitDates || addon.limitTime || addon.limitDays || addon.limitFleet || addon.limitService || addon.limitRideType || addon.limitExtras) && (
+                    <div className="flex justify-between items-center text-[9px] text-white/40 tracking-wider font-bold mt-1">
+                      <span>LINK LOGIC:</span>
+                      <span className={cn(
+                        "font-mono font-bold text-[8px] px-1.5 py-0.5 rounded-md border",
+                        addon.connectionOperator === 'OR' 
+                          ? "bg-amber-500/10 text-amber-400 border-amber-500/20" 
+                          : "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                      )}>
+                        {addon.connectionOperator || 'AND'} (MATCH {(addon.connectionOperator || 'AND') === 'OR' ? 'ANY' : 'ALL'})
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap gap-1 mt-2 pt-1">
+                    {addon.limitLocation && <span className="text-[8px] px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 font-bold uppercase tracking-wider">GPS Area</span>}
+                    {addon.limitDates && <span className="text-[8px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold uppercase tracking-wider">Dates</span>}
+                    {addon.limitTime && <span className="text-[8px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-bold uppercase tracking-wider">Hours ({addon.startTime}-{addon.endTime})</span>}
+                    {addon.limitDays && <span className="text-[8px] px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20 font-bold uppercase tracking-wider">Weekdays</span>}
+                    {addon.limitFleet && <span className="text-[8px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 font-bold uppercase tracking-wider">Fleet</span>}
+                    {addon.limitService && <span className="text-[8px] px-2 py-0.5 rounded-full bg-pink-500/10 text-pink-400 border border-pink-500/20 font-bold uppercase tracking-wider">Services</span>}
+                    {addon.limitExtras && <span className="text-[8px] px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20 font-bold uppercase tracking-wider">Extras ({addon.selectedExtras?.length || 0})</span>}
+                    {addon.limitRideType && <span className="text-[8px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-bold uppercase tracking-wider">Ride Target</span>}
+                    {!addon.limitLocation && !addon.limitDates && !addon.limitTime && !addon.limitDays && !addon.limitFleet && !addon.limitService && !addon.limitRideType && !addon.limitExtras && (
+                      <span className="text-[8px] text-white/30 italic">No constraints (Universal)</span>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex gap-2 mt-4 items-center">
+                {/* Active/Deactivate toggle (Icon Only) */}
+                <button
+                  onClick={() => handleTogglePriceAddonActive(addon.id)}
+                  className={cn(
+                    "p-2.5 rounded-xl transition-all border shrink-0",
+                    addon.active 
+                      ? "bg-green-500/10 text-green-400 border-green-500/20 hover:bg-green-500 hover:text-white" 
+                      : "bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500 hover:text-white"
+                  )}
+                  title={addon.active ? "Deactivate Add-on" : "Activate Add-on"}
+                >
+                  <Power size={14} />
+                </button>
+
                 <button
                   onClick={() => {
                     const { id, ...addonData } = addon;
                     setEditingPriceAddon({ ...addonData, name: addon.name + ' (Copy)' });
                     setShowPriceAddonModal(true);
                   }}
-                  className="p-2 bg-white/5 text-gold rounded-xl hover:bg-gold hover:text-black transition-all"
-                  title="Duplicate"
+                  className="p-2.5 bg-white/5 border border-white/5 text-gold rounded-xl hover:bg-gold hover:text-black transition-all shrink-0"
+                  title="Duplicate Add-on"
                 >
                   <Copy size={14} />
                 </button>
+
                 <button
                   onClick={() => {
                     setEditingPriceAddon(addon);
                     setShowPriceAddonModal(true);
                   }}
-                  className="flex-1 py-2 bg-blue-500/10 text-blue-500 rounded-xl hover:bg-blue-500/50 hover:text-white text-[12px] font-bold transition-all flex items-center justify-center gap-1"
+                  className="flex-1 py-2.5 bg-blue-500/10 text-blue-400 rounded-xl hover:bg-blue-500/50 hover:text-white text-[11px] font-bold uppercase tracking-wider transition-all border border-blue-500/10 flex items-center justify-center gap-1"
+                  title="Edit Add-on"
                 >
-                  <Pencil size={14} /> Edit
+                  <Pencil size={12} /> Edit
                 </button>
 
                 <button
                   onClick={() => handleDeletePriceAddon(addon.id)}
-                  className="flex-1 py-2 bg-red-500/10 text-red-500 rounded-xl hover:bg-red-500/50 hover:text-white transition-all font-bold flex items-center justify-center gap-1"
+                  className="flex-1 py-2.5 bg-red-500/10 text-red-400 rounded-xl hover:bg-red-500/50 hover:text-white transition-all font-bold text-[11px] uppercase tracking-wider border border-red-500/10 flex items-center justify-center gap-1"
+                  title="Delete Add-on"
                 >
-                  <Trash2 size={14} />
-                  <span className="text-[12px] font-bold uppercase tracking-widest text-red-500 group-hover:text-white">Delete</span>
+                  <Trash2 size={12} /> Delete
                 </button>
               </div>
             </div>
@@ -4303,7 +4483,43 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
                     </div>
                   </div>
 
-                  <div className="pt-2">
+                  {/* Active Validity Date Range */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-1 block">
+                        Activation Start Date
+                      </label>
+                      <input
+                        type="date"
+                        value={editingPriceAddon?.activeStartDate || ""}
+                        onChange={(e) =>
+                          setEditingPriceAddon({
+                            ...editingPriceAddon,
+                            activeStartDate: e.target.value,
+                          })
+                        }
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-gold transition-all text-white font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-1 block">
+                        Activation End Date
+                      </label>
+                      <input
+                        type="date"
+                        value={editingPriceAddon?.activeEndDate || ""}
+                        onChange={(e) =>
+                          setEditingPriceAddon({
+                            ...editingPriceAddon,
+                            activeEndDate: e.target.value,
+                          })
+                        }
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-gold transition-all text-white font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-2 space-y-2">
                     <label className="flex items-center gap-2.5 p-3.5 bg-white/5 rounded-xl border border-white/5 cursor-pointer hover:border-gold/30 transition-all">
                       <input
                         type="checkbox"
@@ -4314,6 +4530,19 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
                       <div className="flex flex-col">
                         <span className="text-[10px] uppercase tracking-widest font-bold text-white/80">Hide Label on Price Breakdown</span>
                         <span className="text-[9px] text-white/40">Keep value applied to transaction totals, but do not show separate list item in consumer breakdown summary sheets</span>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center gap-2.5 p-3.5 bg-white/5 rounded-xl border border-white/5 cursor-pointer hover:border-gold/30 transition-all">
+                      <input
+                        type="checkbox"
+                        checked={!!editingPriceAddon?.hideSatisfyDetails}
+                        onChange={(e) => setEditingPriceAddon({ ...editingPriceAddon, hideSatisfyDetails: e.target.checked })}
+                        className="w-4 h-4 rounded border-white/10 bg-white/5 text-gold focus:ring-gold cursor-pointer"
+                      />
+                      <div className="flex flex-col">
+                        <span className="text-[10px] uppercase tracking-widest font-bold text-white/80">Hide Constraint (Satisfy) Details</span>
+                        <span className="text-[9px] text-white/40">Hide the detailed list of matching criteria (like dates, times, or GPS areas) under the check item</span>
                       </div>
                     </label>
                   </div>
@@ -4355,9 +4584,30 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
 
                 {/* Advanced Conditional Constraints */}
                 <div className="space-y-5 pt-4 border-t border-white/[0.05]">
+                  <div className="p-4 bg-white/5 border border-white/10 rounded-2xl space-y-2.5">
+                    <label className="text-[10px] uppercase tracking-widest font-bold text-gold block">
+                      Enable Multiple Connection Operator (LINK LOGIC)
+                    </label>
+                    <select
+                      value={editingPriceAddon?.connectionOperator || "AND"}
+                      onChange={(e) =>
+                        setEditingPriceAddon({ ...editingPriceAddon, connectionOperator: e.target.value })
+                      }
+                      className="custom-select w-full py-2.5 text-xs font-bold"
+                    >
+                      <option value="AND">AND Connection (Require ALL enabled constraints to match)</option>
+                      <option value="OR">OR Connection (Require ANY of the enabled constraints to match)</option>
+                    </select>
+                    <p className="text-[9px] text-white/40 leading-relaxed">
+                      Control how constraints interact. Select <strong>AND</strong> to require every enabled constraint to pass, or <strong>OR</strong> to apply if any single enabled constraint is met.
+                    </p>
+                  </div>
+
                   <h4 className="text-[11px] uppercase tracking-wide font-bold text-gold/80 flex items-center justify-between">
                     <span>Advanced Conditional Constraints</span>
-                    <span className="text-[8px] text-white/30 uppercase normal-case font-normal">(Match all enabled criteria)</span>
+                    <span className="text-[8px] text-white/30 font-normal uppercase normal-case">
+                      (Match Mode: {editingPriceAddon?.connectionOperator || "AND"})
+                    </span>
                   </h4>
 
                   {/* 1. Location Bounding Box */}
@@ -4636,7 +4886,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
 
                     {editingPriceAddon?.limitService && (
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-2 pt-3 border-t border-white/5">
-                        {["airport", "corporate", "wedding", "event", "hourly", "occasions"].map((service) => {
+                        {["airport", "corporate", "wedding", "event", "hourly", "occasions", "offers", "tours"].map((service) => {
                           const current = editingPriceAddon?.selectedServices || [];
                           const isChecked = current.includes(service);
                           return (
@@ -4691,6 +4941,58 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
                           <option value="return">Return Rides Only</option>
                           <option value="any">Either Format (Any)</option>
                         </select>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 8. Booking Extras / Add-ons Restriction */}
+                  <div className="space-y-4 bg-white/[0.01] p-3.5 rounded-2xl border border-white/5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] uppercase tracking-wider font-bold text-white/80">Extras / Add-ons Restriction</span>
+                        <span className="text-[9px] text-white/30 font-display">Apply only when specific child seats, luggage, or premium upgrades are selected</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setEditingPriceAddon({ ...editingPriceAddon, limitExtras: !editingPriceAddon.limitExtras })}
+                        className={cn(
+                          "w-10 h-5 rounded-full transition-all relative shrink-0",
+                          editingPriceAddon?.limitExtras ? "bg-gold" : "bg-white/10"
+                        )}
+                      >
+                        <div className={cn("absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all", editingPriceAddon?.limitExtras ? "right-1" : "left-1")} />
+                      </button>
+                    </div>
+
+                    {editingPriceAddon?.limitExtras && (
+                      <div className="pt-3 border-t border-white/5 space-y-2">
+                        <p className="text-[9px] uppercase tracking-widest font-bold text-white/40 mb-2">Select Restricting Extras (Customer must select at least one of these)</p>
+                        {extras.length === 0 ? (
+                          <p className="text-[10px] text-white/30 italic">No extras configured in Extras Management.</p>
+                        ) : (
+                          <div className="grid grid-cols-2 gap-2">
+                            {extras.map((extra: any) => {
+                              const current = editingPriceAddon?.selectedExtras || [];
+                              const isChecked = current.includes(extra.id) || current.includes(extra.name);
+                              return (
+                                <label key={extra.id} className="flex items-center gap-2 p-1.5 bg-white/5 rounded-lg border border-white/5 cursor-pointer hover:border-gold/30 transition-all">
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(e) => {
+                                      const next = e.target.checked
+                                        ? [...current, extra.id]
+                                        : current.filter((id: string) => id !== extra.id && id !== extra.name);
+                                      setEditingPriceAddon({ ...editingPriceAddon, selectedExtras: next });
+                                    }}
+                                    className="w-3 h-3 rounded bg-white/5 text-gold border-white/10 focus:ring-gold"
+                                  />
+                                  <span className="text-[9px] uppercase tracking-widest font-bold text-white/70">{extra.name}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
