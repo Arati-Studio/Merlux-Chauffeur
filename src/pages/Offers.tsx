@@ -13,6 +13,46 @@ import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_ID } from '../lib/google-maps';
 import LoginInline from '../components/LoginInline';
 import SEO from '../components/SEO';
 
+const COUNTRY_CODES = [
+  { code: "+61", short: "AU +61" },
+  { code: "+64", short: "NZ +64" },
+  { code: "+1", short: "US +1" },
+  { code: "+44", short: "UK +44" },
+  { code: "+65", short: "SG +65" },
+  { code: "+86", short: "CN +86" },
+  { code: "+91", short: "IN +91" },
+  { code: "+971", short: "AE +971" },
+  { code: "+60", short: "MY +60" },
+  { code: "+81", short: "JP +81" },
+  { code: "+49", short: "DE +49" },
+  { code: "+33", short: "FR +33" },
+  { code: "+82", short: "KR +82" },
+  { code: "+62", short: "ID +62" },
+  { code: "+66", short: "TH +66" },
+  { code: "+84", short: "VN +84" },
+  { code: "+39", short: "IT +39" },
+  { code: "+34", short: "ES +34" },
+  { code: "+63", short: "PH +63" },
+  { code: "+94", short: "LK +94" },
+];
+
+const parsePhoneNumber = (phone: string) => {
+  const cleanPhone = (phone || "").trim();
+  const sortedCodes = [...COUNTRY_CODES].sort((a, b) => b.code.length - a.code.length);
+  for (const item of sortedCodes) {
+    if (cleanPhone.startsWith(item.code)) {
+      return {
+        countryCode: item.code,
+        localNumber: cleanPhone.substring(item.code.length).trim()
+      };
+    }
+  }
+  return {
+    countryCode: "+61",
+    localNumber: cleanPhone
+  };
+};
+
 export default function Offers() {
   const navigate = useNavigate();
   const { slug } = useParams();
@@ -394,22 +434,112 @@ export default function Offers() {
     (priceAddons || []).forEach((addon) => {
       if (!addon.active) return;
       
+      // 1. Page/Scope Filter
+      if (addon.applyToOffers === false) return;
+
+      // 2. Location restriction (Offers don't have GPS coordinates)
+      if (addon.limitLocation) return;
+
+      // 3. Date restriction
+      if (addon.limitDates) {
+        const checkDate = (d: string) => {
+          if (!d) return false;
+          if (addon.startDate && d < addon.startDate) return false;
+          if (addon.endDate && d > addon.endDate) return false;
+          return true;
+        };
+        const matchP = checkDate(details.date);
+        const matchR = details.returnRide ? checkDate(details.returnDate) : false;
+        if (!matchP && !matchR) return;
+      }
+
+      // 4. Time restriction
+      if (addon.limitTime) {
+        const checkTime = (timeStr: string) => {
+          if (!timeStr) return false;
+          if (addon.startTime && timeStr < addon.startTime) return false;
+          if (addon.endTime && timeStr > addon.endTime) return false;
+          return true;
+        };
+        const matchP = checkTime(details.time);
+        const matchR = details.returnRide ? checkTime(details.returnTime) : false;
+        
+        let timeMatch = false;
+        const target = addon.timeTarget || "any";
+        if (target === "pickup") {
+          timeMatch = matchP;
+        } else if (target === "return") {
+          timeMatch = details.returnRide ? matchR : false;
+        } else if (target === "both") {
+          timeMatch = details.returnRide ? (matchP && matchR) : matchP;
+        } else {
+          // "any"
+          timeMatch = details.returnRide ? (matchP || matchR) : matchP;
+        }
+
+        if (!timeMatch) return;
+      }
+
+      // 5. Day of week restriction
+      if (addon.limitDays) {
+        const days = addon.selectedDays || [];
+        const checkDay = (d: string) => {
+          if (!d) return false;
+          try {
+            const parsedDate = new Date(d.replace(/-/g, "/"));
+            const weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+            const dayName = weekdays[parsedDate.getDay()];
+            return days.includes(dayName);
+          } catch (_) {
+            return false;
+          }
+        };
+        const matchP = checkDay(details.date);
+        const matchR = details.returnRide ? checkDay(details.returnDate) : false;
+        if (!matchP && !matchR) return;
+      }
+
+      // 6. Fleet restriction
+      if (addon.limitFleet) {
+        const fleetList = addon.selectedFleet || [];
+        if (!selectedFleet || (!fleetList.includes(selectedFleet.name) && !fleetList.includes(selectedFleet.id))) return;
+      }
+
+      // 7. Service restriction (Match against package details)
+      if (addon.limitService) {
+        const serviceList = addon.selectedServices || [];
+        const packVal = (selectedPackage?.title || selectedPackage?.category || "").toLowerCase();
+        const matchesAny = serviceList.some((s: string) => packVal.includes(s.toLowerCase()));
+        if (!matchesAny) return;
+      }
+
+      // 8. One-way / Return ride restriction
+      if (addon.limitRideType) {
+        const targetType = addon.rideTypeTarget || "any";
+        if (targetType === "oneway" && details.returnRide) return;
+        if (targetType === "return" && !details.returnRide) return;
+      }
+
       const baseValue = base; 
 
       let value = 0;
-      if (addon.type === 'percentage') {
+      if (addon.type === "percentage") {
         value = baseValue * (addon.value / 100);
       } else {
         value = addon.value;
       }
 
-      addonTotal += value;
+      const impact = addon.operation === "subtraction" ? -value : value;
+      addonTotal += impact;
       appliedAddons.push({
         id: addon.id,
         name: addon.name,
         value: value,
+        impact: impact,
         type: addon.type,
-        target: addon.target
+        target: addon.target,
+        operation: addon.operation,
+        hideLabelInBreakdown: !!addon.hideLabelInBreakdown,
       });
     });
 
@@ -907,16 +1037,41 @@ export default function Offers() {
                               />
                             </div>
                             <div className="md:col-span-2 space-y-2">
-                              <input
-                                required
-                                type="tel"
-                                value={details.phone}
-                                onChange={(e) => setDetails({ ...details, phone: e.target.value })}
-                                className="w-full bg-white/5 border border-white/10 rounded-xl py-4 px-4 
-                     focus:border-gold outline-none transition-all 
-                     placeholder:text-white/20 text-sm font-medium"
-                                placeholder="Phone number"
-                              />
+                              <div className="flex gap-2">
+                                <div className="relative min-w-[120px] w-1/3 p-0">
+                                  <select
+                                    className="custom-select w-full h-[54px] !py-0 !pl-3 text-sm rounded-xl select-none"
+                                    value={parsePhoneNumber(details.phone).countryCode}
+                                    onChange={(e) => {
+                                      const { localNumber } = parsePhoneNumber(details.phone);
+                                      setDetails({ ...details, phone: `${e.target.value} ${localNumber}` });
+                                    }}
+                                  >
+                                    {COUNTRY_CODES.map((c) => (
+                                      <option key={c.code} value={c.code}>
+                                        {c.short}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <input
+                                  required
+                                  type="tel"
+                                  value={parsePhoneNumber(details.phone).localNumber}
+                                  onChange={(e) => {
+                                    let val = e.target.value;
+                                    const { countryCode } = parsePhoneNumber(details.phone);
+                                    if (val.startsWith("+")) {
+                                      const parsed = parsePhoneNumber(val);
+                                      setDetails({ ...details, phone: `${parsed.countryCode} ${parsed.localNumber}` });
+                                    } else {
+                                      setDetails({ ...details, phone: `${countryCode} ${val}` });
+                                    }
+                                  }}
+                                  className="flex-1 bg-white/5 border border-white/10 rounded-xl py-4 px-4 focus:border-gold outline-none transition-all placeholder:text-white/20 text-sm font-medium"
+                                  placeholder="Phone number"
+                                />
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -1443,10 +1598,12 @@ export default function Offers() {
                                <span className="text-xs font-bold font-mono">${bookingPricing.subtotal.toFixed(2)}</span>
                              </div>
                              
-                             {bookingPricing.appliedAddons.map((addon: any, aIdx: number) => (
+                             {bookingPricing.appliedAddons.filter((addon: any) => !addon.hideLabelInBreakdown).map((addon: any, aIdx: number) => (
                                <div key={`offer-summary-addon-${addon.id}-${aIdx}`} className="flex items-center justify-between text-gold/60">
                                  <span className="text-[10px] font-bold uppercase tracking-widest italic">{addon.name}</span>
-                                 <span className="text-xs font-bold font-mono">+${addon.value.toFixed(2)}</span>
+                                 <span className="text-xs font-bold font-mono">
+                                   {addon.operation === "subtraction" ? "-" : "+"}${addon.value.toFixed(2)}
+                                 </span>
                                </div>
                              ))}
                           </div>

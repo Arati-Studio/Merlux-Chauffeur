@@ -14,6 +14,46 @@ import LoginInline from '../components/LoginInline';
 import SEO from '../components/SEO';
 import { generateDescriptionFromContent } from '../lib/seo';
 
+const COUNTRY_CODES = [
+  { code: "+61", short: "AU +61" },
+  { code: "+64", short: "NZ +64" },
+  { code: "+1", short: "US +1" },
+  { code: "+44", short: "UK +44" },
+  { code: "+65", short: "SG +65" },
+  { code: "+86", short: "CN +86" },
+  { code: "+91", short: "IN +91" },
+  { code: "+971", short: "AE +971" },
+  { code: "+60", short: "MY +60" },
+  { code: "+81", short: "JP +81" },
+  { code: "+49", short: "DE +49" },
+  { code: "+33", short: "FR +33" },
+  { code: "+82", short: "KR +82" },
+  { code: "+62", short: "ID +62" },
+  { code: "+66", short: "TH +66" },
+  { code: "+84", short: "VN +84" },
+  { code: "+39", short: "IT +39" },
+  { code: "+34", short: "ES +34" },
+  { code: "+63", short: "PH +63" },
+  { code: "+94", short: "LK +94" },
+];
+
+const parsePhoneNumber = (phone: string) => {
+  const cleanPhone = (phone || "").trim();
+  const sortedCodes = [...COUNTRY_CODES].sort((a, b) => b.code.length - a.code.length);
+  for (const item of sortedCodes) {
+    if (cleanPhone.startsWith(item.code)) {
+      return {
+        countryCode: item.code,
+        localNumber: cleanPhone.substring(item.code.length).trim()
+      };
+    }
+  }
+  return {
+    countryCode: "+61",
+    localNumber: cleanPhone
+  };
+};
+
 export default function Tours() {
   const navigate = useNavigate();
   const { slug } = useParams();
@@ -395,6 +435,92 @@ export default function Tours() {
     (priceAddons || []).forEach((addon) => {
       if (!addon.active) return;
 
+      // 1. Page/Scope Filter
+      if (addon.applyToTours === false) return;
+
+      // 2. Location restriction (Tours don't have GPS coordinates)
+      if (addon.limitLocation) return;
+
+      // 3. Date restriction
+      if (addon.limitDates) {
+        const checkDate = (d: string) => {
+          if (!d) return false;
+          if (addon.startDate && d < addon.startDate) return false;
+          if (addon.endDate && d > addon.endDate) return false;
+          return true;
+        };
+        const matchP = checkDate(details.date);
+        const matchR = details.returnRide ? checkDate(details.returnDate) : false;
+        if (!matchP && !matchR) return;
+      }
+
+      // 4. Time restriction
+      if (addon.limitTime) {
+        const checkTime = (timeStr: string) => {
+          if (!timeStr) return false;
+          if (addon.startTime && timeStr < addon.startTime) return false;
+          if (addon.endTime && timeStr > addon.endTime) return false;
+          return true;
+        };
+        const matchP = checkTime(details.time);
+        const matchR = details.returnRide ? checkTime(details.returnTime) : false;
+        
+        let timeMatch = false;
+        const target = addon.timeTarget || "any";
+        if (target === "pickup") {
+          timeMatch = matchP;
+        } else if (target === "return") {
+          timeMatch = details.returnRide ? matchR : false;
+        } else if (target === "both") {
+          timeMatch = details.returnRide ? (matchP && matchR) : matchP;
+        } else {
+          // "any"
+          timeMatch = details.returnRide ? (matchP || matchR) : matchP;
+        }
+
+        if (!timeMatch) return;
+      }
+
+      // 5. Day of week restriction
+      if (addon.limitDays) {
+        const days = addon.selectedDays || [];
+        const checkDay = (d: string) => {
+          if (!d) return false;
+          try {
+            const parsedDate = new Date(d.replace(/-/g, "/"));
+            const weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+            const dayName = weekdays[parsedDate.getDay()];
+            return days.includes(dayName);
+          } catch (_) {
+            return false;
+          }
+        };
+        const matchP = checkDay(details.date);
+        const matchR = details.returnRide ? checkDay(details.returnDate) : false;
+        if (!matchP && !matchR) return;
+      }
+
+      // 6. Fleet restriction
+      if (addon.limitFleet) {
+        const fleetList = addon.selectedFleet || [];
+        if (!selectedFleet || (!fleetList.includes(selectedFleet.name) && !fleetList.includes(selectedFleet.id))) return;
+      }
+
+      // 7. Service restriction (Match against tour category/title text)
+      if (addon.limitService) {
+        const serviceList = addon.selectedServices || [];
+        const tourVal = (selectedTour?.title || selectedTour?.category || "").toLowerCase();
+        const matchesAny = serviceList.some((s: string) => tourVal.includes(s.toLowerCase()));
+        if (!matchesAny) return;
+      }
+
+      // 8. One-way / Return ride restriction
+      if (addon.limitRideType) {
+        const targetType = addon.rideTypeTarget || "any";
+        if (targetType === "oneway" && details.returnRide) return;
+        if (targetType === "return" && !details.returnRide) return;
+      }
+
       // For tours/offers, gross/net/total are often the same since they are fixed packages
       // but we maintain the logic for consistency
       const baseValue = (base * quantity);
@@ -406,13 +532,17 @@ export default function Tours() {
         value = addon.value;
       }
 
-      addonTotal += value;
+      const impact = addon.operation === "subtraction" ? -value : value;
+      addonTotal += impact;
       appliedAddons.push({
         id: addon.id,
         name: addon.name,
         value: value,
+        impact: impact,
         type: addon.type,
-        target: addon.target
+        target: addon.target,
+        operation: addon.operation,
+        hideLabelInBreakdown: !!addon.hideLabelInBreakdown,
       });
     });
 
@@ -1383,11 +1513,11 @@ export default function Tours() {
                           <span>Ride Price</span>
                           <span className="text-white font-mono">${(getFleetPrice(selectedFleet) * quantity).toFixed(2)}</span>
                         </div>
-                        {bookingPricing.appliedAddons.map((addon: any, aIdx: number) => (
+                        {bookingPricing.appliedAddons.filter((addon: any) => !addon.hideLabelInBreakdown).map((addon: any, aIdx: number) => (
                           <div key={`addon-tour-summary-${addon.id || aIdx}-${aIdx}`} className="flex justify-between border-b border-white/5 pb-4">
                             <span className="text-gold text-[10px] uppercase tracking-widest font-bold">{addon.name}</span>
                             <span className="text-gold font-bold text-sm">
-                              +${(addon.price ?? addon.value ?? addon.amount ?? addon.cost ?? 0).toFixed(2)}
+                              {addon.operation === "subtraction" ? "-" : "+"}${(addon.price ?? addon.value ?? addon.amount ?? addon.cost ?? 0).toFixed(2)}
                             </span>
                           </div>
                         ))}
@@ -1499,16 +1629,43 @@ export default function Tours() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div className="space-y-2">
                           <label className="text-[10px] uppercase tracking-widest font-bold text-white/30 ml-4">Phone Number</label>
-                          <div className="relative">
-                            <Phone className="absolute left-6 top-1/2 -translate-y-1/2 text-gold opacity-50" size={16} />
-                            <input
-                              required
-                              type="tel"
-                              value={details.phone}
-                              onChange={(e) => setDetails({ ...details, phone: e.target.value })}
-                              className="w-full bg-black/40 border border-white/10 rounded-[1.2rem] py-5 pl-14 pr-6 focus:border-gold outline-none transition-all text-sm"
-                              placeholder="+61 400 000 000"
-                            />
+                          <div className="flex gap-3">
+                            <div className="relative min-w-[120px] w-1/3">
+                              <select
+                                className="custom-select w-full h-[62px] !py-0 !pl-4 text-sm rounded-[1.2rem] select-none hover:border-gold/50 cursor-pointer"
+                                value={parsePhoneNumber(details.phone).countryCode}
+                                onChange={(e) => {
+                                  const { localNumber } = parsePhoneNumber(details.phone);
+                                  setDetails({ ...details, phone: `${e.target.value} ${localNumber}` });
+                                }}
+                              >
+                                {COUNTRY_CODES.map((c) => (
+                                  <option key={c.code} value={c.code}>
+                                    {c.short}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="relative flex-1">
+                              <Phone className="absolute left-6 top-1/2 -translate-y-1/2 text-gold opacity-50" size={16} />
+                              <input
+                                required
+                                type="tel"
+                                value={parsePhoneNumber(details.phone).localNumber}
+                                onChange={(e) => {
+                                  let val = e.target.value;
+                                  const { countryCode } = parsePhoneNumber(details.phone);
+                                  if (val.startsWith("+")) {
+                                    const parsed = parsePhoneNumber(val);
+                                    setDetails({ ...details, phone: `${parsed.countryCode} ${parsed.localNumber}` });
+                                  } else {
+                                    setDetails({ ...details, phone: `${countryCode} ${val}` });
+                                  }
+                                }}
+                                className="w-full bg-black/40 border border-white/10 rounded-[1.2rem] py-5 pl-14 pr-6 focus:border-gold outline-none transition-all text-sm"
+                                placeholder="Phone number"
+                              />
+                            </div>
                           </div>
                         </div>
                         <div className="space-y-2">
@@ -1726,13 +1883,15 @@ export default function Tours() {
                           </div>
                         )}
 
-                        {bookingPricing.appliedAddons.length > 0 && (
+                        {bookingPricing.appliedAddons.filter((addon: any) => !addon.hideLabelInBreakdown).length > 0 && (
                           <div className="space-y-2 border-b border-white/5 pb-3">
                             <p className="text-[8px] uppercase tracking-widest text-white/30 font-bold">Price Add-ons</p>
-                            {bookingPricing.appliedAddons.map((addon: any, aIdx: number) => (
+                            {bookingPricing.appliedAddons.filter((addon: any) => !addon.hideLabelInBreakdown).map((addon: any, aIdx: number) => (
                               <div key={`addon-tour-sticky-summary-${addon.id || aIdx}-${aIdx}`} className="flex justify-between text-[10px] text-white/60">
                                 <span>{addon.name}</span>
-                                <span className="font-mono text-gold font-bold">+${addon.value.toFixed(2)}</span>
+                                <span className="font-mono text-gold font-bold">
+                                  {addon.operation === "subtraction" ? "-" : "+"}${addon.value.toFixed(2)}
+                                </span>
                               </div>
                             ))}
                           </div>
@@ -1820,10 +1979,12 @@ export default function Tours() {
                       <span className="text-white/20 text-[10px] uppercase tracking-widest font-bold">Pickup Location</span>
                       <span className="text-white font-bold text-sm">{details.pickup}</span>
                     </div>
-                    {bookingPricing.appliedAddons.map((addon: any, aIdx: number) => (
-                      <div key={`addon-tour-summary-${addon.id || aIdx}-${aIdx}`} className="flex justify-between border-b border-white/5 pb-4">
+                    {bookingPricing.appliedAddons.filter((addon: any) => !addon.hideLabelInBreakdown).map((addon: any, aIdx: number) => (
+                      <div key={`addon-tour-summary-3-${addon.id || aIdx}-${aIdx}`} className="flex justify-between border-b border-white/5 pb-4">
                         <span className="text-gold/40 text-[10px] uppercase tracking-widest font-bold">{addon.name}</span>
-                        <span className="text-gold font-bold text-sm">+{addon.value.toFixed(2)}</span>
+                        <span className="text-gold font-bold text-sm">
+                          {addon.operation === "subtraction" ? "-" : "+"}${addon.value.toFixed(2)}
+                        </span>
                       </div>
                     ))}
                     <div className="flex justify-between pt-6">

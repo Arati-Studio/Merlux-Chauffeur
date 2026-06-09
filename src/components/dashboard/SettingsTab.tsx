@@ -1,16 +1,431 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   Search, X, Plus, Users, Copy, Trash2, Luggage, Save, Loader2, Sparkles, Upload, Code2, Eye,
   Cog, List, MessageSquare, Send, Mail, Download, FileUp, AlertCircle, FileJson, CheckCircle2, Check, Pencil,
   LayoutGrid, ChevronDown, Car, Percent
 } from 'lucide-react';
+import { GoogleMap, useJsApiLoader, Rectangle, Autocomplete } from '@react-google-maps/api';
+import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_ID } from '../../lib/google-maps';
 import { cn } from '../../lib/utils';
 import { FormNotice } from '../FormNotice';
 import ConfirmationModal from './ConfirmationModal';
 import { db, handleFirestoreError, storage, OperationType } from '../../lib/firebase';
 import { collection, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, setDoc, getDoc, getDocs, writeBatch, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject, uploadBytesResumable } from 'firebase/storage';
+
+const GOOGLE_MAPS_API_KEY =
+  import.meta.env.VITE_GOOGLE_MAPS_API_KEY ||
+  import.meta.env.VITE_GOOGLE_MAPS_PLATFORM_KEY ||
+  (process.env as any).GOOGLE_MAPS_PLATFORM_KEY ||
+  '';
+
+interface BBoxMapProps {
+  bboxNorth: number;
+  bboxSouth: number;
+  bboxEast: number;
+  bboxWest: number;
+  onChange: (bounds: { north: number; south: number; east: number; west: number }) => void;
+  bboxes?: Array<{ id: string; name?: string; north: number; south: number; east: number; west: number }>;
+  onBBoxesChange?: (bboxes: Array<{ id: string; name?: string; north: number; south: number; east: number; west: number }>) => void;
+}
+
+const BBoxMap: React.FC<BBoxMapProps> = ({ bboxNorth, bboxSouth, bboxEast, bboxWest, onChange, bboxes, onBBoxesChange }) => {
+  const { isLoaded } = useJsApiLoader({
+    id: GOOGLE_MAPS_ID,
+    googleMapsApiKey: GOOGLE_MAPS_API_KEY,
+    libraries: GOOGLE_MAPS_LIBRARIES,
+  });
+
+  const [map, setMap] = useState<google.maps.Map | null>(null);
+  const rectRef = useRef<google.maps.Rectangle | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [csvInput, setCsvInput] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [locationName, setLocationName] = useState('');
+  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+
+  // Sync CSV input with props if the user is not actively typing
+  useEffect(() => {
+    if (inputRef.current && document.activeElement === inputRef.current) {
+      return;
+    }
+    if (bboxNorth || bboxSouth || bboxEast || bboxWest) {
+      setCsvInput(`${bboxWest || 0},${bboxSouth || 0},${bboxEast || 0},${bboxNorth || 0}`);
+    } else {
+      setCsvInput('');
+    }
+  }, [bboxNorth, bboxSouth, bboxEast, bboxWest]);
+
+  // Sync map center and bounds
+  useEffect(() => {
+    if (map && bboxNorth && bboxSouth && bboxEast && bboxWest) {
+      const bounds = new google.maps.LatLngBounds(
+        { lat: bboxSouth, lng: bboxWest },
+        { lat: bboxNorth, lng: bboxEast }
+      );
+      map.fitBounds(bounds);
+    }
+  }, [map, bboxNorth, bboxSouth, bboxEast, bboxWest]);
+
+  if (!isLoaded) {
+    return (
+      <div className="h-44 flex items-center justify-center bg-white/5 rounded-xl border border-white/10">
+        <div className="flex flex-col items-center gap-2">
+          <Loader2 className="w-5 h-5 text-gold animate-spin" />
+          <p className="text-[10px] uppercase text-white/40 tracking-widest font-bold">Loading Interactive Directory Map...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const center = {
+    lat: (bboxNorth + bboxSouth) / 2 || -37.8136,
+    lng: (bboxEast + bboxWest) / 2 || 144.9631,
+  };
+
+  const handleBoundsChanged = () => {
+    if (rectRef.current) {
+      const bounds = rectRef.current.getBounds();
+      if (bounds) {
+        const ne = bounds.getNorthEast();
+        const sw = bounds.getSouthWest();
+        const n = Number(ne.lat().toFixed(6));
+        const s = Number(sw.lat().toFixed(6));
+        const e = Number(ne.lng().toFixed(6));
+        const w = Number(sw.lng().toFixed(6));
+
+        // Only fire changes if boundaries changed significantly to avoid infinite state cycles
+        if (
+          Math.abs(n - bboxNorth) > 0.0001 ||
+          Math.abs(s - bboxSouth) > 0.0001 ||
+          Math.abs(e - bboxEast) > 0.0001 ||
+          Math.abs(w - bboxWest) > 0.0001
+        ) {
+          onChange({ north: n, south: s, east: e, west: w });
+        }
+      }
+    }
+  };
+
+  const handleMapClick = (e: google.maps.MapMouseEvent) => {
+    if (!e.latLng) return;
+    const lat = e.latLng.lat();
+    const lng = e.latLng.lng();
+    const halfSize = 0.025; // Create a neat starting bounding box size of ~5km around clicking coordinate
+    onChange({
+      north: Number((lat + halfSize).toFixed(6)),
+      south: Number((lat - halfSize).toFixed(6)),
+      east: Number((lng + halfSize).toFixed(6)),
+      west: Number((lng - halfSize).toFixed(6)),
+    });
+  };
+
+  const handleCSVChange = (val: string) => {
+    setCsvInput(val);
+    const parts = val.split(',').map(s => parseFloat(s.trim()));
+    if (parts.length === 4 && parts.every(p => !isNaN(p))) {
+      const isLat = (num: number) => num >= -90 && num <= 90;
+      let west = parts[0], south = parts[1], east = parts[2], north = parts[3];
+
+      if (isLat(parts[0]) && !isLat(parts[1])) {
+        // Format: south, west, north, east
+        south = Math.min(parts[0], parts[2]);
+        north = Math.max(parts[0], parts[2]);
+        west = Math.min(parts[1], parts[3]);
+        east = Math.max(parts[1], parts[3]);
+      } else if (isLat(parts[1]) && !isLat(parts[0])) {
+        // Format: west, south, east, north
+        west = Math.min(parts[0], parts[2]);
+        east = Math.max(parts[0], parts[2]);
+        south = Math.min(parts[1], parts[3]);
+        north = Math.max(parts[1], parts[3]);
+      } else {
+        // Fallback default order: west, south, east, north
+        west = Math.min(parts[0], parts[2]);
+        east = Math.max(parts[0], parts[2]);
+        south = Math.min(parts[1], parts[3]);
+        north = Math.max(parts[1], parts[3]);
+      }
+
+      onChange({
+        north: Number(north.toFixed(6)),
+        south: Number(south.toFixed(6)),
+        east: Number(east.toFixed(6)),
+        west: Number(west.toFixed(6)),
+      });
+    }
+  };
+
+  return (
+    <div className="space-y-3 pb-2">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+        <div className="flex flex-col">
+          <label className="text-[10px] uppercase tracking-widest font-bold text-gold/80 block">
+            Interactive Map Visualizer & Area Editor
+          </label>
+          <span className="text-[8px] text-white/30 uppercase tracking-wider font-medium">
+            Drag handles to resize or click map to move rectangle area
+          </span>
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <label className="text-[9px] uppercase tracking-widest font-bold text-white/40 block">Search Location to Auto-Draw Box</label>
+        <Autocomplete
+          onLoad={(autocomplete) => {
+            autocompleteRef.current = autocomplete;
+          }}
+          onPlaceChanged={() => {
+            if (autocompleteRef.current) {
+              const place = autocompleteRef.current.getPlace();
+              if (place.geometry) {
+                const loc = place.geometry.location;
+                const vp = place.geometry.viewport;
+                
+                if (vp) {
+                  const ne = vp.getNorthEast();
+                  const sw = vp.getSouthWest();
+                  onChange({
+                    north: Number(ne.lat().toFixed(6)),
+                    south: Number(sw.lat().toFixed(6)),
+                    east: Number(ne.lng().toFixed(6)),
+                    west: Number(sw.lng().toFixed(6)),
+                  });
+                } else if (loc) {
+                  const lat = loc.lat();
+                  const lng = loc.lng();
+                  const halfSize = 0.025;
+                  onChange({
+                    north: Number((lat + halfSize).toFixed(6)),
+                    south: Number((lat - halfSize).toFixed(6)),
+                    east: Number((lng + halfSize).toFixed(6)),
+                    west: Number((lng - halfSize).toFixed(6)),
+                  });
+                }
+                
+                if (place.formatted_address) {
+                  setSearchQuery(place.formatted_address);
+                  setLocationName(place.name || place.formatted_address.split(',')[0]);
+                }
+              }
+            }
+          }}
+        >
+          <div className="relative">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Type an address, suburb, or landmark..."
+              className="w-full bg-white/5 border border-white/10 rounded-lg pl-8 pr-8 py-1.5 text-xs outline-none focus:border-gold placeholder:text-white/20 text-white font-sans"
+            />
+            <Search className="absolute left-2.5 top-2.5 w-3 h-3 text-white/30" />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery("");
+                }}
+                className="absolute right-2.5 top-2.5 text-white/30 hover:text-white transition-colors"
+                title="Clear Search"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+        </Autocomplete>
+      </div>
+
+      <div className="space-y-1.5">
+        <label className="text-[9px] uppercase tracking-widest font-bold text-white/40 block">CSV Coordinates (West Lng, South Lat, East Lng, North Lat)</label>
+        <div className="flex gap-2">
+          <input
+            ref={inputRef}
+            type="text"
+            value={csvInput}
+            onChange={(e) => handleCSVChange(e.target.value)}
+            className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs outline-none focus:border-gold placeholder:text-white/20 font-mono text-white"
+            placeholder="e.g. 144.948048,-37.822807,144.979033,-37.805991"
+          />
+          {csvInput && (
+            <button
+              type="button"
+              onClick={() => {
+                setCsvInput("");
+                onChange({ north: 0, south: 0, east: 0, west: 0 });
+              }}
+              className="px-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-white/40 hover:text-white transition-all text-xs shrink-0 font-medium uppercase text-[9px] tracking-wider"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="h-75 w-full rounded-xl overflow-hidden border border-white/10 relative">
+        <GoogleMap
+          mapContainerStyle={{ width: '100%', height: '100%' }}
+          center={center}
+          zoom={10}
+          onLoad={(mapInstance) => setMap(mapInstance)}
+          onClick={handleMapClick}
+          options={{
+            styles: [
+              { "elementType": "geometry", "stylers": [{ "color": "#212121" }] },
+              { "elementType": "labels.icon", "stylers": [{ "visibility": "off" }] },
+              { "elementType": "labels.text.fill", "stylers": [{ "color": "#757575" }] },
+              { "elementType": "labels.text.stroke", "stylers": [{ "color": "#212121" }] },
+              { "featureType": "administrative", "elementType": "geometry", "stylers": [{ "color": "#757575" }] },
+              { "featureType": "road", "elementType": "geometry.fill", "stylers": [{ "color": "#2c2c2c" }] },
+              { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#3c3c3c" }] },
+              { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#000000" }] }
+            ],
+            disableDefaultUI: true,
+            zoomControl: true,
+          }}
+        >
+          {bboxNorth !== 0 && bboxSouth !== 0 && bboxEast !== 0 && bboxWest !== 0 && (
+            <Rectangle
+              onLoad={(r) => { rectRef.current = r; }}
+              onBoundsChanged={handleBoundsChanged}
+              bounds={{
+                north: bboxNorth,
+                south: bboxSouth,
+                east: bboxEast,
+                west: bboxWest,
+              }}
+              options={{
+                draggable: true,
+                editable: true,
+                fillColor: "#D4AF37",
+                fillOpacity: 0.2,
+                strokeColor: "#D4AF37",
+                strokeOpacity: 0.8,
+                strokeWeight: 1.5,
+              }}
+            />
+          )}
+
+          {bboxes && bboxes.map((box, idx) => (
+            <Rectangle
+              key={box.id || idx}
+              bounds={{
+                north: box.north,
+                south: box.south,
+                east: box.east,
+                west: box.west,
+              }}
+              options={{
+                draggable: false,
+                editable: false,
+                fillColor: "#3b82f6",
+                fillOpacity: 0.12,
+                strokeColor: "#3b82f6",
+                strokeOpacity: 0.6,
+                strokeWeight: 1.5,
+              }}
+            />
+          ))}
+        </GoogleMap>
+      </div>
+
+      <div className="space-y-1.5 pt-1">
+        <label className="text-[9px] uppercase tracking-widest font-bold text-white/40 block">Active Range Location Name</label>
+        <input
+          type="text"
+          value={locationName}
+          onChange={(e) => setLocationName(e.target.value)}
+          placeholder="e.g. Melbourne Airport, CBD, Eastern Suburbs, etc."
+          className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs outline-none focus:border-gold placeholder:text-white/20 text-white font-sans"
+        />
+      </div>
+
+      <div className="pt-2">
+        <button
+          type="button"
+          onClick={() => {
+            if (bboxNorth && bboxSouth && bboxEast && bboxWest) {
+              const nameValue = locationName.trim() || `Range #${(bboxes || []).length + 1}`;
+              const newBox = {
+                id: Math.random().toString(36).substring(2, 11),
+                name: nameValue,
+                north: Number(bboxNorth),
+                south: Number(bboxSouth),
+                east: Number(bboxEast),
+                west: Number(bboxWest),
+              };
+              const alreadyExists = (bboxes || []).some(
+                b => b.north === newBox.north && b.south === newBox.south && b.east === newBox.east && b.west === newBox.west
+              );
+              if (alreadyExists) return;
+              const updated = [...(bboxes || []), newBox];
+              if (onBBoxesChange) onBBoxesChange(updated);
+              
+              // Clear input helper states
+              setLocationName("");
+              setSearchQuery("");
+            }
+          }}
+          disabled={!bboxNorth || !bboxSouth || !bboxEast || !bboxWest}
+          className="w-full bg-gold/10 hover:bg-gold/20 text-gold border border-gold/30 rounded-xl py-2 px-3 text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          Add Current Area Map Selection to active ranges ({bboxes?.length || 0} saved)
+        </button>
+      </div>
+
+      {bboxes && bboxes.length > 0 && (
+        <div className="space-y-2 pt-3 border-t border-white/5">
+          <label className="text-[9px] uppercase tracking-widest font-bold text-white/40 block">Saved Bounding Box Ranges ({bboxes.length})</label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto custom-scrollbar pr-1">
+            {bboxes.map((box, idx) => (
+              <div key={box.id || idx} className="flex items-center justify-between bg-white/[0.02] border border-white/5 rounded-xl p-3 gap-2">
+                <div className="flex flex-col text-[10px] text-white/70 font-mono">
+                  <span className="text-[8px] uppercase tracking-widest text-gold font-bold mb-1 block truncate max-w-[180px]" title={box.name || `Range #${idx + 1}`}>
+                    {box.name || `Range #${idx + 1}`}
+                  </span>
+                  <span className="text-white/40">West / South limit:</span>
+                  <span className="text-white/80">{box.west}, {box.south}</span>
+                  <span className="text-white/40 mt-0.5">East / North limit:</span>
+                  <span className="text-white/80">{box.east}, {box.north}</span>
+                </div>
+                <div className="flex flex-col gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onChange({
+                        north: box.north,
+                        south: box.south,
+                        east: box.east,
+                        west: box.west,
+                      });
+                    }}
+                    className="p-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-white/50 hover:text-white transition-all flex items-center justify-center"
+                    title="Load selection back into slider/map coordinates"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const updated = (bboxes || []).filter(curr => curr.id !== box.id);
+                      if (onBBoxesChange) onBBoxesChange(updated);
+                    }}
+                    className="p-1.5 bg-red-500/5 hover:bg-red-500/10 rounded-lg text-red-400 hover:text-red-300 transition-all flex items-center justify-center"
+                    title="Delete range segment"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const ALL_COLLECTIONS = [
   { id: 'bookings', label: 'Bookings' },
@@ -1025,11 +1440,53 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
   const handleUpdatePriceAddon = async (id: string | null, data: any) => {
     setIsSavingPriceAddon(true);
     try {
+      const sanitizedData = {
+        name: data.name || '',
+        value: Number(data.value) || 0,
+        type: data.type || 'percentage',
+        operation: data.operation || 'addition',
+        target: data.target || 'gross',
+        active: data.active ?? true,
+        applyToBooking: data.applyToBooking !== false,
+        applyToOffers: data.applyToOffers !== false,
+        applyToTours: data.applyToTours !== false,
+        hideLabelInBreakdown: !!data.hideLabelInBreakdown,
+
+        limitLocation: !!data.limitLocation,
+        bboxNorth: data.limitLocation ? (Number(data.bboxNorth) || 0) : 0,
+        bboxSouth: data.limitLocation ? (Number(data.bboxSouth) || 0) : 0,
+        bboxEast: data.limitLocation ? (Number(data.bboxEast) || 0) : 0,
+        bboxWest: data.limitLocation ? (Number(data.bboxWest) || 0) : 0,
+        bboxTarget: data.limitLocation ? (data.bboxTarget || 'pickup') : 'pickup',
+        bboxes: data.limitLocation ? (data.bboxes || []) : [],
+
+        limitDates: !!data.limitDates,
+        startDate: data.limitDates ? (data.startDate || '') : '',
+        endDate: data.limitDates ? (data.endDate || '') : '',
+
+        limitTime: !!data.limitTime,
+        startTime: data.limitTime ? (data.startTime || '') : '',
+        endTime: data.limitTime ? (data.endTime || '') : '',
+        timeTarget: data.limitTime ? (data.timeTarget || 'pickup') : 'pickup',
+
+        limitDays: !!data.limitDays,
+        selectedDays: data.limitDays ? (data.selectedDays || []) : [],
+
+        limitFleet: !!data.limitFleet,
+        selectedFleet: data.limitFleet ? (data.selectedFleet || []) : [],
+
+        limitService: !!data.limitService,
+        selectedServices: data.limitService ? (data.selectedServices || []) : [],
+
+        limitRideType: !!data.limitRideType,
+        rideTypeTarget: data.limitRideType ? (data.rideTypeTarget || 'oneway') : 'oneway',
+      };
+
       if (!id || id === 'new') {
         const newRef = doc(collection(db, 'price-addons'));
-        await setDoc(newRef, { ...data, id: newRef.id, createdAt: serverTimestamp() });
+        await setDoc(newRef, { ...sanitizedData, id: newRef.id, createdAt: serverTimestamp() });
       } else {
-        await updateDoc(doc(db, 'price-addons', id), { ...data, updatedAt: serverTimestamp() });
+        await updateDoc(doc(db, 'price-addons', id), { ...sanitizedData, updatedAt: serverTimestamp() });
       }
       setShowPriceAddonModal(false);
       setEditingPriceAddon(null);
@@ -1746,6 +2203,29 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
                   operation: 'addition',
                   target: 'gross',
                   active: true,
+                  applyToBooking: true,
+                  applyToOffers: true,
+                  applyToTours: true,
+                  limitLocation: false,
+                  bboxNorth: -37.5,
+                  bboxSouth: -38.5,
+                  bboxEast: 145.5,
+                  bboxWest: 144.5,
+                  bboxTarget: 'pickup',
+                  limitDates: false,
+                  startDate: '',
+                  endDate: '',
+                  limitTime: false,
+                  startTime: '',
+                  endTime: '',
+                  limitDays: false,
+                  selectedDays: [],
+                  limitFleet: false,
+                  selectedFleet: [],
+                  limitService: false,
+                  selectedServices: [],
+                  limitRideType: false,
+                  rideTypeTarget: 'any'
                 });
                 setShowPriceAddonModal(true);
               }}
@@ -1872,34 +2352,6 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
                 <h4 className="text-[10px] uppercase tracking-[0.2em] font-black text-white/40">
                   Price Component Visibility
                 </h4>
-              </div>
-
-              <div className="flex items-center justify-between p-5 bg-white/[0.03] rounded-2xl border border-white/5 hover:border-gold/20 transition-all group">
-                <div>
-                  <p className="text-sm font-bold group-hover:text-gold transition-colors">Show Gross Price</p>
-                  <p className="text-[9px] text-white/30 uppercase tracking-widest font-bold mt-0.5">
-                    Subtotal before discounts
-                  </p>
-                </div>
-                <button
-                  onClick={() =>
-                    setSystemSettings({
-                      ...systemSettings,
-                      showGrossPrice: !systemSettings?.showGrossPrice,
-                    })
-                  }
-                  className={cn(
-                    "w-11 h-6 rounded-full transition-all relative shrink-0",
-                    systemSettings?.showGrossPrice !== false ? "bg-gold" : "bg-white/10"
-                  )}
-                >
-                  <div
-                    className={cn(
-                      "absolute top-1 w-4 h-4 rounded-full bg-white transition-all shadow-sm",
-                      systemSettings?.showGrossPrice !== false ? "right-1" : "left-1"
-                    )}
-                  />
-                </button>
               </div>
 
               <div className="p-5 bg-white/[0.03] rounded-2xl border border-white/5 space-y-5 hover:border-gold/20 transition-all">
@@ -3716,9 +4168,9 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
             <motion.div
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
-              className="w-full max-w-md glass p-8 rounded-3xl border border-gold/20 max-h-[90vh] overflow-y-auto"
+              className="w-full max-w-xl glass p-8 rounded-3xl border border-gold/20 max-h-[90vh] overflow-y-auto custom-scrollbar"
             >
-              <div className="flex justify-between items-center mb-6">
+              <div className="flex justify-between items-center mb-6 border-b border-white/[0.05] pb-4">
                 <h3 className="text-xl font-display text-gold">
                   {editingPriceAddon?.id ? "Edit Price Add-on" : "Add Price Add-on"}
                 </h3>
@@ -3760,94 +4212,491 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
                 </div>
               </div>
 
-              <div className="space-y-4">
-                <div>
-                  <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-1 block">
-                    Add-on Name
-                  </label>
-                  <input
-                    type="text"
-                    value={editingPriceAddon?.name || ""}
-                    onChange={(e) =>
-                      setEditingPriceAddon({
-                        ...editingPriceAddon,
-                        name: e.target.value,
-                      })
-                    }
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-gold transition-all"
-                    placeholder="Fuel Surcharge"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-6">
+                {/* Core Settings Section */}
+                <div className="space-y-4">
+                  <h4 className="text-[11px] uppercase tracking-wider font-bold text-gold/80 border-b border-white/[0.03] pb-2">Basic Information</h4>
                   <div>
                     <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-1 block">
-                      Value
+                      Add-on Name <span className="text-red-500">*</span>
                     </label>
                     <input
-                      type="number"
-                      value={editingPriceAddon?.value || 0}
+                      type="text"
+                      value={editingPriceAddon?.name || ""}
                       onChange={(e) =>
                         setEditingPriceAddon({
                           ...editingPriceAddon,
-                          value: parseFloat(e.target.value),
+                          name: e.target.value,
                         })
                       }
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-gold transition-all"
+                      placeholder="Fuel Surcharge (e.g. Peak Surcharge)"
+                      required
                     />
                   </div>
-                  <div>
-                    <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-1 block">
-                      Value Type
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-1 block">
+                        Value <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        value={editingPriceAddon?.value || 0}
+                        onChange={(e) =>
+                          setEditingPriceAddon({
+                            ...editingPriceAddon,
+                            value: parseFloat(e.target.value) || 0,
+                          })
+                        }
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-gold transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-1 block">
+                        Value Type
+                      </label>
+                      <select
+                        value={editingPriceAddon?.type || "percentage"}
+                        onChange={(e) =>
+                          setEditingPriceAddon({ ...editingPriceAddon, type: e.target.value })
+                        }
+                        className="custom-select w-full py-3 text-sm"
+                      >
+                        <option value="percentage">% Percentage</option>
+                        <option value="fixed">$ Fixed Amount</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-1 block">
+                        Operation
+                      </label>
+                      <select
+                        value={editingPriceAddon?.operation || "addition"}
+                        onChange={(e) =>
+                          setEditingPriceAddon({ ...editingPriceAddon, operation: e.target.value })
+                        }
+                        className="custom-select w-full py-3 text-sm"
+                      >
+                        <option value="addition">Addition (+)</option>
+                        <option value="subtraction">Subtraction (-)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-1 block">
+                        Target Price Base
+                      </label>
+                      <select
+                        value={editingPriceAddon?.target || "gross"}
+                        onChange={(e) =>
+                          setEditingPriceAddon({ ...editingPriceAddon, target: e.target.value })
+                        }
+                        className="custom-select w-full py-3 text-sm"
+                      >
+                        <option value="gross">Gross Price (Base)</option>
+                        <option value="net">Net Price (Post-Discount)</option>
+                        <option value="total">Total Price (Final)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="pt-2">
+                    <label className="flex items-center gap-2.5 p-3.5 bg-white/5 rounded-xl border border-white/5 cursor-pointer hover:border-gold/30 transition-all">
+                      <input
+                        type="checkbox"
+                        checked={!!editingPriceAddon?.hideLabelInBreakdown}
+                        onChange={(e) => setEditingPriceAddon({ ...editingPriceAddon, hideLabelInBreakdown: e.target.checked })}
+                        className="w-4 h-4 rounded border-white/10 bg-white/5 text-gold focus:ring-gold cursor-pointer"
+                      />
+                      <div className="flex flex-col">
+                        <span className="text-[10px] uppercase tracking-widest font-bold text-white/80">Hide Label on Price Breakdown</span>
+                        <span className="text-[9px] text-white/40">Keep value applied to transaction totals, but do not show separate list item in consumer breakdown summary sheets</span>
+                      </div>
                     </label>
-                    <select
-                      value={editingPriceAddon?.type || "percentage"}
-                      onChange={(e) =>
-                        setEditingPriceAddon({ ...editingPriceAddon, type: e.target.value })
-                      }
-                      className="custom-select w-full py-3 text-sm"
-                    >
-                      <option value="percentage">% Percentage</option>
-                      <option value="fixed">$ Fixed Amount</option>
-                    </select>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-1 block">
-                      Operation
+                {/* Scope Application Section */}
+                <div className="space-y-4 pt-2 border-t border-white/[0.03]">
+                  <h4 className="text-[11px] uppercase tracking-wider font-bold text-gold/80 pb-2">Where to Apply</h4>
+                  <div className="grid grid-cols-3 gap-2">
+                    <label className="flex items-center gap-2 p-2 bg-white/5 rounded-lg border border-white/5 cursor-pointer hover:border-gold/30 transition-all">
+                      <input
+                        type="checkbox"
+                        checked={editingPriceAddon?.applyToBooking !== false}
+                        onChange={(e) => setEditingPriceAddon({ ...editingPriceAddon, applyToBooking: e.target.checked })}
+                        className="w-3 h-3 rounded border-white/10 bg-white/5 text-gold focus:ring-gold"
+                      />
+                      <span className="text-[10px] uppercase tracking-widest font-bold text-white/60">Booking Page</span>
                     </label>
-                    <select
-                      value={editingPriceAddon?.operation || "addition"}
-                      onChange={(e) =>
-                        setEditingPriceAddon({ ...editingPriceAddon, operation: e.target.value })
-                      }
-                      className="custom-select w-full py-3 text-sm"
-                    >
-                      <option value="addition">Addition (+)</option>
-                      <option value="subtraction">Subtraction (-)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-1 block">
-                      Target Price Base
+                    <label className="flex items-center gap-2 p-2 bg-white/5 rounded-lg border border-white/5 cursor-pointer hover:border-gold/30 transition-all">
+                      <input
+                        type="checkbox"
+                        checked={editingPriceAddon?.applyToOffers !== false}
+                        onChange={(e) => setEditingPriceAddon({ ...editingPriceAddon, applyToOffers: e.target.checked })}
+                        className="w-3 h-3 rounded border-white/10 bg-white/5 text-gold focus:ring-gold"
+                      />
+                      <span className="text-[10px] uppercase tracking-widest font-bold text-white/60">Offers Page</span>
                     </label>
-                    <select
-                      value={editingPriceAddon?.target || "gross"}
-                      onChange={(e) =>
-                        setEditingPriceAddon({ ...editingPriceAddon, target: e.target.value })
-                      }
-                      className="custom-select w-full py-3 text-sm"
-                    >
-                      <option value="gross">Gross Price (Base)</option>
-                      <option value="net">Net Price (Post-Discount)</option>
-                      <option value="total">Total Price (Final)</option>
-                    </select>
+                    <label className="flex items-center gap-2 p-2 bg-white/5 rounded-lg border border-white/5 cursor-pointer hover:border-gold/30 transition-all">
+                      <input
+                        type="checkbox"
+                        checked={editingPriceAddon?.applyToTours !== false}
+                        onChange={(e) => setEditingPriceAddon({ ...editingPriceAddon, applyToTours: e.target.checked })}
+                        className="w-3 h-3 rounded border-white/10 bg-white/5 text-gold focus:ring-gold"
+                      />
+                      <span className="text-[10px] uppercase tracking-widest font-bold text-white/60">Tours Page</span>
+                    </label>
                   </div>
                 </div>
 
-                <div className="pt-4 flex gap-4">
+                {/* Advanced Conditional Constraints */}
+                <div className="space-y-5 pt-4 border-t border-white/[0.05]">
+                  <h4 className="text-[11px] uppercase tracking-wide font-bold text-gold/80 flex items-center justify-between">
+                    <span>Advanced Conditional Constraints</span>
+                    <span className="text-[8px] text-white/30 uppercase normal-case font-normal">(Match all enabled criteria)</span>
+                  </h4>
+
+                  {/* 1. Location Bounding Box */}
+                  <div className="space-y-2 bg-white/[0.01] p-3.5 rounded-2xl border border-white/5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] uppercase tracking-wider font-bold text-white/80">GPS Bounding Box Restriction</span>
+                        <span className="text-[9px] text-white/30">Apply only when route coordinate values reside within boundaries</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setEditingPriceAddon({ ...editingPriceAddon, limitLocation: !editingPriceAddon.limitLocation })}
+                        className={cn(
+                          "w-10 h-5 rounded-full transition-all relative shrink-0",
+                          editingPriceAddon?.limitLocation ? "bg-gold" : "bg-white/10"
+                        )}
+                      >
+                        <div className={cn("absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all", editingPriceAddon?.limitLocation ? "right-1" : "left-1")} />
+                      </button>
+                    </div>
+
+                    {editingPriceAddon?.limitLocation && (
+                      <div className="space-y-3 pt-3 border-t border-white/5">
+                        <BBoxMap
+                          bboxNorth={Number(editingPriceAddon?.bboxNorth) || -37.5}
+                          bboxSouth={Number(editingPriceAddon?.bboxSouth) || -38.5}
+                          bboxEast={Number(editingPriceAddon?.bboxEast) || 145.5}
+                          bboxWest={Number(editingPriceAddon?.bboxWest) || 144.5}
+                          bboxes={editingPriceAddon?.bboxes || []}
+                          onChange={(bounds) => setEditingPriceAddon({
+                            ...editingPriceAddon,
+                            bboxNorth: bounds.north,
+                            bboxSouth: bounds.south,
+                            bboxEast: bounds.east,
+                            bboxWest: bounds.west,
+                          })}
+                          onBBoxesChange={(updatedBBoxes) => setEditingPriceAddon({
+                            ...editingPriceAddon,
+                            bboxes: updatedBBoxes
+                          })}
+                        />
+
+                        <div>
+                          <label className="text-[9px] uppercase tracking-widest font-bold text-white/40 mb-1 block">Coordinate to Check</label>
+                          <select
+                            value={editingPriceAddon?.bboxTarget || "pickup"}
+                            onChange={(e) => setEditingPriceAddon({ ...editingPriceAddon, bboxTarget: e.target.value })}
+                            className="custom-select w-full py-2 text-xs"
+                          >
+                            <option value="pickup">Pickup Location</option>
+                            <option value="dropoff">Dropoff Location</option>
+                            <option value="both">Both Pickup & Dropoff</option>
+                            <option value="either">Either Pickup or Dropoff</option>
+                          </select>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 2. Specific Date Selection */}
+                  <div className="space-y-2 bg-white/[0.01] p-3.5 rounded-2xl border border-white/5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] uppercase tracking-wider font-bold text-white/80">Date Range Limit</span>
+                        <span className="text-[9px] text-white/30">Make add-on active only for specific reservation dates</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setEditingPriceAddon({ ...editingPriceAddon, limitDates: !editingPriceAddon.limitDates })}
+                        className={cn(
+                          "w-10 h-5 rounded-full transition-all relative shrink-0",
+                          editingPriceAddon?.limitDates ? "bg-gold" : "bg-white/10"
+                        )}
+                      >
+                        <div className={cn("absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all", editingPriceAddon?.limitDates ? "right-1" : "left-1")} />
+                      </button>
+                    </div>
+
+                    {editingPriceAddon?.limitDates && (
+                      <div className="grid grid-cols-2 gap-3 pt-3 border-t border-white/5">
+                        <div>
+                          <label className="text-[9px] uppercase tracking-widest font-bold text-white/40 mb-1 block">Start Date</label>
+                          <input
+                            type="date"
+                            value={editingPriceAddon?.startDate || ""}
+                            onChange={(e) => setEditingPriceAddon({ ...editingPriceAddon, startDate: e.target.value })}
+                            className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs outline-none focus:border-gold text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[9px] uppercase tracking-widest font-bold text-white/40 mb-1 block">End Date</label>
+                          <input
+                            type="date"
+                            value={editingPriceAddon?.endDate || ""}
+                            onChange={(e) => setEditingPriceAddon({ ...editingPriceAddon, endDate: e.target.value })}
+                            className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs outline-none focus:border-gold text-white"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 3. Specific Time Selection */}
+                  <div className="space-y-2 bg-white/[0.01] p-3.5 rounded-2xl border border-white/5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] uppercase tracking-wider font-bold text-white/80">Time Window Limit</span>
+                        <span className="text-[9px] text-white/30">Apply surcharge/discount within daily clock time ranges</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setEditingPriceAddon({ ...editingPriceAddon, limitTime: !editingPriceAddon.limitTime })}
+                        className={cn(
+                          "w-10 h-5 rounded-full transition-all relative shrink-0",
+                          editingPriceAddon?.limitTime ? "bg-gold" : "bg-white/10"
+                        )}
+                      >
+                        <div className={cn("absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all", editingPriceAddon?.limitTime ? "right-1" : "left-1")} />
+                      </button>
+                    </div>
+
+                    {editingPriceAddon?.limitTime && (
+                      <div className="space-y-3 pt-3 border-t border-white/5">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-[9px] uppercase tracking-widest font-bold text-white/40 mb-1 block">Start Time</label>
+                            <input
+                              type="time"
+                              value={editingPriceAddon?.startTime || ""}
+                              onChange={(e) => setEditingPriceAddon({ ...editingPriceAddon, startTime: e.target.value })}
+                              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs outline-none focus:border-gold text-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] uppercase tracking-widest font-bold text-white/40 mb-1 block">End Time</label>
+                            <input
+                              type="time"
+                              value={editingPriceAddon?.endTime || ""}
+                              onChange={(e) => setEditingPriceAddon({ ...editingPriceAddon, endTime: e.target.value })}
+                              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs outline-none focus:border-gold text-white"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-[9px] uppercase tracking-widest font-bold text-white/40 mb-1 block">Time to Check</label>
+                          <select
+                            value={editingPriceAddon?.timeTarget || "pickup"}
+                            onChange={(e) => setEditingPriceAddon({ ...editingPriceAddon, timeTarget: e.target.value })}
+                            className="custom-select w-full py-2 text-xs"
+                          >
+                            <option value="pickup">Pickup Time Only</option>
+                            <option value="return">Return Time Only</option>
+                            <option value="any">Any Time (Either Pickup or Return)</option>
+                            <option value="both">Both Times (Pickup and Return must both align)</option>
+                          </select>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 4. Days of the Week Selection */}
+                  <div className="space-y-2 bg-white/[0.01] p-3.5 rounded-2xl border border-white/5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] uppercase tracking-wider font-bold text-white/80">Weekly Days Limit</span>
+                        <span className="text-[9px] text-white/30">Choose specific days of the week when this applies</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setEditingPriceAddon({ ...editingPriceAddon, limitDays: !editingPriceAddon.limitDays })}
+                        className={cn(
+                          "w-10 h-5 rounded-full transition-all relative shrink-0",
+                          editingPriceAddon?.limitDays ? "bg-gold" : "bg-white/10"
+                        )}
+                      >
+                        <div className={cn("absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all", editingPriceAddon?.limitDays ? "right-1" : "left-1")} />
+                      </button>
+                    </div>
+
+                    {editingPriceAddon?.limitDays && (
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-3 border-t border-white/5">
+                        {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((day) => {
+                          const current = editingPriceAddon?.selectedDays || [];
+                          const isChecked = current.includes(day);
+                          return (
+                            <label key={day} className="flex items-center gap-1.5 p-1.5 bg-white/5 rounded-lg border border-white/5 cursor-pointer hover:border-gold/30 transition-all">
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={(e) => {
+                                  const next = e.target.checked
+                                    ? [...current, day]
+                                    : current.filter((d: string) => d !== day);
+                                  setEditingPriceAddon({ ...editingPriceAddon, selectedDays: next });
+                                }}
+                                className="w-3 h-3 rounded bg-white/5 text-gold border-white/10 focus:ring-gold"
+                              />
+                              <span className="text-[9px] uppercase tracking-widest font-bold text-white/70">{day.substring(0, 3)}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 5. Fleet Selection */}
+                  <div className="space-y-2 bg-white/[0.01] p-3.5 rounded-2xl border border-white/5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] uppercase tracking-wider font-bold text-white/80">Vehicle Fleet Limit</span>
+                        <span className="text-[9px] text-white/30">Apply only to specific vehicles in your active fleet register</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setEditingPriceAddon({ ...editingPriceAddon, limitFleet: !editingPriceAddon.limitFleet })}
+                        className={cn(
+                          "w-10 h-5 rounded-full transition-all relative shrink-0",
+                          editingPriceAddon?.limitFleet ? "bg-gold" : "bg-white/10"
+                        )}
+                      >
+                        <div className={cn("absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all", editingPriceAddon?.limitFleet ? "right-1" : "left-1")} />
+                      </button>
+                    </div>
+
+                    {editingPriceAddon?.limitFleet && (
+                      <div className="space-y-2 pt-3 border-t border-white/5">
+                        {(!fleet || fleet.length === 0) ? (
+                          <p className="text-[10px] text-white/30 italic">No vehicles found in fleet settings.</p>
+                        ) : (
+                          <div className="grid grid-cols-2 gap-2 max-h-28 overflow-y-auto custom-scrollbar p-1">
+                            {fleet.map((v) => {
+                              const current = editingPriceAddon?.selectedFleet || [];
+                              const isChecked = current.includes(v.id) || current.includes(v.name);
+                              return (
+                                <label key={v.id} className="flex items-center gap-2 p-1.5 bg-white/5 rounded-lg border border-white/5 cursor-pointer hover:border-gold/30 transition-all">
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(e) => {
+                                      const next = e.target.checked
+                                        ? [...current, v.name]
+                                        : current.filter((item: string) => item !== v.name && item !== v.id);
+                                      setEditingPriceAddon({ ...editingPriceAddon, selectedFleet: next });
+                                    }}
+                                    className="w-3 h-3 rounded bg-white/5 text-gold border-white/10 focus:ring-gold"
+                                  />
+                                  <span className="text-[9px] uppercase tracking-wider font-bold text-white/70 truncate">{v.name}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 6. Service Selection */}
+                  <div className="space-y-2 bg-white/[0.01] p-3.5 rounded-2xl border border-white/5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] uppercase tracking-wider font-bold text-white/80">Service Type Limit</span>
+                        <span className="text-[9px] text-white/30">Limit surcharge to wedding, corporate, airport services, etc.</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setEditingPriceAddon({ ...editingPriceAddon, limitService: !editingPriceAddon.limitService })}
+                        className={cn(
+                          "w-10 h-5 rounded-full transition-all relative shrink-0",
+                          editingPriceAddon?.limitService ? "bg-gold" : "bg-white/10"
+                        )}
+                      >
+                        <div className={cn("absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all", editingPriceAddon?.limitService ? "right-1" : "left-1")} />
+                      </button>
+                    </div>
+
+                    {editingPriceAddon?.limitService && (
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 pt-3 border-t border-white/5">
+                        {["airport", "corporate", "wedding", "event", "hourly", "occasions"].map((service) => {
+                          const current = editingPriceAddon?.selectedServices || [];
+                          const isChecked = current.includes(service);
+                          return (
+                            <label key={service} className="flex items-center gap-2 p-1.5 bg-white/5 rounded-lg border border-white/5 cursor-pointer hover:border-gold/30 transition-all">
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={(e) => {
+                                  const next = e.target.checked
+                                    ? [...current, service]
+                                    : current.filter((s: string) => s !== service);
+                                  setEditingPriceAddon({ ...editingPriceAddon, selectedServices: next });
+                                }}
+                                className="w-3 h-3 rounded bg-white/5 text-gold border-white/10 focus:ring-gold"
+                              />
+                              <span className="text-[9px] uppercase tracking-widest font-bold text-white/70">{service}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 7. Ride Type: One-way / Return */}
+                  <div className="space-y-2 bg-white/[0.01] p-3.5 rounded-2xl border border-white/5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] uppercase tracking-wider font-bold text-white/80">Ride Type Restriction</span>
+                        <span className="text-[9px] text-white/30 font-display">Apply to Return, One-way, or Any booking format</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setEditingPriceAddon({ ...editingPriceAddon, limitRideType: !editingPriceAddon.limitRideType })}
+                        className={cn(
+                          "w-10 h-5 rounded-full transition-all relative shrink-0",
+                          editingPriceAddon?.limitRideType ? "bg-gold" : "bg-white/10"
+                        )}
+                      >
+                        <div className={cn("absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all", editingPriceAddon?.limitRideType ? "right-1" : "left-1")} />
+                      </button>
+                    </div>
+
+                    {editingPriceAddon?.limitRideType && (
+                      <div className="pt-3 border-t border-white/5">
+                        <label className="text-[9px] uppercase tracking-widest font-gold font-bold text-white/40 mb-1 block">Applicable Format</label>
+                        <select
+                          value={editingPriceAddon?.rideTypeTarget || "oneway"}
+                          onChange={(e) => setEditingPriceAddon({ ...editingPriceAddon, rideTypeTarget: e.target.value })}
+                          className="custom-select w-full py-2 text-xs"
+                        >
+                          <option value="oneway">One-Way Rides Only</option>
+                          <option value="return">Return Rides Only</option>
+                          <option value="any">Either Format (Any)</option>
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="pt-4 flex gap-4 min-h-[50px] border-t border-white/[0.05]">
                   <button
                     onClick={() => setShowPriceAddonModal(false)}
                     className="flex-1 py-3 text-xs font-bold uppercase border border-white/20 rounded-xl text-white/70 hover:text-white hover:border-white/40 transition-all"

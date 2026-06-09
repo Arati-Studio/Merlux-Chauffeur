@@ -72,6 +72,46 @@ import SEO from "../components/SEO";
 
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_ID } from "../lib/google-maps";
 
+const COUNTRY_CODES = [
+  { code: "+61", short: "AU +61" },
+  { code: "+64", short: "NZ +64" },
+  { code: "+1", short: "US +1" },
+  { code: "+44", short: "UK +44" },
+  { code: "+65", short: "SG +65" },
+  { code: "+86", short: "CN +86" },
+  { code: "+91", short: "IN +91" },
+  { code: "+971", short: "AE +971" },
+  { code: "+60", short: "MY +60" },
+  { code: "+81", short: "JP +81" },
+  { code: "+49", short: "DE +49" },
+  { code: "+33", short: "FR +33" },
+  { code: "+82", short: "KR +82" },
+  { code: "+62", short: "ID +62" },
+  { code: "+66", short: "TH +66" },
+  { code: "+84", short: "VN +84" },
+  { code: "+39", short: "IT +39" },
+  { code: "+34", short: "ES +34" },
+  { code: "+63", short: "PH +63" },
+  { code: "+94", short: "LK +94" },
+];
+
+const parsePhoneNumber = (phone: string) => {
+  const cleanPhone = (phone || "").trim();
+  const sortedCodes = [...COUNTRY_CODES].sort((a, b) => b.code.length - a.code.length);
+  for (const item of sortedCodes) {
+    if (cleanPhone.startsWith(item.code)) {
+      return {
+        countryCode: item.code,
+        localNumber: cleanPhone.substring(item.code.length).trim()
+      };
+    }
+  }
+  return {
+    countryCode: "+61",
+    localNumber: cleanPhone
+  };
+};
+
 // Suppress Google Maps Places Autocomplete, DirectionsService, Marker, and DirectionsRenderer deprecation warnings
 if (typeof window !== "undefined") {
   const originalWarn = console.warn;
@@ -79,13 +119,13 @@ if (typeof window !== "undefined") {
     if (
       args[0] &&
       typeof args[0] === "string" &&
-      (args[0].includes("google.maps.places.Autocomplete") || 
-       args[0].includes("PlaceAutocompleteElement") ||
-       args[0].includes("google.maps.DirectionsService") ||
-       args[0].includes("Route.computeRoutes") ||
-       args[0].includes("google.maps.Marker") ||
-       args[0].includes("AdvancedMarkerElement") ||
-       args[0].includes("google.maps.DirectionsRenderer"))
+      (args[0].includes("google.maps.places.Autocomplete") ||
+        args[0].includes("PlaceAutocompleteElement") ||
+        args[0].includes("google.maps.DirectionsService") ||
+        args[0].includes("Route.computeRoutes") ||
+        args[0].includes("google.maps.Marker") ||
+        args[0].includes("AdvancedMarkerElement") ||
+        args[0].includes("google.maps.DirectionsRenderer"))
     ) {
       return;
     }
@@ -518,6 +558,130 @@ export default function Booking() {
       (priceAddons || []).forEach((addon) => {
         if (!addon.active) return;
 
+        // 1. Page validation
+        if (addon.applyToBooking === false) return;
+
+        // 2. Location restriction (Bounding Box GPS coordinates)
+        if (addon.limitLocation) {
+          const checkBBoxLocation = (lat: number, lng: number) => {
+            // First check multiple bboxes if defined and non-empty
+            if (addon.bboxes && addon.bboxes.length > 0) {
+              return addon.bboxes.some((box: any) => {
+                const n = Number(box.north);
+                const s = Number(box.south);
+                const e = Number(box.east);
+                const w = Number(box.west);
+                const matchLat = lat >= Math.min(s, n) && lat <= Math.max(s, n);
+                const matchLng = lng >= Math.min(w, e) && lng <= Math.max(w, e);
+                return matchLat && matchLng;
+              });
+            }
+            // Fallback to single bbox fields
+            const n = Number(addon.bboxNorth);
+            const s = Number(addon.bboxSouth);
+            const e = Number(addon.bboxEast);
+            const w = Number(addon.bboxWest);
+            const matchLat = lat >= Math.min(s, n) && lat <= Math.max(s, n);
+            const matchLng = lng >= Math.min(w, e) && lng <= Math.max(w, e);
+            return matchLat && matchLng;
+          };
+
+          const hasPickup = pickupCoords && typeof pickupCoords.lat === "number" && typeof pickupCoords.lng === "number";
+          const hasDropoff = dropoffCoords && typeof dropoffCoords.lat === "number" && typeof dropoffCoords.lng === "number";
+
+          let locationMatch = false;
+          if (addon.bboxTarget === "pickup") {
+            locationMatch = !!(hasPickup && checkBBoxLocation(pickupCoords.lat, pickupCoords.lng));
+          } else if (addon.bboxTarget === "dropoff") {
+            locationMatch = !!(hasDropoff && checkBBoxLocation(dropoffCoords.lat, dropoffCoords.lng));
+          } else if (addon.bboxTarget === "both") {
+            locationMatch = !!(hasPickup && hasDropoff && checkBBoxLocation(pickupCoords.lat, pickupCoords.lng) && checkBBoxLocation(dropoffCoords.lat, dropoffCoords.lng));
+          } else if (addon.bboxTarget === "either") {
+            const matchP = hasPickup && checkBBoxLocation(pickupCoords.lat, pickupCoords.lng);
+            const matchD = hasDropoff && checkBBoxLocation(dropoffCoords.lat, dropoffCoords.lng);
+            locationMatch = !!(matchP || matchD);
+          }
+          if (!locationMatch) return;
+        }
+
+        // 3. Date restriction
+        if (addon.limitDates) {
+          const checkDate = (d: string) => {
+            if (!d) return false;
+            if (addon.startDate && d < addon.startDate) return false;
+            if (addon.endDate && d > addon.endDate) return false;
+            return true;
+          };
+          const matchP = checkDate(formData.date);
+          const matchR = formData.isReturn ? checkDate(formData.returnDate) : false;
+          if (!matchP && !matchR) return;
+        }
+
+        // 4. Time restriction
+        if (addon.limitTime) {
+          const checkTime = (timeStr: string) => {
+            if (!timeStr) return false;
+            if (addon.startTime && timeStr < addon.startTime) return false;
+            if (addon.endTime && timeStr > addon.endTime) return false;
+            return true;
+          };
+          const matchP = checkTime(formData.time);
+          const matchR = formData.isReturn ? checkTime(formData.returnTime) : false;
+          
+          let timeMatch = false;
+          const target = addon.timeTarget || "any";
+          if (target === "pickup") {
+            timeMatch = matchP;
+          } else if (target === "return") {
+            timeMatch = formData.isReturn ? matchR : false;
+          } else if (target === "both") {
+            timeMatch = formData.isReturn ? (matchP && matchR) : matchP;
+          } else {
+            // "any" state
+            timeMatch = formData.isReturn ? (matchP || matchR) : matchP;
+          }
+
+          if (!timeMatch) return;
+        }
+
+        // 5. Day of week restriction
+        if (addon.limitDays) {
+          const days = addon.selectedDays || [];
+          const checkDay = (d: string) => {
+            if (!d) return false;
+            try {
+              const parsedDate = new Date(d.replace(/-/g, "/"));
+              const weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+              const dayName = weekdays[parsedDate.getDay()];
+              return days.includes(dayName);
+            } catch (_) {
+              return false;
+            }
+          };
+          const matchP = checkDay(formData.date);
+          const matchR = formData.isReturn ? checkDay(formData.returnDate) : false;
+          if (!matchP && !matchR) return;
+        }
+
+        // 6. Fleet restriction
+        if (addon.limitFleet) {
+          const fleetList = addon.selectedFleet || [];
+          if (!vehicle || (!fleetList.includes(vehicle.name) && !fleetList.includes(vehicle.id))) return;
+        }
+
+        // 7. Service restriction
+        if (addon.limitService) {
+          const serviceList = addon.selectedServices || [];
+          if (!formData.serviceType || !serviceList.includes(formData.serviceType)) return;
+        }
+
+        // 8. One-way / Return ride restriction
+        if (addon.limitRideType) {
+          const targetType = addon.rideTypeTarget || "any";
+          if (targetType === "oneway" && formData.isReturn) return;
+          if (targetType === "return" && !formData.isReturn) return;
+        }
+
         let baseValue = 0;
         if (addon.target === "gross") baseValue = subtotal;
         else if (addon.target === "net") baseValue = netPrice;
@@ -540,6 +704,7 @@ export default function Booking() {
           type: addon.type,
           value: addon.value,
           operation: addon.operation,
+          hideLabelInBreakdown: !!addon.hideLabelInBreakdown,
         });
       });
 
@@ -575,6 +740,8 @@ export default function Booking() {
       appliedCoupon,
       paymentMethod,
       priceAddons,
+      pickupCoords,
+      dropoffCoords,
     ],
   );
 
@@ -582,7 +749,7 @@ export default function Booking() {
   const [typeFilter, setTypeFilter] = useState("all");
   const [paxFilter, setPaxFilter] = useState(0);
   const [bagsFilter, setBagsFilter] = useState(0);
-  const [priceSort, setPriceSort] = useState<"asc" | "desc" | null>(null);
+  const [priceSort, setPriceSort] = useState<"asc" | "desc" | null>("asc");
 
   const filteredFleet = useMemo(() => {
     let result = fleet.length > 0 ? [...fleet] : [...vehicles];
@@ -2857,7 +3024,7 @@ export default function Booking() {
                                           </span>
                                         </div>
                                       )}
-                                    {settings?.showNetPrice !== false && (
+                                    {settings?.showGrossPrice !== false && (
                                       <div className="flex justify-between items-center text-[10px] uppercase tracking-[0.16em] text-white/50 py-1.5 border-b border-white/[0.03] transition-colors hover:text-white/80">
                                         <span>Gross Price</span>
                                         <span className="font-display font-medium text-white/90">${details.gross.toFixed(2)}</span>
@@ -2878,13 +3045,12 @@ export default function Booking() {
                                           </span>
                                         </div>
                                       )}
-                                    {settings?.showNetPrice !== false &&
-                                      details.discount > 0 && (
-                                        <div className="flex justify-between items-center text-[10px] uppercase tracking-[0.16em] text-gold/50 font-bold py-1.5 border-b border-white/[0.03] transition-colors hover:text-white/80">
-                                          <span>Net Price</span>
-                                          <span className="font-display font-medium text-gold/50 font-bold">${details.net.toFixed(2)}</span>
-                                        </div>
-                                      )}
+                                    {settings?.showNetPrice !== false && (
+                                      <div className="flex justify-between items-center text-[10px] uppercase tracking-[0.16em] text-gold/50 font-bold py-1.5 border-b border-white/[0.03] transition-colors hover:text-white/80">
+                                        <span>Net Price</span>
+                                        <span className="font-display font-medium text-gold/50 font-bold">${details.net.toFixed(2)}</span>
+                                      </div>
+                                    )}
                                     {settings?.showTax !== false && (
                                       <div className="flex justify-between items-center text-[10px] uppercase tracking-[0.16em] text-white/50 py-1.5 border-b border-white/[0.03] transition-colors hover:text-white/80">
                                         <span>
@@ -3014,16 +3180,41 @@ export default function Booking() {
                               <label className="text-[9px] uppercase tracking-[0.18em] text-white/40 font-bold">
                                 Phone <span className="text-red-500">*</span>
                               </label>
-                              <input
-                                type="tel"
-                                className="w-full bg-black/40 hover:bg-black/60 focus:bg-black/80 rounded-xl border border-white/[0.08] focus:border-gold/50 py-3 px-4 outline-none text-white text-sm transition-all duration-300 placeholder:text-white/20 select-none shadow-inner"
-                                value={formData.customerPhone}
-                                onChange={(e) =>
-                                  updateForm("customerPhone", e.target.value)
-                                }
-                                placeholder="Phone Number"
-                                required
-                              />
+                              <div className="flex gap-2">
+                                <div className="flex items-center w-full bg-black/40 hover:bg-black/60 rounded-xl border border-white/[0.08] focus-within:border-gold/50 transition-all duration-300 shadow-inner overflow-hidden">
+                                  <select
+                                    className="custom-select h-[46px] border-r border-white/[0.08] text-white rounded-sm transition-all duration-300 bg-transparent pl-3 pr-7 outline-none cursor-pointer shrink-0"
+                                    value={parsePhoneNumber(formData.customerPhone).countryCode}
+                                    onChange={(e) => {
+                                      const { localNumber } = parsePhoneNumber(formData.customerPhone);
+                                      updateForm("customerPhone", `${e.target.value} ${localNumber}`);
+                                    }}
+                                  >
+                                    {COUNTRY_CODES.map((c) => (
+                                      <option key={c.code} value={c.code}>
+                                        {c.short}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <input
+                                    type="tel"
+                                    className="flex-1 bg-transparent py-3 px-4 outline-none text-white text-sm placeholder:text-white/20 select-none min-w-0"
+                                    value={parsePhoneNumber(formData.customerPhone).localNumber}
+                                    onChange={(e) => {
+                                      const { countryCode } = parsePhoneNumber(formData.customerPhone);
+                                      let val = e.target.value;
+                                      if (val.startsWith("+")) {
+                                        const parsed = parsePhoneNumber(val);
+                                        updateForm("customerPhone", `${parsed.countryCode} ${parsed.localNumber}`);
+                                      } else {
+                                        updateForm("customerPhone", `${countryCode} ${val}`);
+                                      }
+                                    }}
+                                    placeholder="Phone Number"
+                                    required
+                                  />
+                                </div>
+                              </div>
                             </div>
                           </div>
 
@@ -3703,7 +3894,7 @@ export default function Booking() {
                                           </span>
                                         </div>
                                       )}
-                                    {settings?.showNetPrice !== false && (
+                                    {settings?.showGrossPrice !== false && (
                                       <div className="flex justify-between items-center text-[10px] uppercase tracking-[0.16em] text-white/50 py-1.5 border-b border-white/[0.03] transition-colors hover:text-white/80">
                                         <span>Gross Price</span>
                                         <span className="font-display font-medium text-white/90">${details.gross.toFixed(2)}</span>
@@ -3724,13 +3915,12 @@ export default function Booking() {
                                           </span>
                                         </div>
                                       )}
-                                    {settings?.showNetPrice !== false &&
-                                      details.discount > 0 && (
-                                        <div className="flex justify-between items-center text-[10px] uppercase tracking-[0.16em] text-gold/50 font-bold py-1.5 border-b border-white/[0.03] transition-colors hover:text-white/80">
-                                          <span>Net Price</span>
-                                          <span className="font-display font-medium text-gold/50 font-bold">${details.net.toFixed(2)}</span>
-                                        </div>
-                                      )}
+                                    {settings?.showNetPrice !== false && (
+                                      <div className="flex justify-between items-center text-[10px] uppercase tracking-[0.16em] text-gold/50 font-bold py-1.5 border-b border-white/[0.03] transition-colors hover:text-white/80">
+                                        <span>Net Price</span>
+                                        <span className="font-display font-medium text-gold/50 font-bold">${details.net.toFixed(2)}</span>
+                                      </div>
+                                    )}
                                     {settings?.showTax !== false && (
                                       <div className="flex justify-between items-center text-[10px] uppercase tracking-[0.16em] text-white/50 py-1.5 border-b border-white/[0.03] transition-colors hover:text-white/80">
                                         <span>
@@ -3748,12 +3938,12 @@ export default function Booking() {
                                           </span>
                                         </div>
                                       )}
-                                    {details.appliedAddons && details.appliedAddons.length > 0 && (
+                                    {details.appliedAddons && details.appliedAddons.filter((addon: any) => !addon.hideLabelInBreakdown).length > 0 && (
                                       <div className="space-y-1 py-1.5 border-b border-white/[0.03]">
-                                        {details.appliedAddons.map((addon: any, aIdx: number) => (
+                                        {details.appliedAddons.filter((addon: any) => !addon.hideLabelInBreakdown).map((addon: any, aIdx: number) => (
                                           <div key={`addon-cust-${addon.id || aIdx}-${aIdx}`} className="flex justify-between items-center text-[10px] uppercase tracking-[0.16em] text-gold/60 py-1 font-display">
                                             <span>{addon.name}</span>
-                                            <span className="font-display font-medium">
+                                            <span className="font-display font-medium font-semibold">
                                               {addon.impact > 0 ? '+' : '-'}${Math.abs(addon.impact).toFixed(2)}
                                             </span>
                                           </div>
