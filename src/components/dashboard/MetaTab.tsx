@@ -1836,7 +1836,7 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
                 <button
                   onClick={handleSaveMetadata}
                   disabled={isSaving}
-                  className="btn-primary px-10 py-3 rounded-xl h-auto"
+                  className="btn-primary px-10 py-3 rounded-xl h-auto flex items-center justify-center"
                 >
                   {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                   <span className="text-[10px] uppercase font-bold tracking-widest ml-2">Save Metadata</span>

@@ -35,6 +35,7 @@ import {
   RotateCcw,
   Eye,
   LocateFixed,
+  History,
 } from "lucide-react";
 import {
   GoogleMap,
@@ -149,16 +150,45 @@ const formatWithZone = (value?: string, timeZone?: string) =>
     })
     : "N/A";
 
+const formatDateWithWeekday = (dateStr: string) => {
+  if (!dateStr) return "N/A";
+  try {
+    const date = new Date(dateStr.replace(/-/g, "/"));
+    return date.toLocaleDateString("en-AU", {
+      weekday: "long",
+      day: "numeric",
+      month: "short",
+      year: "numeric"
+    });
+  } catch (e) {
+    return dateStr;
+  }
+};
+
+const formatTime12h = (timeStr: string) => {
+  if (!timeStr) return "N/A";
+  try {
+    const [hours, minutes] = timeStr.split(":");
+    const h = parseInt(hours, 10);
+    const m = minutes;
+    const ampm = h >= 12 ? "PM" : "AM";
+    const h12 = h % 12 || 12;
+    return `${h12}:${m} ${ampm}`;
+  } catch (e) {
+    return timeStr;
+  }
+};
+
 const center = {
   lat: -37.8136,
   lng: 144.9631, // Melbourne
 };
 
 const steps = [
-  { id: 1, name: "Service", icon: Info },
+  { id: 1, name: "Service", icon: Briefcase },
   { id: 2, name: "Details", icon: MapPin },
   { id: 3, name: "Vehicle", icon: Car },
-  { id: 4, name: "Payment", icon: CheckCircle },
+  { id: 4, name: "Summary", icon: CreditCard },
 ];
 
 const serviceTypes = [
@@ -255,6 +285,8 @@ export default function Booking() {
 
   const [pickupCoords, setPickupCoords] = useState<google.maps.LatLngLiteral | null>(null);
   const [dropoffCoords, setDropoffCoords] = useState<google.maps.LatLngLiteral | null>(null);
+  const [waypointCoords, setWaypointCoords] = useState<{ [key: number]: { lat: number; lng: number } }>({});
+  const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
 
   const [step, setStep] = useState(initialState?.step || 1);
   const mainScrollRef = useRef<HTMLDivElement>(null);
@@ -298,25 +330,6 @@ export default function Booking() {
     }
   }, [step]);
 
-  useEffect(() => {
-    const savedData = localStorage.getItem('booking_draft');
-    const isCancelled = new URLSearchParams(location.search).get('cancelled');
-    if (savedData && !isCancelled) {
-      try {
-        const data = JSON.parse(savedData);
-        setFormData(data.formData);
-        setStep(data.step);
-        if (data.appliedCoupon) setAppliedCoupon(data.appliedCoupon);
-        if (data.distance) setDistance(data.distance);
-        if (data.duration) setDuration(data.duration);
-        // Clean up
-        localStorage.removeItem('booking_draft');
-      } catch (err) {
-        console.error('Failed to restore booking draft:', err);
-      }
-    }
-  }, [location.search]);
-
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [showLoginFields, setShowLoginFields] = useState(false);
   const [loginEmail, setLoginEmail] = useState("");
@@ -350,6 +363,217 @@ export default function Booking() {
   const [distance, setDistance] = useState<string>("");
   const [duration, setDuration] = useState<string>("");
   const [distanceValue, setDistanceValue] = useState<number>(0);
+  const [lastSaved, setLastSaved] = useState<number | null>(null);
+
+  const canNavigateToStep = (targetStep: number) => {
+    if (targetStep === step) return true;
+    if (targetStep < step) return true; // Always allow going back
+
+    // Forward navigation validation
+    if (targetStep === 2) {
+      return !!formData.serviceType;
+    }
+    if (targetStep === 3) {
+      const hasService = !!formData.serviceType;
+      const isDropoffRequired = formData.serviceType !== "hourly";
+      const hasDetails = !!formData.pickup && (isDropoffRequired ? !!formData.dropoff : true) && !!formData.date && !!formData.time;
+      
+      const isSameAddress = isDropoffRequired && formData.pickup && formData.dropoff && 
+                           formData.pickup.trim().toLowerCase() === formData.dropoff.trim().toLowerCase();
+      const hasDistance = isDropoffRequired ? (distanceValue > 0) : true;
+
+      return hasService && hasDetails && !isSameAddress && hasDistance;
+    }
+    if (targetStep === 4) {
+      const hasService = !!formData.serviceType;
+      const isDropoffRequired = formData.serviceType !== "hourly";
+      const hasDetails = !!formData.pickup && (isDropoffRequired ? !!formData.dropoff : true) && !!formData.date && !!formData.time;
+      
+      const isSameAddress = isDropoffRequired && formData.pickup && formData.dropoff && 
+                           formData.pickup.trim().toLowerCase() === formData.dropoff.trim().toLowerCase();
+      const hasDistance = isDropoffRequired ? (distanceValue > 0) : true;
+      const hasVehicle = !!formData.vehicle;
+      
+      return hasService && hasDetails && !isSameAddress && hasDistance && hasVehicle;
+    }
+    return false;
+  };
+
+  const handleStepClick = (targetId: number) => {
+    if (canNavigateToStep(targetId)) {
+      setStep(targetId);
+      if (mainScrollRef.current) {
+        mainScrollRef.current.scrollTo(0, 0);
+      }
+    } else {
+      // Provide feedback why they can't move forward
+      if (targetId === 2 && !formData.serviceType) {
+        showNotice('warning', "Please select a service type first", "Required Step");
+      } else if (targetId === 3) {
+        const isDropoffRequired = formData.serviceType !== "hourly";
+        if (!formData.pickup || (isDropoffRequired && !formData.dropoff) || !formData.date || !formData.time) {
+          showNotice('warning', "Please complete all ride details first", "Required Step");
+        } else if (isDropoffRequired && formData.pickup && formData.dropoff && 
+                   formData.pickup.trim().toLowerCase() === formData.dropoff.trim().toLowerCase()) {
+          showNotice('error', "Pickup and Drop-off locations cannot be the same address.", 'Address Error');
+        } else if (isDropoffRequired && (!distance || distanceValue <= 0)) {
+          showNotice('error', "Distance cannot be 0 km. Please ensure your pickup and drop-off points are valid. (Min KM Restriction)", 'Distance Error');
+        }
+      } else if (targetId === 4 && !formData.vehicle) {
+        showNotice('warning', "Please select a vehicle first", "Required Step");
+      }
+    }
+  };
+
+  const handleNewBooking = () => {
+    // Reset all states (Storage is NOT cleared so users can restore if needed)
+    
+    // Reset all states
+    setFormData({
+      serviceType: "",
+      pickup: "",
+      dropoff: "",
+      date: "",
+      time: "",
+      vehicle: "",
+      passengers: 1,
+      flightNumber: "",
+      notes: "",
+      customerName: user?.displayName || "",
+      customerEmail: user?.email || "",
+      customerPhone: "",
+      customerPassword: "",
+      isReturn: false,
+      returnDate: "",
+      returnTime: "",
+      waypoints: [],
+      hours: 1,
+      purpose: "",
+      couponCode: "",
+      selectedExtras: [],
+    });
+    
+    setStep(1);
+    setAppliedCoupon(null);
+    setDistance("");
+    setDuration("");
+    setDistanceValue(0);
+    setLastSaved(null);
+    setPickupCoords(null);
+    setDropoffCoords(null);
+    setWaypointCoords({});
+    setDirections(null);
+    
+    // Clear inputs manually
+    if (pickupInputRef.current) pickupInputRef.current.value = "";
+    if (dropoffInputRef.current) dropoffInputRef.current.value = "";
+    
+    showNotice('success', "Started a fresh booking", "New Booking");
+  };
+
+  const restoreDraft = () => {
+    const saved = localStorage.getItem('booking_progress_auto');
+    if (saved) {
+      try {
+        const data = JSON.parse(saved);
+        setFormData(prev => ({
+          ...prev,
+          ...data.formData,
+          customerPassword: prev.customerPassword 
+        }));
+        setStep(data.step || 1);
+        if (data.appliedCoupon) setAppliedCoupon(data.appliedCoupon);
+        if (data.distance) setDistance(data.distance);
+        if (data.duration) setDuration(data.duration);
+        if (data.distanceValue) setDistanceValue(data.distanceValue);
+        if (data.pickupCoords) setPickupCoords(data.pickupCoords);
+        if (data.dropoffCoords) setDropoffCoords(data.dropoffCoords);
+        if (data.waypointCoords) setWaypointCoords(data.waypointCoords);
+        if (data.directions) setDirections(data.directions);
+
+        setLastSaved(data.lastUpdated || null);
+        showNotice('success', "Booking progress restored from draft", "Draft Restored");
+      } catch (e) {
+        console.error("Failed to restore progress:", e);
+        showNotice('error', "Could not restore booking draft", "Restore Failed");
+      }
+    } else {
+      showNotice('info', "No saved draft found", "No Draft");
+    }
+  };
+
+  // Auto-save form progress to localStorage
+  useEffect(() => {
+    const hasData = formData.pickup || formData.dropoff || formData.date || formData.customerEmail || step > 1;
+    if (hasData) {
+      const now = Date.now();
+      const draft = {
+        formData,
+        step,
+        appliedCoupon,
+        distance,
+        duration,
+        distanceValue,
+        pickupCoords,
+        dropoffCoords,
+        waypointCoords,
+        directions,
+        lastUpdated: now
+      };
+      localStorage.setItem('booking_progress_auto', JSON.stringify(draft));
+      setLastSaved(now);
+    }
+  }, [formData, step, appliedCoupon, distance, duration, distanceValue, pickupCoords, dropoffCoords, waypointCoords, directions]);
+
+  // Restore progress on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('booking_progress_auto');
+    if (saved) {
+      try {
+        const data = JSON.parse(saved);
+        // Progress expires after 24 hours
+        if (Date.now() - (data.lastUpdated || 0) < 24 * 60 * 60 * 1000) {
+          setFormData(prev => ({
+            ...prev,
+            ...data.formData,
+            // Keep current password if user was typing one, or ignore saved password for security
+            customerPassword: prev.customerPassword 
+          }));
+          setStep(data.step || 1);
+          if (data.appliedCoupon) setAppliedCoupon(data.appliedCoupon);
+          if (data.distance) setDistance(data.distance);
+          if (data.duration) setDuration(data.duration);
+          if (data.distanceValue) setDistanceValue(data.distanceValue);
+          if (data.pickupCoords) setPickupCoords(data.pickupCoords);
+          if (data.dropoffCoords) setDropoffCoords(data.dropoffCoords);
+          if (data.waypointCoords) setWaypointCoords(data.waypointCoords);
+          if (data.directions) setDirections(data.directions);
+          setLastSaved(data.lastUpdated || null);
+        }
+      } catch (e) {
+        console.error("Failed to restore progress:", e);
+      }
+    }
+  }, [setFormData, setStep, setDistance, setDuration, setAppliedCoupon, setDistanceValue, setPickupCoords, setDropoffCoords, setWaypointCoords, setDirections]);
+
+  useEffect(() => {
+    const savedData = localStorage.getItem('booking_draft');
+    const isCancelled = new URLSearchParams(location.search).get('cancelled');
+    if (savedData && !isCancelled) {
+      try {
+        const data = JSON.parse(savedData);
+        setFormData(data.formData);
+        setStep(data.step);
+        if (data.appliedCoupon) setAppliedCoupon(data.appliedCoupon);
+        if (data.distance) setDistance(data.distance);
+        if (data.duration) setDuration(data.duration);
+        // Clean up
+        localStorage.removeItem('booking_draft');
+      } catch (err) {
+        console.error('Failed to restore booking draft:', err);
+      }
+    }
+  }, [location.search, setFormData, setStep, setDistance, setDuration, setAppliedCoupon]);
 
   // Route Avoidance options
   const [avoidTolls, setAvoidTolls] = useState(false);
@@ -920,6 +1144,10 @@ export default function Booking() {
       priceAddons,
       pickupCoords,
       dropoffCoords,
+      formData.date,
+      formData.time,
+      formData.returnDate,
+      formData.returnTime,
     ],
   );
 
@@ -959,10 +1187,6 @@ export default function Booking() {
     return result;
   }, [fleet, typeFilter, paxFilter, bagsFilter, priceSort, calculatePrice]);
 
-  const [waypointCoords, setWaypointCoords] = useState<{ [key: number]: { lat: number; lng: number } }>({});
-
-  const [directions, setDirections] =
-    useState<google.maps.DirectionsResult | null>(null);
   const [debouncedPickup, setDebouncedPickup] = useState(formData.pickup);
   const [debouncedDropoff, setDebouncedDropoff] = useState(formData.dropoff);
   const [debouncedWaypoints, setDebouncedWaypoints] = useState(formData.waypoints);
@@ -1155,6 +1379,14 @@ export default function Booking() {
     setNotice(null);
     if (step === 2) {
       const isDropoffRequired = formData.serviceType !== "hourly";
+      
+      // Check if pickup and dropoff are the same
+      if (isDropoffRequired && formData.pickup && formData.dropoff && 
+          formData.pickup.trim().toLowerCase() === formData.dropoff.trim().toLowerCase()) {
+        showNotice('error', "Pickup and Drop-off locations cannot be the same address.", 'Address Error');
+        return;
+      }
+
       if (
         !formData.pickup ||
         (isDropoffRequired && !formData.dropoff) ||
@@ -1190,8 +1422,13 @@ export default function Booking() {
 
       // If service is not hourly, distance calculation is required
       if (formData.serviceType !== "hourly") {
-        if (!distance || distanceKm === 0) {
+        if (!distance && distanceValue === 0) {
           showNotice('warning', "Calculating distance... Please wait for the map to update.", 'Distance Required');
+          return;
+        }
+        
+        if (distanceKm <= 0) {
+          showNotice('error', "Distance cannot be 0 km. Please ensure your pickup and drop-off points are valid. (Min KM Restriction)", 'Distance Error');
           return;
         }
 
@@ -1695,6 +1932,16 @@ export default function Booking() {
           distance,
           duration
         }));
+        
+        // Also ensure current auto-save is updated before redirect
+        localStorage.setItem('booking_progress_auto', JSON.stringify({
+          formData,
+          step,
+          appliedCoupon,
+          distance,
+          duration,
+          lastUpdated: Date.now()
+        }));
 
         const response = await fetch("/api/create-checkout-session", {
           method: "POST",
@@ -1746,6 +1993,10 @@ export default function Booking() {
             });
           }
 
+          // Clear progress after successful cash booking
+          localStorage.removeItem('booking_progress_auto');
+          localStorage.removeItem('booking_draft');
+
           navigate(`/payment/success?booking_id=${docRef.id}&method=cash`);
         } catch (err) {
           handleFirestoreError(err, OperationType.WRITE, "bookings");
@@ -1795,39 +2046,91 @@ export default function Booking() {
             </h1>
 
             {/* Progress Bar */}
-            <div className="flex flex-wrap items-center justify-center gap-y-4 gap-x-4 md:gap-x-8 mt-12 bg-white/[0.02] border border-white/5 py-4 px-6 md:px-10 rounded-full w-fit mx-auto backdrop-blur-sm">
-              {steps.map((s, idx) => (
-                <div key={s.id} className="flex items-center gap-2 md:gap-3 group">
-                  <div
-                    className={cn(
-                      "w-7 h-7 md:w-9 md:h-9 rounded-full flex items-center justify-center text-[10px] md:text-xs font-black transition-all duration-500",
-                      step >= s.id
-                        ? "bg-gold text-black shadow-[0_0_15px_rgba(212,175,55,0.3)] ring-4 ring-gold/10"
-                        : "bg-white/5 text-white/20 border border-white/10",
+            <div className="flex justify-between sm:justify-center mt-12 mb-16 w-full max-w-xl mx-auto px-4 relative group/bar">
+              {steps.map((s, idx, arr) => {
+                const Icon = s.icon;
+                const isCompleted = step > s.id;
+                const isActive = step === s.id;
+                const isNavigable = canNavigateToStep(s.id);
+                
+                return (
+                  <div key={s.id} className="flex-1 flex flex-col items-center xl:flex-row xl:items-center">
+                    <div
+                      className={cn(
+                        "flex items-center gap-2 transition-all duration-300",
+                        isNavigable ? "cursor-pointer group" : "cursor-not-allowed opacity-50"
+                      )}
+                      onClick={() => handleStepClick(s.id)}
+                    >
+                      {/* Icon circle / squircle */}
+                      <div
+                        className={cn(
+                          "w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-700 border relative",
+                          isActive
+                            ? "bg-gold text-black border-gold shadow-[0_0_20px_rgba(212,175,55,0.3)] scale-110 rotate-[360deg]"
+                            : isCompleted
+                              ? "bg-gold/10 text-gold border-gold/30"
+                              : "bg-white/5 text-white/20 border-white/10 group-hover:bg-white/10"
+                        )}
+                      >
+                        {isCompleted ? (
+                          <CheckCircle size={16}/>
+                        ) : (
+                          <Icon size={16} className={cn(isActive ? "animate-pulse" : "")} />
+                        )}
+
+                        {/* Status ring for active step */}
+                        {isActive && (
+                          <div className="absolute -inset-1 rounded-xl border border-gold/30 animate-ping opacity-20"></div>
+                        )}
+                      </div>
+
+                      {/* Desktop label */}
+                      <div className="hidden xl:flex flex-col items-start min-w-[60px]">
+                        <span className="text-[7px] uppercase tracking-[0.2em] font-bold text-white/30 leading-none mb-0.5">
+                          Step {s.id}
+                        </span>
+                        <span
+                          className={cn(
+                            "text-[10px] uppercase tracking-[0.25em] font-black transition-colors duration-500",
+                            isActive || isCompleted ? "text-gold" : "text-white/20",
+                            isNavigable && !isActive ? "group-hover:text-white/80" : ""
+                          )}
+                        >
+                          {s.name}
+                        </span>
+                      </div>
+
+                      {/* Connector line (desktop only) */}
+                      {idx < arr.length - 1 && (
+                        <motion.div
+                          initial={{ width: "1rem" }}
+                          animate={{ width: "2rem" }}
+                          transition={{ duration: 0.6, ease: "easeOut" }}
+                          className={cn("h-[1px] hidden xl:block mx-2", isCompleted ? "bg-gold/30" : "bg-white/5")}
+                        />
+                      )}
+                    </div>
+
+                    {/* Mobile: only active label stacked below icon */}
+                    {step === s.id && (
+                      <motion.span
+                        initial={{ opacity: 0, y: 0 }}
+                        animate={{ opacity: 1, y: "25%" }}
+                        exit={{ opacity: 0, y: 0 }}
+                        transition={{ duration: 0.4, ease: "easeOut" }}
+                        className="text-[10px] uppercase tracking-[0.2em] font-bold xl:hidden text-gold mt-1"
+                      >
+                        {s.name}
+                      </motion.span>
                     )}
-                  >
-                    {step > s.id ? <CheckCircle size={14} className="md:size-18" /> : s.id}
                   </div>
-                  <span
-                    className={cn(
-                      "text-[9px] md:text-xs uppercase tracking-[0.2em] font-black transition-colors duration-500",
-                      step >= s.id ? "text-gold" : "text-white/20",
-                    )}
-                  >
-                    {s.name}
-                  </span>
-                  {idx !== steps.length - 1 && (
-                    <div className={cn(
-                      "w-3 md:w-6 h-[1px] transition-colors duration-500",
-                      step > s.id ? "bg-gold/40" : "bg-white/10"
-                    )} />
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
-          <div className="space-y-6">
+          <div className="space-y-6 relative">
             <AnimatePresence mode="wait">
               {step === 1 && (
                 <motion.div
@@ -1837,9 +2140,34 @@ export default function Booking() {
                   exit={{ opacity: 0, scale: 0.98, y: -10 }}
                   className="space-y-8"
                 >
-                  <div className="text-center md:text-left mb-10">
-                    <h2 className="text-2xl md:text-3xl font-display text-white mb-2">Select Service Class</h2>
-                    <p className="text-white/40 text-sm max-w-lg">Experience the pinnacle of chauffeured travel. Select your required service to proceed with your reservation.</p>
+                  <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8 border-b border-white/[0.05] pb-6">
+                    <div className="text-center md:text-left">
+                      <h2 className="text-2xl md:text-4xl font-display text-white mb-2">Select Service Class</h2>
+                      <p className="text-gold/40 text-[10px] uppercase tracking-[0.4em] font-black">Choose your experience</p>
+                    </div>
+                    
+                    <div className="flex items-center justify-center md:justify-end gap-3">
+                      {lastSaved && (
+                         <div
+                          className="flex items-center gap-2.5 px-4 py-2 rounded-xl border border-gold/10 bg-gold/5 text-gold/50 text-[10px] uppercase tracking-widest font-black shadow-lg"
+                        >
+                          <div className="relative">
+                            <History size={16} />
+                            <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-gold animate-pulse"></div>
+                          </div>
+                          <span>Draft Saved</span>
+                          <span className="opacity-40 font-mono text-[9px] lowercase">({new Date(lastSaved).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})</span>
+                        </div>
+                      )}
+                      <button
+                        onClick={handleNewBooking}
+                        className="flex items-center gap-2.5 px-4 py-2 rounded-xl border border-red-500/20 bg-red-500/5 text-red-500/60 hover:text-red-500 hover:bg-red-500/10 hover:border-red-500/40 transition-all text-[10px] uppercase tracking-widest font-black shadow-lg group"
+                        title="Reset Booking"
+                      >
+                        <RotateCcw size={16} className="group-hover:rotate-[-45deg] transition-transform" />
+                        Reset
+                      </button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
@@ -1906,6 +2234,36 @@ export default function Booking() {
                   exit={{ opacity: 0, x: -20 }}
                   className="bg-[#030303]/40 backdrop-blur-3xl p-5 md:p-10 xl:p-12 rounded-3xl border border-white/[0.05] shadow-[0_25px_60px_rgba(0,0,0,0.85)] grid grid-cols-1 lg:grid-cols-2 gap-8 md:gap-10 hover:border-white/[0.08] transition-all duration-700 relative overflow-hidden"
                 >
+                  <div className="lg:col-span-2 flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-white/[0.05] pb-6">
+                    <div className="text-center md:text-left">
+                      <h2 className="text-2xl md:text-3xl font-display text-white mb-2">Ride Details</h2>
+                      <p className="text-gold/40 text-[10px] uppercase tracking-[0.4em] font-black">Configure your journey</p>
+                    </div>
+                    
+                    <div className="flex items-center justify-center md:justify-end gap-3">
+                      {lastSaved && (
+                        <div
+                          className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg border border-gold/10 bg-gold/5 text-gold/50 text-[9px] uppercase tracking-widest font-black"
+                        >
+                          <div className="relative">
+                            <History size={14} />
+                            <div className="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full bg-gold animate-pulse"></div>
+                          </div>
+                          <span>Draft Saved</span>
+                          <span className="opacity-40 font-mono text-[8px] lowercase">({new Date(lastSaved).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})</span>
+                        </div>
+                      )}
+                      <button
+                        onClick={handleNewBooking}
+                        className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg border border-red-500/20 bg-red-500/5 text-red-500/60 hover:text-red-500 hover:bg-red-500/10 hover:border-red-500/40 transition-all text-[9px] uppercase tracking-widest font-black group"
+                        title="Reset Booking"
+                      >
+                        <RotateCcw size={14} className="group-hover:rotate-[-45deg] transition-transform" />
+                        Reset
+                      </button>
+                    </div>
+                  </div>
+
                   <div className="space-y-8 h-full flex flex-col justify-between overflow-y-auto custom-scrollbar pr-2">
                     <div className="grid grid-cols-1 gap-8">
                       {/* Pickup Location */}
@@ -2692,6 +3050,36 @@ export default function Booking() {
                   exit={{ opacity: 0, x: -20 }}
                   className="bg-[#030303]/40 backdrop-blur-3xl p-5 md:p-10 xl:p-12 rounded-3xl border border-white/[0.05] shadow-[0_25px_60px_rgba(0,0,0,0.85)] grid grid-cols-1 lg:grid-cols-3 gap-8 md:gap-10 hover:border-white/[0.08] transition-all duration-700 relative overflow-hidden items-start"
                 >
+                  <div className="lg:col-span-3 flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8 border-b border-white/[0.05] pb-6 w-full">
+                    <div className="text-center md:text-left">
+                      <h2 className="text-2xl md:text-3xl font-display text-white mb-2">Select Vehicle</h2>
+                      <p className="text-gold/40 text-[10px] uppercase tracking-[0.4em] font-black">Choose your fleet</p>
+                    </div>
+                    
+                    <div className="flex items-center justify-center md:justify-end gap-3">
+                      {lastSaved && (
+                        <div
+                          className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg border border-gold/10 bg-gold/5 text-gold/50 text-[9px] uppercase tracking-widest font-black"
+                        >
+                          <div className="relative">
+                            <History size={14} />
+                            <div className="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full bg-gold animate-pulse"></div>
+                          </div>
+                          <span>Draft Saved</span>
+                          <span className="opacity-40 font-mono text-[8px] lowercase">({new Date(lastSaved).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})</span>
+                        </div>
+                      )}
+                      <button
+                        onClick={handleNewBooking}
+                        className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg border border-red-500/20 bg-red-500/5 text-red-500/60 hover:text-red-500 hover:bg-red-500/10 hover:border-red-500/40 transition-all text-[9px] uppercase tracking-widest font-black group"
+                        title="Reset Booking"
+                      >
+                        <RotateCcw size={14} className="group-hover:rotate-[-45deg] transition-transform" />
+                        Reset
+                      </button>
+                    </div>
+                  </div>
+
                   <div className="lg:col-span-2 space-y-8">
                     {/* Vehicle Filters */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-5 bg-[#080808]/90 backdrop-blur-xl border border-white/[0.08] rounded-2xl shadow-[0_15px_50px_rgba(0,0,0,0.8)] relative overflow-hidden group">
@@ -2945,9 +3333,21 @@ export default function Booking() {
                       {/* Subtle elegant linear gold gradient accent line at the top of card */}
                       <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-gold/40 to-transparent"></div>
 
-                      <h3 className="text-gold text-xs uppercase tracking-[0.25em] font-bold mb-8 border-b border-white/[0.06] pb-4">
-                        Booking Summary
-                      </h3>
+                      <div className="flex items-center justify-between mb-8 border-b border-white/[0.06] pb-4">
+                        <h3 className="text-gold text-xs uppercase tracking-[0.25em] font-bold">
+                          Booking Summary
+                        </h3>
+                        {lastSaved && (
+                          <div className="flex flex-col items-end">
+                            <span className="text-[8px] uppercase tracking-widest text-gold/60 font-bold animate-pulse">
+                              Draft Saved
+                            </span>
+                            <span className="text-[7px] text-white/30 font-mono tracking-wider">
+                              {new Date(lastSaved).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                        )}
+                      </div>
 
                       <div className="space-y-5 mb-8">
                         <div className="flex items-center gap-4">
@@ -2985,7 +3385,7 @@ export default function Booking() {
                               Date & Time
                             </p>
                             <p className="text-[11px] text-white/95 font-medium leading-normal">
-                              {formData.date} at {formData.time}
+                              {formatDateWithWeekday(formData.date)} at {formatTime12h(formData.time)}
                             </p>
                           </div>
                         </div>
@@ -2999,7 +3399,7 @@ export default function Booking() {
                                 Return Trip
                               </p>
                               <p className="text-[11px] text-white/95 font-medium leading-normal">
-                                {formData.returnDate} at {formData.returnTime}
+                                {formatDateWithWeekday(formData.returnDate)} at {formatTime12h(formData.returnTime)}
                               </p>
                             </div>
                           </div>
@@ -3290,6 +3690,36 @@ export default function Booking() {
                   animate={{ opacity: 1, scale: 1 }}
                   className="space-y-8"
                 >
+                  <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8 border-b border-white/[0.05] pb-6">
+                    <div className="text-center md:text-left">
+                      <h2 className="text-2xl md:text-3xl font-display text-white mb-2">Booking Summary</h2>
+                      <p className="text-gold/40 text-[10px] uppercase tracking-[0.4em] font-black">Finalize your reservation</p>
+                    </div>
+                    
+                    <div className="flex items-center justify-center md:justify-end gap-3">
+                      {lastSaved && (
+                        <div
+                          className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg border border-gold/10 bg-gold/5 text-gold/50 text-[9px] uppercase tracking-widest font-black"
+                        >
+                          <div className="relative">
+                            <History size={14} />
+                            <div className="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full bg-gold animate-pulse"></div>
+                          </div>
+                          <span>Draft Saved</span>
+                          <span className="opacity-40 font-mono text-[8px] lowercase">({new Date(lastSaved).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})</span>
+                        </div>
+                      )}
+                      <button
+                        onClick={handleNewBooking}
+                        className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg border border-red-500/20 bg-red-500/5 text-red-500/60 hover:text-red-500 hover:bg-red-500/10 hover:border-red-500/40 transition-all text-[9px] uppercase tracking-widest font-black group"
+                        title="Reset Booking"
+                      >
+                        <RotateCcw size={14} className="group-hover:rotate-[-45deg] transition-transform" />
+                        Reset
+                      </button>
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 text-left items-start">
                     <div className="lg:col-span-7 space-y-8">
                       {/* Confirmation Card */}
@@ -3730,10 +4160,10 @@ export default function Booking() {
                               </div>
                               <div className="min-w-0">
                                 <p className="text-[9px] uppercase tracking-[0.18em] text-white/35 font-bold mb-0.5">
-                                  Date
+                                  Pickup Date
                                 </p>
                                 <p className="text-white font-semibold text-xs truncate">
-                                  {formData.date}
+                                  {formatDateWithWeekday(formData.date)}
                                 </p>
                               </div>
                             </div>
@@ -3744,10 +4174,10 @@ export default function Booking() {
                               </div>
                               <div className="min-w-0">
                                 <p className="text-[9px] uppercase tracking-[0.18em] text-white/35 font-bold mb-0.5">
-                                  Time
+                                  Pickup Time
                                 </p>
                                 <p className="text-white font-semibold text-xs truncate">
-                                  {formData.time}
+                                  {formatTime12h(formData.time)}
                                 </p>
                               </div>
                             </div>
@@ -3851,8 +4281,8 @@ export default function Booking() {
                                   <p className="text-[9px] uppercase tracking-[0.18em] text-white/35 font-bold mb-0.5">
                                     Return Trip
                                   </p>
-                                  <p className="text-white font-semibold text-xs leading-normal">
-                                    {formData.returnDate} at {formData.returnTime}
+                                  <p className="text-[11px] text-white/95 font-medium leading-normal">
+                                    {formatDateWithWeekday(formData.returnDate)} at {formatTime12h(formData.returnTime)}
                                   </p>
                                 </div>
                               </div>

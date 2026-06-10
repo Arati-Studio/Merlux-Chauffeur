@@ -1014,19 +1014,19 @@ ${sitemapEntries.map(entry => `  <url>
       const scMeta = globalSeo.searchConsoleId ? `<meta name="google-site-verification" content="${globalSeo.searchConsoleId}" />` : '';
 
       const seoTags = `
-    <title>${title}</title>
-    <meta name="description" content="${desc}" />
-    <meta name="keywords" content="${keywords}" />
-    <link rel="canonical" href="${canonical}" />
-    ${favicon}
-    ${noindex}
-    ${scMeta}
-    <meta property="og:title" content="${title}" />
-    <meta property="og:description" content="${desc}" />
-    <meta property="og:type" content="website" />
-    <meta property="og:url" content="${canonical}" />
-    <meta property="og:image" content="${ogImage}" />
-    <meta name="twitter:card" content="summary_large_image" />
+    <title data-rh="true">${title}</title>
+    <meta data-rh="true" name="description" content="${desc}" />
+    <meta data-rh="true" name="keywords" content="${keywords}" />
+    <link data-rh="true" rel="canonical" href="${canonical}" />
+    ${favicon.replace('<link', '<link data-rh="true"')}
+    ${noindex.replace('<meta', '<meta data-rh="true"')}
+    ${scMeta.replace('<meta', '<meta data-rh="true"')}
+    <meta data-rh="true" property="og:title" content="${title}" />
+    <meta data-rh="true" property="og:description" content="${desc}" />
+    <meta data-rh="true" property="og:type" content="website" />
+    <meta data-rh="true" property="og:url" content="${canonical}" />
+    <meta data-rh="true" property="og:image" content="${ogImage}" />
+    <meta data-rh="true" name="twitter:card" content="summary_large_image" />
     ${orgSchema}
     ${pageSchema}
     ${gaScript}
@@ -1034,6 +1034,7 @@ ${sitemapEntries.map(entry => `  <url>
 
       // Replace default title and add other tags
       return html
+        .replace(/<title data-rh="true">.*?<\/title>/, '')
         .replace(/<title>.*?<\/title>/, '')
         .replace('</head>', `${seoTags}</head>`);
     } catch (error) {

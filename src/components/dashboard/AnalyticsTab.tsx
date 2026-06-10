@@ -284,7 +284,7 @@ export default function AnalyticsTab({
         </div>
 
         {/* Right Side: View Mode + Filters */}
-        <div className="flex flex-col sm:flex-row gap-4 item-center">
+        <div className="flex flex-row flex-wrap items-center justify-start lg:justify-end gap-3 sm:gap-4">
 
           {/* View Mode Buttons */}
           <div className="flex items-center gap-2 bg-black/40 p-1 rounded-lg border border-white/10">

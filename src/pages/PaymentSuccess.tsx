@@ -61,6 +61,10 @@ export default function PaymentSuccess() {
         const session = await response.json();
         
         if (session.payment_status === 'paid') {
+          // Clear progress after successful Stripe payment
+          localStorage.removeItem('booking_progress_auto');
+          localStorage.removeItem('booking_draft');
+          
           const bookingDataString = 
             (session.metadata.bookingDataChunk1 || '') + 
             (session.metadata.bookingDataChunk2 || '') + 
