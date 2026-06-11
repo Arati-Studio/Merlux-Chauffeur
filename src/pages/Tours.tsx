@@ -1617,7 +1617,6 @@ export default function Tours() {
                                   ) : (
                                     <span className="text-gold font-display text-xl tracking-tight">${f.salePrice || f.standardPrice || f.price || 0}</span>
                                   )}
-                                  <p className="text-[7px] text-white/20 uppercase font-black">Base / Unit</p>
                                 </div>
                               </div>
 
@@ -1635,59 +1634,61 @@ export default function Tours() {
                       })}
                     </div>
 
-                    <div className="border-t border-white/10 pt-12">
-                      <div className="flex items-center justify-center gap-4 mb-10">
-                        <div className="h-px bg-gradient-to-r from-transparent to-white/10 flex-1" />
-                        <h3 className="text-xl font-display text-gold uppercase tracking-[0.2em]">Added Extras</h3>
-                        <div className="h-px bg-gradient-to-l from-transparent to-white/10 flex-1" />
-                      </div>
+                    {selectedTour?.extras && selectedTour.extras.length > 0 && (
+                      <div className="border-t border-white/10 pt-12">
+                        <div className="flex items-center justify-center gap-4 mb-10">
+                          <div className="h-px bg-gradient-to-r from-transparent to-white/10 flex-1" />
+                          <h3 className="text-xl font-display text-gold uppercase tracking-[0.2em]">Added Extras</h3>
+                          <div className="h-px bg-gradient-to-l from-transparent to-white/10 flex-1" />
+                        </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {(selectedTour?.extras || []).map((extra: any, extraIdx: number) => {
-                          const extraId = extra.id || extra.name;
-                          const isSelected = selectedExtras[extraId] > 0;
-                          return (
-                            <div
-                              key={`extra-${extraId}-${extraIdx}`}
-                              onClick={() => toggleExtra(extraId)}
-                              className={cn(
-                                "glass p-4 rounded-2xl border transition-all relative overflow-hidden group cursor-pointer",
-                                isSelected ? "border-gold/50 bg-gold/5" : "border-white/5 hover:border-gold/20"
-                              )}
-                            >
-                              <div className="flex items-center justify-between gap-4">
-                                <div className="flex-1">
-                                  <p className={cn("text-xs font-bold transition-colors", isSelected ? "text-gold" : "text-white")}>{extra.name}</p>
-                                  <div className="flex items-center gap-2 mt-0.5">
-                                    <p className="text-[9px] text-white/30 font-bold">${extra.price} / Unit</p>
-                                    {extra.availableCount !== undefined && extra.availableCount !== null && (
-                                      <p className="text-[9px] text-white/20 font-bold">Max {extra.availableCount}</p>
-                                    )}
-                                  </div>
-                                </div>
-                                {isSelected ? (
-                                  <div className="flex items-center gap-3 bg-black/40 p-1.5 rounded-xl border border-white/10" onClick={(e) => e.stopPropagation()}>
-                                    <button onClick={() => updateExtraCount(extraId, -1, extra.availableCount)} className="p-1 hover:text-gold"><Minus size={10} /></button>
-                                    <span className="text-xs font-bold font-mono min-w-[1ch] text-center">{selectedExtras[extraId]}</span>
-                                    <button
-                                      onClick={() => updateExtraCount(extraId, 1, extra.availableCount)}
-                                      className="p-1 hover:text-gold disabled:opacity-20 disabled:hover:text-white"
-                                      disabled={extra.availableCount !== undefined && selectedExtras[extraId] >= Number(extra.availableCount)}
-                                    >
-                                      <Plus size={10} />
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <div className="w-8 h-8 rounded-xl bg-white/5 flex items-center justify-center text-white/20 border border-white/10 group-hover:bg-gold/10 group-hover:text-gold transition-all">
-                                    <Plus size={14} />
-                                  </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {selectedTour.extras.map((extra: any, extraIdx: number) => {
+                            const extraId = extra.id || extra.name;
+                            const isSelected = selectedExtras[extraId] > 0;
+                            return (
+                              <div
+                                key={`extra-${extraId}-${extraIdx}`}
+                                onClick={() => toggleExtra(extraId)}
+                                className={cn(
+                                  "glass p-4 rounded-2xl border transition-all relative overflow-hidden group cursor-pointer",
+                                  isSelected ? "border-gold/50 bg-gold/5" : "border-white/5 hover:border-gold/20"
                                 )}
+                              >
+                                <div className="flex items-center justify-between gap-4">
+                                  <div className="flex-1">
+                                    <p className={cn("text-xs font-bold transition-colors", isSelected ? "text-gold" : "text-white")}>{extra.name}</p>
+                                    <div className="flex items-center gap-2 mt-0.5">
+                                      <p className="text-[9px] text-white/30 font-bold">${extra.price} / Unit</p>
+                                      {extra.availableCount !== undefined && extra.availableCount !== null && (
+                                        <p className="text-[9px] text-white/20 font-bold">Max {extra.availableCount}</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                  {isSelected ? (
+                                    <div className="flex items-center gap-3 bg-black/40 p-1.5 rounded-xl border border-white/10" onClick={(e) => e.stopPropagation()}>
+                                      <button onClick={() => updateExtraCount(extraId, -1, extra.availableCount)} className="p-1 hover:text-gold"><Minus size={10} /></button>
+                                      <span className="text-xs font-bold font-mono min-w-[1ch] text-center">{selectedExtras[extraId]}</span>
+                                      <button
+                                        onClick={() => updateExtraCount(extraId, 1, extra.availableCount)}
+                                        className="p-1 hover:text-gold disabled:opacity-20 disabled:hover:text-white"
+                                        disabled={extra.availableCount !== undefined && selectedExtras[extraId] >= Number(extra.availableCount)}
+                                      >
+                                        <Plus size={10} />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div className="w-8 h-8 rounded-xl bg-white/5 flex items-center justify-center text-white/20 border border-white/10 group-hover:bg-gold/10 group-hover:text-gold transition-all">
+                                      <Plus size={14} />
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
 
                   {/* Sidebar Summary */}

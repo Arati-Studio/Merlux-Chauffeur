@@ -147,11 +147,17 @@ export default function Navbar() {
                       to={link.url || link.path || '#'}
                       onClick={() => setActiveSubMenu(null)}
                       className={cn(
-                        "text-[10px] lg:text-sm uppercase font-bold tracking-widest transition-colors duration-300 whitespace-nowrap",
+                        "group relative py-0.5 text-[10px] lg:text-sm uppercase font-bold tracking-widest transition-colors duration-300 whitespace-nowrap",
                         location.pathname === (link.url || link.path) ? "text-gold" : "text-white/70 hover:text-gold"
                       )}
                     >
                       {link.name || link.label}
+                      <span
+                        className={cn(
+                          'absolute inset-x-0 -bottom-1 h-[2px] bg-gold transition-transform duration-500 origin-left',
+                          location.pathname === (link.url || link.path) ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
+                        )}
+                      />
                     </Link>
                     <button 
                       onClick={(e) => {
@@ -251,14 +257,14 @@ export default function Navbar() {
                   <Link
                     to={link.path || link.url}
                     className={cn(
-                      'group relative overflow-hidden text-[10px] lg:text-sm uppercase font-bold tracking-widest transition-colors duration-300 whitespace-nowrap',
+                      'group relative py-0.5 text-[10px] lg:text-sm uppercase font-bold tracking-widest transition-colors duration-300 whitespace-nowrap',
                       location.pathname === (link.path || link.url) ? 'text-gold' : 'text-white/70'
                     )}
                   >
                     {link.name || link.label}
                     <span
                       className={cn(
-                        'absolute inset-x-0 -bottom-1 h-[2px] bg-gold transition-transform duration-300 origin-right',
+                        'absolute inset-x-0 -bottom-1 h-[2px] bg-gold transition-transform duration-500 origin-left',
                         location.pathname === (link.path || link.url) ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
                       )}
                     />
@@ -273,12 +279,18 @@ export default function Navbar() {
                 <button
                   onClick={() => setIsMoreOpen(!isMoreOpen)}
                   className={cn(
-                    "group flex items-center gap-2 text-[10px] lg:text-sm font-bold uppercase tracking-widest transition-colors duration-300",
+                    "group relative py-1 flex items-center gap-2 text-[10px] lg:text-sm font-bold uppercase tracking-widest transition-colors duration-300",
                     displayMoreLinks.some((l: any) => (l.path || l.url) === location.pathname) ? "text-gold" : "text-white/70"
                   )}
                 >
                   More
                   <ChevronDown size={14} className={cn("transition-transform duration-300", isMoreOpen && "rotate-180")} />
+                  <span
+                    className={cn(
+                      'absolute inset-x-0 -bottom-1 h-[1px] bg-gold transition-transform duration-500 origin-left',
+                      displayMoreLinks.some((l: any) => (l.path || l.url) === location.pathname) ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
+                    )}
+                  />
                 </button>
 
                 <AnimatePresence>
