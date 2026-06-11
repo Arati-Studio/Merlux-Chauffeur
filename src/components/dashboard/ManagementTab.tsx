@@ -5,7 +5,7 @@ import {
   BookOpen, FileText, HelpCircle, Layout, Plus, Search, 
   Trash2, Edit2, List, Grid, LayoutGrid, Eye, EyeOff, Save,
   Search as SearchIcon, Filter, RefreshCw, X, ChevronDown, CheckCircle,
-  MoreVertical, Share2, Copy
+  MoreVertical, Share2, Copy, AppWindow
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -70,7 +70,7 @@ const ManagementTab: React.FC<any> = (allProps) => {
   };
 
   const subTabs = [
-    { id: 'seo', label: 'CMS', icon: Globe },
+    { id: 'seo', label: 'CMS', icon: AppWindow },
     { id: 'settings', label: 'Settings', icon: Settings },
     { id: 'offers-tours', label: 'Products', icon: Tag },
     { id: 'floatui', label: 'FloatUI', icon: MessageCircle },

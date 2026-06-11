@@ -134,6 +134,14 @@ input[type="time"] {
     scrollbar-color: rgba(212, 175, 55, 0.6) transparent;
   }
 
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
   /* Base track */
   input[type="range"] {
     width: 100%;

@@ -495,6 +495,26 @@ const BBoxMap: React.FC<BBoxMapProps> = ({ bboxNorth, bboxSouth, bboxEast, bboxW
   );
 };
 
+const COUNTRIES = [
+  { code: '', name: 'No Restriction (Global)' },
+  { code: 'AU', name: 'Australia' },
+  { code: 'LK', name: 'Sri Lanka' },
+  { code: 'US', name: 'United States' },
+  { code: 'GB', name: 'United Kingdom' },
+  { code: 'AE', name: 'United Arab Emirates' },
+  { code: 'CA', name: 'Canada' },
+  { code: 'NZ', name: 'New Zealand' },
+  { code: 'SG', name: 'Singapore' },
+  { code: 'FR', name: 'France' },
+  { code: 'DE', name: 'Germany' },
+  { code: 'IT', name: 'Italy' },
+  { code: 'ES', name: 'Spain' },
+  { code: 'CH', name: 'Switzerland' },
+  { code: 'JP', name: 'Japan' },
+  { code: 'QA', name: 'Qatar' },
+  { code: 'SA', name: 'Saudi Arabia' }
+];
+
 const ALL_COLLECTIONS = [
   { id: 'bookings', label: 'Bookings' },
   { id: 'users', label: 'Users' },
@@ -682,8 +702,6 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
   const [showImportConfirm, setShowImportConfirm] = useState(false);
   const [pendingImportFile, setPendingImportFile] = useState<File | null>(null);
   const [selectedCollectionsForExport, setSelectedCollectionsForExport] = useState<string[]>([]);
-  const [smsTemplateToDelete, setSmsTemplateToDelete] = useState<string | null>(null);
-  const [emailTemplateToDelete, setEmailTemplateToDelete] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [activeSubSection, setActiveSubSection] = useState<'fleet' | 'extras' | 'coupons' | 'booking' | 'sms' | 'email' | 'backup'>('fleet');
 
@@ -1664,11 +1682,20 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
     setIsSavingSmsTemplate(true);
     try {
       const { id, ...rest } = template;
-      await setDoc(doc(db, 'sms-templates', id), { ...rest, updatedAt: serverTimestamp() }, { merge: true });
+      if (id && id !== 'new') {
+        await setDoc(doc(db, 'sms-templates', id), { ...rest, updatedAt: serverTimestamp() }, { merge: true });
+        showDashboardNotice('success', 'SMS template updated.');
+      } else {
+        await addDoc(collection(db, 'sms-templates'), { 
+          ...rest, 
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp() 
+        });
+        showDashboardNotice('success', 'SMS template created.');
+      }
       setShowSmsTemplateModal(false);
-      showDashboardNotice('success', 'SMS template updated.');
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `sms-templates/${template.id}`);
+      handleFirestoreError(err, OperationType.UPDATE, `sms-templates/${template.id || 'new'}`);
     } finally {
       setIsSavingSmsTemplate(false);
     }
@@ -1678,11 +1705,20 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
     setIsSavingEmailTemplate(true);
     try {
       const { id, ...rest } = template;
-      await setDoc(doc(db, 'email-templates', id), { ...rest, updatedAt: serverTimestamp() }, { merge: true });
+      if (id && id !== 'new') {
+        await setDoc(doc(db, 'email-templates', id), { ...rest, updatedAt: serverTimestamp() }, { merge: true });
+        showDashboardNotice('success', 'Email template updated.');
+      } else {
+        await addDoc(collection(db, 'email-templates'), { 
+          ...rest, 
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp() 
+        });
+        showDashboardNotice('success', 'Email template created.');
+      }
       setShowEmailTemplateModal(false);
-      showDashboardNotice('success', 'Email template updated.');
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `email-templates/${template.id}`);
+      handleFirestoreError(err, OperationType.UPDATE, `email-templates/${template.id || 'new'}`);
     } finally {
       setIsSavingEmailTemplate(false);
     }
@@ -2765,20 +2801,24 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <div className="group">
                   <label className="text-[9px] uppercase tracking-widest font-black text-white/30 mb-2 block group-hover:text-gold transition-colors">
-                    Country Restriction (ISO)
+                    Country Restriction (Regional)
                   </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. AU, US"
+                  <select
                     value={systemSettings?.limitCountry || ""}
                     onChange={(e) =>
                       setSystemSettings({
                         ...systemSettings,
-                        limitCountry: e.target.value.toUpperCase(),
+                        limitCountry: e.target.value,
                       })
                     }
-                    className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-gold/50 focus:bg-gold/5 transition-all text-white font-mono placeholder:text-white/10"
-                  />
+                    className="custom-select w-full"
+                  >
+                    {COUNTRIES.map(c => (
+                      <option key={c.code} value={c.code}>
+                        {c.name} {c.code ? `(${c.code})` : ''}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="group">
                   <label className="text-[9px] uppercase tracking-widest font-black text-white/30 mb-2 block group-hover:text-gold transition-colors">
@@ -3198,6 +3238,20 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
                       </button>
                       <button
                         onClick={() => {
+                          const { id, createdAt, updatedAt, ...rest } = template;
+                          setEditingSmsTemplate({
+                            ...rest,
+                            name: `${template.name} (Copy)`,
+                          });
+                          setShowSmsTemplateModal(true);
+                        }}
+                        className="w-10 h-10 bg-blue-500/10 text-blue-500 rounded-xl hover:bg-blue-500 hover:text-white transition-all border border-blue-500/20 flex items-center justify-center shrink-0"
+                        title="Duplicate Template"
+                      >
+                        <Copy size={14} />
+                      </button>
+                      <button
+                        onClick={() => {
                           setEditingSmsTemplate(template);
                           setShowSmsTemplateModal(true);
                         }}
@@ -3206,11 +3260,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
                         Edit
                       </button>
                       <button
-                        onClick={() => {
-                          if (template.id) {
-                            setSmsTemplateToDelete(template.id);
-                          }
-                        }}
+                        onClick={() => handleDeleteSmsTemplate(template.id)}
                         className="w-10 h-10 bg-red-500/10 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all border border-red-500/20 flex items-center justify-center shrink-0"
                       >
                         <Trash2 size={14} />
@@ -3387,6 +3437,20 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
                       </button>
                       <button
                         onClick={() => {
+                          const { id, createdAt, updatedAt, ...rest } = template;
+                          setEditingEmailTemplate({
+                            ...rest,
+                            name: `${template.name} (Copy)`,
+                          });
+                          setShowEmailTemplateModal(true);
+                        }}
+                        className="w-10 h-10 bg-blue-500/10 text-blue-500 rounded-xl hover:bg-blue-500 hover:text-white transition-all border border-blue-500/20 flex items-center justify-center shrink-0"
+                        title="Duplicate Template"
+                      >
+                        <Copy size={14} />
+                      </button>
+                      <button
+                        onClick={() => {
                           setEditingEmailTemplate(template);
                           setShowEmailTemplateModal(true);
                         }}
@@ -3395,11 +3459,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
                         Edit
                       </button>
                       <button
-                        onClick={() => {
-                          if (template.id) {
-                            setEmailTemplateToDelete(template.id);
-                          }
-                        }}
+                        onClick={() => handleDeleteEmailTemplate(template.id)}
                         className="w-10 h-10 bg-red-500/10 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all border border-red-500/20 flex items-center justify-center shrink-0"
                       >
                         <Trash2 size={14} />
@@ -5547,37 +5607,6 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
             </motion.div>
           )}
 
-        <ConfirmationModal
-          key="delete-sms-template-conf"
-          isOpen={smsTemplateToDelete !== null}
-          onClose={() => setSmsTemplateToDelete(null)}
-          onConfirm={() => {
-            if (smsTemplateToDelete) {
-              handleDeleteSmsTemplate(smsTemplateToDelete);
-            }
-          }}
-          title="Delete SMS Template?"
-          message="This will permanently delete this SMS template. This action cannot be undone."
-          confirmLabel="Delete"
-          cancelLabel="Cancel"
-          type="danger"
-        />
-
-        <ConfirmationModal
-          key="delete-email-template-conf"
-          isOpen={emailTemplateToDelete !== null}
-          onClose={() => setEmailTemplateToDelete(null)}
-          onConfirm={() => {
-            if (emailTemplateToDelete) {
-              handleDeleteEmailTemplate(emailTemplateToDelete);
-            }
-          }}
-          title="Delete Email Template?"
-          message="This will permanently delete this Email template. This action cannot be undone."
-          confirmLabel="Delete"
-          cancelLabel="Cancel"
-          type="danger"
-        />
       </AnimatePresence>
     </div>
   );

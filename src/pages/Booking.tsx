@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+// Dynamic reload touch
 import { motion, AnimatePresence } from "motion/react";
 import {
   MapPin,
@@ -3050,7 +3051,7 @@ export default function Booking() {
                   exit={{ opacity: 0, x: -20 }}
                   className="bg-[#030303]/40 backdrop-blur-3xl p-5 md:p-10 xl:p-12 rounded-3xl border border-white/[0.05] shadow-[0_25px_60px_rgba(0,0,0,0.85)] grid grid-cols-1 lg:grid-cols-3 gap-8 md:gap-10 hover:border-white/[0.08] transition-all duration-700 relative overflow-hidden items-start"
                 >
-                  <div className="lg:col-span-3 flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8 border-b border-white/[0.05] pb-6 w-full">
+                  <div className="lg:col-span-3 flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-white/[0.05] pb-6 w-full">
                     <div className="text-center md:text-left">
                       <h2 className="text-2xl md:text-3xl font-display text-white mb-2">Select Vehicle</h2>
                       <p className="text-gold/40 text-[10px] uppercase tracking-[0.4em] font-black">Choose your fleet</p>

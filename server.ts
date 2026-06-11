@@ -941,16 +941,20 @@ ${sitemapEntries.map(entry => `  <url>
   });
 
   app.get('/robots.txt', (req, res) => {
+    const SITE_URL = getSiteUrl(req);
     const robotsPath = path.join(process.cwd(), 'dist', 'robots.txt');
     if (fs.existsSync(robotsPath)) {
       return res.sendFile(robotsPath);
     }
-    res.send("User-agent: *\nAllow: /\nSitemap: /sitemap_index.xml");
+    // Explicitly using the full site URL for better sitemap discovery
+    res.send(`User-agent: *\nAllow: /\nSitemap: ${SITE_URL}/sitemap_index.xml\nSitemap: ${SITE_URL}/sitemap.xml`);
   });
 
   // Helper for SEO injection
-  const injectSEO = async (html: string, url: string) => {
+  const injectSEO = async (html: string, req: any) => {
     try {
+      const url = req.originalUrl;
+      const SITE_URL = getSiteUrl(req);
       const settingsSnap = await dbAdmin.collection('settings').doc('system').get();
       const globalSettings = settingsSnap.exists ? settingsSnap.data() : null;
       const globalSeo = globalSettings?.seo || {};
@@ -995,7 +999,7 @@ ${sitemapEntries.map(entry => `  <url>
       const keywords = [...seoKeywords, ...defaultKeywords].filter(k => k !== '').join(', ');
       const favicon = globalSeo.favicon ? `<link rel="icon" href="${globalSeo.favicon}" />` : '';
       const ogImage = seoData?.ogImage || seoData?.featuredImage || globalSeo.ogImage || globalSeo.logo || '';
-      const canonical = seoData?.canonicalUrl || `${process.env.APP_URL || ''}${url}`;
+      const canonical = seoData?.canonicalUrl || `${SITE_URL}${url}`;
       const noindex = seoData?.noindex ? '<meta name="robots" content="noindex, nofollow">' : '<meta name="robots" content="index, follow">';
 
       const pageSchema = seoData?.schema ? `<script type="application/ld+json">${JSON.stringify(seoData.schema)}</script>` : '';
@@ -1018,6 +1022,7 @@ ${sitemapEntries.map(entry => `  <url>
     <meta data-rh="true" name="description" content="${desc}" />
     <meta data-rh="true" name="keywords" content="${keywords}" />
     <link data-rh="true" rel="canonical" href="${canonical}" />
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="${SITE_URL}/sitemap_index.xml" />
     ${favicon.replace('<link', '<link data-rh="true"')}
     ${noindex.replace('<meta', '<meta data-rh="true"')}
     ${scMeta.replace('<meta', '<meta data-rh="true"')}
@@ -1060,7 +1065,7 @@ ${sitemapEntries.map(entry => `  <url>
       try {
         let template = fs.readFileSync(path.resolve(__dirnameResolved, 'index.html'), 'utf-8');
         template = await vite.transformIndexHtml(url, template);
-        const html = await injectSEO(template, url);
+        const html = await injectSEO(template, req);
         res.status(200).set({ 'Content-Type': 'text/html' }).end(html);
       } catch (e) {
         vite.ssrFixStacktrace(e as Error);
@@ -1074,7 +1079,7 @@ ${sitemapEntries.map(entry => `  <url>
     app.get('*', async (req, res) => {
       try {
         const template = fs.readFileSync(path.join(distPath, 'index.html'), 'utf-8');
-        const html = await injectSEO(template, req.originalUrl);
+        const html = await injectSEO(template, req);
         res.status(200).set({ 'Content-Type': 'text/html' }).end(html);
       } catch (e) {
         res.status(500).end('Internal Server Error');

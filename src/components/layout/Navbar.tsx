@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Home, Gift, MapPin, Briefcase, MoreHorizontal, User, CalendarDays, LogOut, ChevronDown, LogIn, ShieldCheck, Truck, UserCircle, LayoutDashboard, Search } from 'lucide-react';
+import { Home, Gift, MapPin, Briefcase, MoreHorizontal, User, CalendarDays, LogOut, ChevronDown, LogIn, ShieldCheck, Truck, UserCircle, LayoutDashboard, Search, Car } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { cn } from '../../lib/utils';
 import { auth, db } from '../../lib/firebase';
@@ -418,8 +418,22 @@ export default function Navbar() {
                   <LogIn size={20} />
                 </Link>
               )}
-              <Link to="/booking" className="btn-primary py-2 px-4 lg:px-6 text-[10px] lg:text-xs rounded-sm whitespace-nowrap">
-                Book Now
+              <Link to="/booking" className="group relative overflow-hidden bg-gold text-black px-3 py-1 rounded-full text-[10px] lg:text-xs font-black uppercase tracking-[0.2em] shadow-[0_0_20px_rgba(212,175,55,0.2)] transition-all duration-500 hover:shadow-[0_0_30px_rgba(212,175,55,0.5)] hover:scale-105 active:scale-95 whitespace-nowrap flex items-center gap-3">
+                <div className="relative z-10 flex items-center overflow-hidden w-6 h-6 group-hover:text-gold transition-colors duration-500">
+                  <motion.div 
+                    animate={{ x: [ -25, 25 ] }}
+                    transition={{ 
+                      repeat: Infinity, 
+                      duration: 3,
+                      ease: "linear"
+                    }}
+                    className="flex shrink-0"
+                  >
+                    <Car size={18} />
+                  </motion.div>
+                </div>
+                <span className="relative z-10 group-hover:text-gold transition-colors duration-500 hidden md:inline-block">Book Now</span>
+                <div className="absolute inset-0 bg-black translate-y-[101%] group-hover:translate-y-0 transition-transform duration-500 ease-out" />
               </Link>
             </div>
           </div>
@@ -470,10 +484,22 @@ export default function Navbar() {
 
             <Link
               to="/booking"
-              className="border border-green-700 rounded-md p-1.5 shadow-sm bg-green-700 text-white hover:bg-green-800 transition-colors"
+              className="border border-gold/40 rounded-md p-1.5 shadow-[0_0_15px_rgba(212,175,55,0.2)] bg-gold text-black hover:bg-black hover:text-gold transition-all duration-500 overflow-hidden"
               title="Book Now"
             >
-              <CalendarDays size={16} />
+              <div className="relative w-4 h-4 overflow-hidden">
+                <motion.div
+                  animate={{ x: [-20, 20] }}
+                  transition={{ 
+                    repeat: Infinity, 
+                    duration: 2.5,
+                    ease: "linear"
+                  }}
+                  className="flex shrink-0"
+                >
+                  <Car size={16} />
+                </motion.div>
+              </div>
             </Link>
 
             {user && (

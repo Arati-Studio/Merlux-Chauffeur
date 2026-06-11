@@ -938,73 +938,79 @@ export default function Offers() {
                     className="space-y-8"
                   >
                     {/* Filters & Search */}
-                    <div className="flex flex-wrap items-center justify-between gap-4 bg-[#0A0A0A] p-4 rounded-2xl border border-white/5">
-                      <div className="relative w-full md:w-64 mt-2 md:mt-0">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" size={16} />
-                        <input
-                          type="text"
-                          placeholder="Search standard and special offers..."
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                          className="w-full bg-black/40 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-xs text-white focus:outline-none focus:border-gold/50 transition-all"
-                        />
-                        {searchQuery && (
-                          <button
-                            onClick={() => setSearchQuery('')}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-white/20 hover:text-white transition-colors"
-                          >
-                            <XCircle size={14} />
-                          </button>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap gap-4 items-center w-full md:w-auto">
-                        <div className="flex items-center gap-2">
-                          <label className="text-[9px] uppercase tracking-widest font-bold text-white/40">
-                            Tags
-                          </label>
-                          <select
-                            value={tagFilter}
-                            onChange={(e) => setTagFilter(e.target.value)}
-                            className="bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-gold/50 transition-all custom-select appearance-none cursor-pointer w-full sm:w-40"
-                          >
-                            <option value="all">All Packages</option>
-                            {allTags.map((tag, tIdx) => (
-                              <option key={`offer-tag-${tag}-${tIdx}`} value={tag}>{tag}</option>
-                            ))}
-                          </select>
-                        </div>
+<div className="flex flex-wrap items-center justify-between gap-4 bg-[#0A0A0A] p-4 rounded-2xl border border-white/5">
+  {/* Search — full width on mobile, fixed on md+ */}
+  <div className="relative w-full md:w-64">
+    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" size={16} />
+    <input
+      type="text"
+      placeholder="Search standard and special offers..."
+      value={searchQuery}
+      onChange={(e) => setSearchQuery(e.target.value)}
+      className="w-full bg-black/40 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-xs text-white focus:outline-none focus:border-gold/50 transition-all"
+    />
+    {searchQuery && (
+      <button
+        onClick={() => setSearchQuery('')}
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-white/20 hover:text-white transition-colors"
+      >
+        <XCircle size={14} />
+      </button>
+    )}
+  </div>
 
-                        <div className="flex items-center gap-2">
-                          <label className="text-[9px] uppercase tracking-widest font-bold text-white/40">
-                            Discount
-                          </label>
-                          <select
-                            value={discountFilter}
-                            onChange={(e) => setDiscountFilter(e.target.value)}
-                            className="bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-gold/50 transition-all custom-select appearance-none cursor-pointer w-full sm:w-40"
-                          >
-                            <option value="all">All Discounts</option>
-                            <option value="percentage">Percentage (%)</option>
-                            <option value="fixed">Fixed Amount ($)</option>
-                          </select>
-                        </div>
+  {/* Filters — each row takes full width on mobile, auto on md+ */}
+  <div className="grid grid-cols-1 md:flex md:flex-wrap gap-3 w-full md:w-auto">
+    {/* Tags */}
+    <div className="flex items-center gap-2 w-full md:w-auto">
+      <label className="text-[9px] uppercase tracking-widest font-bold text-white/40 shrink-0 w-14 md:w-auto">
+        Tags
+      </label>
+      <select
+        value={tagFilter}
+        onChange={(e) => setTagFilter(e.target.value)}
+        className="flex-1 md:flex-none bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-gold/50 transition-all custom-select appearance-none cursor-pointer md:w-40"
+      >
+        <option value="all">All Packages</option>
+        {allTags.map((tag, tIdx) => (
+          <option key={`offer-tag-${tag}-${tIdx}`} value={tag}>{tag}</option>
+        ))}
+      </select>
+    </div>
 
-                        <div className="flex items-center gap-2">
-                          <label className="text-[9px] uppercase tracking-widest font-bold text-white/40">
-                            Sort Price
-                          </label>
-                          <select
-                            value={priceSort}
-                            onChange={(e) => setPriceSort(e.target.value as any)}
-                            className="bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-gold/50 transition-all custom-select appearance-none cursor-pointer w-full sm:w-40"
-                          >
-                            <option value="none">Default Sort</option>
-                            <option value="asc">Low to High</option>
-                            <option value="desc">High to Low</option>
-                          </select>
-                        </div>
-                      </div>
-                    </div>
+    {/* Discount */}
+    <div className="flex items-center gap-2 w-full md:w-auto">
+      <label className="text-[9px] uppercase tracking-widest font-bold text-white/40 shrink-0 w-14 md:w-auto">
+        Discount
+      </label>
+      <select
+        value={discountFilter}
+        onChange={(e) => setDiscountFilter(e.target.value)}
+        className="flex-1 md:flex-none bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-gold/50 transition-all custom-select appearance-none cursor-pointer md:w-40"
+      >
+        <option value="all">All Discounts</option>
+        <option value="percentage">Percentage (%)</option>
+        <option value="fixed">Fixed Amount ($)</option>
+      </select>
+    </div>
+
+    {/* Sort Price */}
+    <div className="flex items-center gap-2 w-full md:w-auto">
+      <label className="text-[9px] uppercase tracking-widest font-bold text-white/40 shrink-0 w-14 md:w-auto">
+        Sort Price
+      </label>
+      <select
+        value={priceSort}
+        onChange={(e) => setPriceSort(e.target.value as any)}
+        className="flex-1 md:flex-none bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-gold/50 transition-all custom-select appearance-none cursor-pointer md:w-40"
+      >
+        <option value="none">Default Sort</option>
+        <option value="asc">Low to High</option>
+        <option value="desc">High to Low</option>
+      </select>
+    </div>
+  </div>
+</div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                       {isLoading ? (

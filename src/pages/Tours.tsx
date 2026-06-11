@@ -1112,7 +1112,7 @@ export default function Tours() {
                       <select
                         value={categoryFilter}
                         onChange={(e) => setCategoryFilter(e.target.value)}
-                        className="custom-select w-full bg-black/40 border border-white/10 rounded-[1.2rem] py-2 pl-12 pr-8 focus:border-gold outline-none transition-all text-sm uppercase appearance-none cursor-pointer"
+                        className="custom-select w-full bg-black/40 border border-white/10 rounded-[1.2rem] py-2 pl-12 pr-8 focus:border-gold outline-none transition-all text-sm appearance-none cursor-pointer"
                       >
                         {categories.map((cat, cIdx) => (
                           <option key={`cat-${cat}-${cIdx}`} value={cat}>
