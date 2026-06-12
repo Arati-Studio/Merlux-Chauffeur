@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { 
-  Globe, Save, Loader2, Phone, BarChart3, Upload, Monitor, Layout, 
+  Globe, Save, Loader2, Phone, BarChart3, Upload, Monitor, Layout, Search,
   Compass, ArrowRight, Briefcase, Plus, Edit2, Trash2, Power, Eye, Info, List,
-  Code2, Copy, Trash, X, ArrowUp, ArrowDown, ChevronDown, CheckCircle,
+  Code2, Copy, Trash, X, ArrowUp, ArrowDown, ChevronDown, CheckCircle, ChevronRight,
   MoreHorizontal, GitMerge, Target, Blocks, Tag, MapPin, BookOpen, ChevronUp,
   Settings, Menu, Check, HelpCircle
 } from 'lucide-react';
@@ -70,6 +70,16 @@ const CmsTab: React.FC<CmsTabProps> = ({
   const [targetedMenuIdx, setTargetedMenuIdx] = useState<number | null>(null);
   const [targetedSubIdx, setTargetedSubIdx] = useState<number | null>(null);
   const [isSavingMenus, setIsSavingMenus] = useState(false);
+  const [paletteSearch, setPaletteSearch] = useState('');
+  const [paletteTab, setPaletteTab] = useState<'nodes' | 'pages' | 'blogs'>('nodes');
+  const [selectedPaletteItems, setSelectedPaletteItems] = useState<any[]>([]);
+  const [collapsedNodes, setCollapsedNodes] = useState<string[]>([]);
+
+  const toggleNode = (nodeId: string) => {
+    setCollapsedNodes(prev => 
+      prev.includes(nodeId) ? prev.filter(id => id !== nodeId) : [...prev, nodeId]
+    );
+  };
 
   // New states for internal modals logic if needed
   const [showBlogModal, setShowBlogModal] = useState(false);
@@ -236,26 +246,30 @@ const CmsTab: React.FC<CmsTabProps> = ({
     setTempMenuItems(next);
   };
 
-  const addItemTo = (item: { label: string; url: string }) => {
-    if (targetedMenuIdx !== null) {
-      const next = [...tempMenuItems];
-      const rootItem = { ...next[targetedMenuIdx] };
+  const addItemTo = (items: { label: string; url: string } | { label: string; url: string }[]) => {
+    const newItems = Array.isArray(items) ? items : [items];
+    
+    setTempMenuItems(prev => {
+      if (targetedMenuIdx !== null) {
+        const next = [...prev];
+        const rootItem = { ...next[targetedMenuIdx] };
 
-      if (targetedSubIdx !== null && rootItem.items?.[targetedSubIdx]) {
-        const subItems = [...(rootItem.items || [])];
-        const subItem = { ...subItems[targetedSubIdx] };
-        subItem.items = [...(subItem.items || []), item];
-        subItems[targetedSubIdx] = subItem;
-        rootItem.items = subItems;
+        if (targetedSubIdx !== null && rootItem.items?.[targetedSubIdx]) {
+          const subItems = [...(rootItem.items || [])];
+          const subItem = { ...subItems[targetedSubIdx] };
+          subItem.items = [...(subItem.items || []), ...newItems];
+          subItems[targetedSubIdx] = subItem;
+          rootItem.items = subItems;
+        } else {
+          rootItem.items = [...(rootItem.items || []), ...newItems];
+        }
+
+        next[targetedMenuIdx] = rootItem;
+        return next;
       } else {
-        rootItem.items = [...(rootItem.items || []), item];
+        return [...prev, ...newItems];
       }
-
-      next[targetedMenuIdx] = rootItem;
-      setTempMenuItems(next);
-    } else {
-      setTempMenuItems([...tempMenuItems, item]);
-    }
+    });
   };
 
   const handleUpdateMenus = async () => {
@@ -802,6 +816,22 @@ const CmsTab: React.FC<CmsTabProps> = ({
                       <h4 className="text-[9px] uppercase tracking-[0.2em] font-black text-white">Structure</h4>
                     </div>
                     <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => {
+                          const nodesWithItems = tempMenuItems
+                            .map((item, i) => (item.items?.length ?? 0) > 0 ? `node-${i}` : null)
+                            .filter(Boolean) as string[];
+                          
+                          if (collapsedNodes.length === nodesWithItems.length) {
+                            setCollapsedNodes([]);
+                          } else {
+                            setCollapsedNodes(nodesWithItems);
+                          }
+                        }}
+                        className="text-[8px] uppercase tracking-widest font-black text-gold/40 hover:text-gold transition-colors mr-2 px-2 py-1 rounded-lg border border-white/5 hover:border-gold/20"
+                      >
+                        {collapsedNodes.length > 0 ? 'Expand All' : 'Collapse All'}
+                      </button>
                       <span className="w-1 h-1 rounded-full bg-gold" />
                       <span className="text-[9px] font-mono text-white/40">{tempMenuItems.length} Root Nodes</span>
                     </div>
@@ -856,6 +886,19 @@ const CmsTab: React.FC<CmsTabProps> = ({
                             {/* Fields */}
                             <div className="flex-1 min-w-0" onClick={e => e.stopPropagation()}>
                               <div className="flex items-center gap-2 mb-1">
+                                {(item.items?.length ?? 0) > 0 && (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); toggleNode(`node-${idx}`); }}
+                                    className={cn(
+                                      "w-7 h-7 rounded-lg border flex items-center justify-center transition-all shrink-0",
+                                      collapsedNodes.includes(`node-${idx}`) 
+                                        ? "bg-white/10 text-gold border-gold/30" 
+                                        : "bg-white/5 text-white/40 border-white/10 hover:border-white/20"
+                                    )}
+                                  >
+                                    <ChevronDown size={12} className={cn("transition-transform duration-300", collapsedNodes.includes(`node-${idx}`) && "-rotate-90")} />
+                                  </button>
+                                )}
                                 <input
                                   type="text"
                                   value={item.label}
@@ -947,85 +990,95 @@ const CmsTab: React.FC<CmsTabProps> = ({
                         </div>
 
                         {/* Sub-items */}
-                        {(item.items?.length ?? 0) > 0 && (
-                          <div className="ml-10 mt-2 space-y-2 pb-1 relative">
-                            {/* Vertical connector line */}
-                            <div className="absolute left-[-16px] top-0 bottom-4 w-px bg-white/10" />
+                        <AnimatePresence>
+                          {!collapsedNodes.includes(`node-${idx}`) && (item.items?.length ?? 0) > 0 && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.2 }}
+                              className="overflow-hidden"
+                            >
+                              <div className="ml-10 mt-2 space-y-2 pb-1 relative">
+                                {/* Vertical connector line */}
+                                <div className="absolute left-[-16px] top-0 bottom-4 w-px bg-white/10" />
 
-                            {item.items!.map((subItem, sIdx) => (
-                              <div key={`sub-${idx}-${sIdx}`} className="relative pl-6">
-                                {/* Horizontal connector */}
-                                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-px bg-white/10" />
+                                {item.items!.map((subItem, sIdx) => (
+                                  <div key={`sub-${idx}-${sIdx}`} className="relative pl-6">
+                                    {/* Horizontal connector */}
+                                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-px bg-white/10" />
 
-                                <div className="p-2 bg-white/[0.02] border border-white/5 rounded-xl hover:border-gold/20 transition-all">
-                                  <div className="flex items-center gap-3">
-                                    {/* FIX 5: Sub-item move controls are always visible,
-                                             not hidden until hover — essential for touch. */}
-                                    <div className="flex flex-col gap-0.5 shrink-0">
-                                      <button
-                                        onClick={() => moveSubItem(idx, sIdx, "up")}
-                                        disabled={sIdx === 0}
-                                        className="text-white/30 hover:text-gold disabled:opacity-20 transition-colors p-0.5"
-                                      >
-                                        <ChevronUp size={11} />
-                                      </button>
-                                      {/* FIX 6: Added missing "move down" for sub-items */}
-                                      <button
-                                        onClick={() => moveSubItem(idx, sIdx, "down")}
-                                        disabled={sIdx === (item.items?.length ?? 1) - 1}
-                                        className="text-white/30 hover:text-gold disabled:opacity-20 transition-colors p-0.5"
-                                      >
-                                        <ChevronDown size={11} />
-                                      </button>
-                                    </div>
+                                    <div className="p-2 bg-white/[0.02] border border-white/5 rounded-xl hover:border-gold/20 transition-all">
+                                      <div className="flex items-center gap-3">
+                                        {/* FIX 5: Sub-item move controls are always visible,
+                                                 not hidden until hover — essential for touch. */}
+                                        <div className="flex flex-col gap-0.5 shrink-0">
+                                          <button
+                                            onClick={() => moveSubItem(idx, sIdx, "up")}
+                                            disabled={sIdx === 0}
+                                            className="text-white/30 hover:text-gold disabled:opacity-20 transition-colors p-0.5"
+                                          >
+                                            <ChevronUp size={11} />
+                                          </button>
+                                          {/* FIX 6: Added missing "move down" for sub-items */}
+                                          <button
+                                            onClick={() => moveSubItem(idx, sIdx, "down")}
+                                            disabled={sIdx === (item.items?.length ?? 1) - 1}
+                                            className="text-white/30 hover:text-gold disabled:opacity-20 transition-colors p-0.5"
+                                          >
+                                            <ChevronDown size={11} />
+                                          </button>
+                                        </div>
 
-                                    <div className="flex-1 min-w-0">
-                                      <input
-                                        type="text"
-                                        value={subItem.label}
-                                        onChange={e => updateSubLabel(idx, sIdx, e.target.value)}
-                                        className="bg-transparent border-none text-[12px] font-bold text-white/80 w-full focus:ring-0 p-0 mb-0.5 placeholder:text-white/10"
-                                        placeholder="Sub-item Label"
-                                      />
-                                      <input
-                                        type="text"
-                                        value={subItem.url}
-                                        onChange={e => updateSubUrl(idx, sIdx, e.target.value)}
-                                        className="bg-transparent border-none text-[9px] font-mono text-white/30 w-full focus:ring-0 p-0"
-                                        placeholder="/sub-path"
-                                      />
-                                    </div>
+                                        <div className="flex-1 min-w-0">
+                                          <input
+                                            type="text"
+                                            value={subItem.label}
+                                            onChange={e => updateSubLabel(idx, sIdx, e.target.value)}
+                                            className="bg-transparent border-none text-[12px] font-bold text-white/80 w-full focus:ring-0 p-0 mb-0.5 placeholder:text-white/10"
+                                            placeholder="Sub-item Label"
+                                          />
+                                          <input
+                                            type="text"
+                                            value={subItem.url}
+                                            onChange={e => updateSubUrl(idx, sIdx, e.target.value)}
+                                            className="bg-transparent border-none text-[9px] font-mono text-white/30 w-full focus:ring-0 p-0"
+                                            placeholder="/sub-path"
+                                          />
+                                        </div>
 
-                                    <div className="flex items-center gap-1.5 shrink-0">
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setTargetedMenuIdx(idx);
-                                          setTargetedSubIdx(targetedSubIdx === sIdx ? null : sIdx);
-                                        }}
-                                        className={cn(
-                                          "w-7 h-7 rounded-lg border flex items-center justify-center transition-all",
-                                          targetedMenuIdx === idx && targetedSubIdx === sIdx
-                                            ? "bg-gold text-black border-gold shadow-lg shadow-gold/20"
-                                            : "bg-gold/5 text-gold border-gold/10 hover:bg-gold/20 hover:border-gold/30"
-                                        )}
-                                        title="Target for injection"
-                                      >
-                                        <Target size={11} />
-                                      </button>
-                                      <button
-                                        onClick={(e) => { e.stopPropagation(); deleteSub(idx, sIdx); }}
-                                        className="w-7 h-7 rounded-lg bg-red-500/5 text-red-500/30 border border-red-500/10 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all shadow-sm"
-                                      >
-                                        <Trash2 size={11} />
-                                      </button>
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setTargetedMenuIdx(idx);
+                                              setTargetedSubIdx(targetedSubIdx === sIdx ? null : sIdx);
+                                            }}
+                                            className={cn(
+                                              "w-7 h-7 rounded-lg border flex items-center justify-center transition-all",
+                                              targetedMenuIdx === idx && targetedSubIdx === sIdx
+                                                ? "bg-gold text-black border-gold shadow-lg shadow-gold/20"
+                                                : "bg-gold/5 text-gold border-gold/10 hover:bg-gold/20 hover:border-gold/30"
+                                            )}
+                                            title="Target for injection"
+                                          >
+                                            <Target size={11} />
+                                          </button>
+                                          <button
+                                            onClick={(e) => { e.stopPropagation(); deleteSub(idx, sIdx); }}
+                                            className="w-7 h-7 rounded-lg bg-red-500/5 text-red-500/30 border border-red-500/10 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all shadow-sm"
+                                          >
+                                            <Trash2 size={11} />
+                                          </button>
+                                        </div>
+                                      </div>
                                     </div>
                                   </div>
-                                </div>
+                                ))}
                               </div>
-                            ))}
-                          </div>
-                        )}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
                     ))}
 
@@ -1045,11 +1098,9 @@ const CmsTab: React.FC<CmsTabProps> = ({
                 </div>
 
                 {/* Right — Palette */}
-                {/* FIX 8: On mobile, cap height so both panels are visible.
-                         On lg+ let it fill the available height. */}
-                <div className="w-full lg:w-[340px] flex flex-col min-h-0 max-h-[40vh] lg:max-h-none bg-white/[0.01]">
+                <div className="w-full lg:w-[380px] flex flex-col min-h-0 max-h-[50vh] lg:max-h-none bg-white/[0.01]">
                   {/* Palette header */}
-                  <div className="shrink-0 px-4 md:px-6 pt-4 md:pt-6 pb-3 border-b border-white/5 space-y-3">
+                  <div className="shrink-0 px-4 md:px-6 pt-4 md:pt-6 pb-3 border-b border-white/5 space-y-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <div className="p-1 bg-gold/10 rounded">
@@ -1063,6 +1114,51 @@ const CmsTab: React.FC<CmsTabProps> = ({
                       >
                         + Manual
                       </button>
+                    </div>
+
+                    {/* Search bar */}
+                    <div className="relative">
+                      <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20" />
+                      <input 
+                        type="text"
+                        placeholder="Search assets..."
+                        value={paletteSearch}
+                        onChange={(e) => setPaletteSearch(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-4 py-2.5 text-[11px] text-white outline-none focus:border-gold/50 transition-all placeholder:text-white/10"
+                      />
+                    </div>
+
+                    {/* Tabs */}
+                    <div className="flex gap-1 p-1 bg-white/5 rounded-xl border border-white/5">
+                      {(['nodes', 'pages', 'blogs'] as const).map((tab) => {
+                        const count = 
+                          tab === 'nodes' ? 8 : 
+                          tab === 'pages' ? pages.length : 
+                          blogs.length;
+                        return (
+                          <button
+                            key={tab}
+                            onClick={() => {
+                              setPaletteTab(tab);
+                              setSelectedPaletteItems([]);
+                            }}
+                            className={cn(
+                              "flex-1 py-1.5 px-2 rounded-lg text-[8px] uppercase tracking-widest font-black transition-all flex flex-col items-center gap-0.5",
+                              paletteTab === tab 
+                                ? "bg-gold text-black shadow-lg shadow-gold/10" 
+                                : "text-white/40 hover:text-white hover:bg-white/5"
+                            )}
+                          >
+                            <span>{tab}</span>
+                            <span className={cn(
+                              "text-[7px]",
+                              paletteTab === tab ? "text-black/60" : "text-white/20"
+                            )}>
+                              {count}
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
 
                     <AnimatePresence>
@@ -1101,13 +1197,61 @@ const CmsTab: React.FC<CmsTabProps> = ({
 
                   {/* Scrollable palette content */}
                   <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-4 md:px-6 py-4 space-y-6">
+                    {/* Bulk Selection Tool */}
+                    <div className="flex items-center justify-between px-1">
+                      <button 
+                        onClick={() => {
+                          const currentItems = 
+                            paletteTab === 'nodes' ? [
+                              { label: "Home", url: "/" },
+                              { label: "Fleet", url: "/fleet" },
+                              { label: "Services", url: "/services" },
+                              { label: "Offers", url: "/offers" },
+                              { label: "Tours", url: "/tours" },
+                              { label: "About", url: "/about" },
+                              { label: "Contact", url: "/contact" },
+                              { label: "Blog", url: "/blog" }
+                            ].filter(i => i.label.toLowerCase().includes(paletteSearch.toLowerCase())) :
+                            paletteTab === 'pages' ? pages.filter(p => p.title.toLowerCase().includes(paletteSearch.toLowerCase()))
+                              .map(p => ({ label: p.title, url: `/${p.slug}`, id: p.id })) :
+                            blogs.filter(b => b.title.toLowerCase().includes(paletteSearch.toLowerCase()))
+                              .map(b => ({ label: b.title, url: `/blog/${b.slug}`, id: b.id }));
 
-                    {/* Foundational Nodes */}
-                    <div className="space-y-3">
-                      <label className="text-[9px] font-black uppercase tracking-[0.2em] text-white/20 px-1">
-                        Foundational Nodes
-                      </label>
-                      <div className="grid grid-cols-2 gap-2">
+                          if (selectedPaletteItems.length === currentItems.length && currentItems.length > 0) {
+                            setSelectedPaletteItems([]);
+                          } else {
+                            setSelectedPaletteItems(currentItems);
+                          }
+                        }}
+                        className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-gold/60 hover:text-gold transition-colors"
+                      >
+                        <div className={cn(
+                          "w-3 h-3 rounded flex items-center justify-center border transition-all",
+                          selectedPaletteItems.length > 0 && selectedPaletteItems.length === (
+                            paletteTab === 'nodes' ? 8 : (paletteTab === 'pages' ? pages.length : blogs.length)
+                          ) ? "bg-gold border-gold text-black" : "border-white/20"
+                        )}>
+                          {selectedPaletteItems.length > 0 && <Check size={8} />}
+                        </div>
+                        Select All
+                      </button>
+
+                      {selectedPaletteItems.length > 0 && (
+                        <button 
+                          onClick={() => {
+                            addItemTo(selectedPaletteItems);
+                            setSelectedPaletteItems([]);
+                          }}
+                          className="px-3 py-1 bg-gold text-black rounded-lg text-[9px] font-black uppercase tracking-widest animate-fade-in"
+                        >
+                          Add {selectedPaletteItems.length} Items
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Nodes Tab */}
+                    {paletteTab === 'nodes' && (
+                      <div className="grid grid-cols-1 gap-2">
                         {[
                           { label: "Home", url: "/" },
                           { label: "Fleet", url: "/fleet" },
@@ -1117,127 +1261,116 @@ const CmsTab: React.FC<CmsTabProps> = ({
                           { label: "About", url: "/about" },
                           { label: "Contact", url: "/contact" },
                           { label: "Blog", url: "/blog" },
-                        ].map(core => (
-                          <button
-                            key={`core-${core.url}`}
-                            onClick={() => addItemTo(core)}
-                            className="flex items-center justify-between p-3 bg-white/5 rounded-2xl hover:bg-gold/10 hover:border-gold/30 border border-white/5 transition-all text-left group"
-                          >
-                            <span className="text-[10px] font-bold text-white/80 group-hover:text-white transition-colors">
-                              {core.label}
-                            </span>
-                            <Plus size={10} className="text-gold shrink-0" />
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Static Pages */}
-                    {pages.length > 0 && (
-                      <div className="space-y-2">
-                        <label className="text-[8px] font-black uppercase tracking-widest text-white/20 px-1 flex justify-between">
-                          <span>Static Content</span>
-                          <span>{pages.length}</span>
-                        </label>
-                        <div className="space-y-1">
-                          {pages.slice(0, 15).map(p => (
-                            <button
-                              key={`palette-page-${p.id}`}
-                              onClick={() => addItemTo({ label: p.title, url: `/${p.slug}` })}
-                              className="w-full flex items-center justify-between p-3 bg-white/5 rounded-xl hover:bg-white/10 transition-all text-left group border border-transparent hover:border-white/10"
+                        ].filter(i => i.label.toLowerCase().includes(paletteSearch.toLowerCase())).map(core => {
+                          const isSelected = selectedPaletteItems.some(si => si.url === core.url);
+                          return (
+                            <div 
+                              key={`core-${core.url}`}
+                              className="group flex items-center gap-2"
                             >
-                              <span className="text-[10px] font-medium text-white/60 line-clamp-1 group-hover:text-white transition-colors">
-                                {p.title}
-                              </span>
-                              <Plus size={10} className="text-gold opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Luxe Offers */}
-                    {offers.length > 0 && (
-                      <div className="space-y-2">
-                        <label className="text-[9px] font-black uppercase tracking-[0.2em] text-white/20 px-1 flex justify-between items-center">
-                          <span>Luxe Offers</span>
-                          <Tag size={10} className="text-gold/40" />
-                        </label>
-                        <div className="space-y-1.5">
-                          {offers.map(o => (
-                            <button
-                              key={`palette-offer-${o.id}`}
-                              onClick={() => addItemTo({ label: o.title, url: `/offers/${o.slug}` })}
-                              className="w-full flex items-center justify-between px-4 py-3 bg-white/[0.03] rounded-[1.25rem] border border-white/5 hover:bg-gold/[0.05] hover:border-gold/30 transition-all text-left group"
-                            >
-                              <div className="flex flex-col min-w-0">
-                                <span className="text-[11px] font-bold text-white/80 group-hover:text-white transition-colors truncate">
-                                  {o.title}
-                                </span>
-                                {o.offerPercentage && (
-                                  <span className="text-[8px] text-gold uppercase tracking-[0.2em] font-black mt-0.5">
-                                    SAVE {o.offerPercentage}%
-                                  </span>
+                              <button 
+                                onClick={() => {
+                                  if (isSelected) {
+                                    setSelectedPaletteItems(selectedPaletteItems.filter(si => si.url !== core.url));
+                                  } else {
+                                    setSelectedPaletteItems([...selectedPaletteItems, core]);
+                                  }
+                                }}
+                                className={cn(
+                                  "w-4 h-4 rounded border flex items-center justify-center transition-all shrink-0",
+                                  isSelected ? "bg-gold border-gold text-black" : "border-white/10 group-hover:border-white/30"
                                 )}
-                              </div>
-                              <div className="w-7 h-7 shrink-0 rounded-full bg-white/5 flex items-center justify-center text-white/20 group-hover:bg-gold group-hover:text-black transition-all ml-2">
-                                <Plus size={11} />
-                              </div>
-                            </button>
-                          ))}
-                        </div>
+                              >
+                                {isSelected && <Check size={10} />}
+                              </button>
+                              <button
+                                onClick={() => addItemTo(core)}
+                                className="flex-1 flex items-center justify-between p-3 bg-white/5 rounded-2xl hover:bg-gold/10 hover:border-gold/30 border border-white/5 transition-all text-left"
+                              >
+                                <span className="text-[10px] font-bold text-white/80 transition-colors">
+                                  {core.label}
+                                </span>
+                                <Plus size={10} className="text-gold shrink-0" />
+                              </button>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
 
-                    {/* Curated Tours */}
-                    {tours.length > 0 && (
+                    {/* Pages Tab */}
+                    {paletteTab === 'pages' && (
                       <div className="space-y-2">
-                        <label className="text-[9px] font-black uppercase tracking-[0.2em] text-white/20 px-1 flex justify-between items-center">
-                          <span>Curated Tours</span>
-                          <MapPin size={10} className="text-gold/40" />
-                        </label>
-                        <div className="space-y-1.5">
-                          {tours.map(t => (
-                            <button
-                              key={`palette-tour-${t.id}`}
-                              onClick={() => addItemTo({ label: t.title, url: `/tours/${t.slug}` })}
-                              className="w-full flex items-center justify-between px-4 py-3 bg-white/[0.03] rounded-[1.25rem] border border-white/5 hover:bg-gold/[0.05] hover:border-gold/30 transition-all text-left group"
-                            >
-                              <span className="text-[11px] font-bold text-white/80 group-hover:text-white transition-colors truncate">
-                                {t.title}
-                              </span>
-                              <div className="w-7 h-7 shrink-0 rounded-full bg-white/5 flex items-center justify-center text-white/20 group-hover:bg-gold group-hover:text-black transition-all ml-2">
-                                <Plus size={11} />
-                              </div>
-                            </button>
-                          ))}
-                        </div>
+                        {pages.filter(i => i.title.toLowerCase().includes(paletteSearch.toLowerCase())).map(p => {
+                          const item = { label: p.title, url: `/${p.slug}`, id: p.id };
+                          const isSelected = selectedPaletteItems.some(si => si.id === p.id);
+                          return (
+                            <div key={`palette-page-${p.id}`} className="group flex items-center gap-2">
+                              <button 
+                                onClick={() => {
+                                  if (isSelected) {
+                                    setSelectedPaletteItems(selectedPaletteItems.filter(si => si.id !== p.id));
+                                  } else {
+                                    setSelectedPaletteItems([...selectedPaletteItems, item]);
+                                  }
+                                }}
+                                className={cn(
+                                  "w-4 h-4 rounded border flex items-center justify-center transition-all shrink-0",
+                                  isSelected ? "bg-gold border-gold text-black" : "border-white/10 group-hover:border-white/30"
+                                )}
+                              >
+                                {isSelected && <Check size={10} />}
+                              </button>
+                              <button
+                                onClick={() => addItemTo(item)}
+                                className="flex-1 flex items-center justify-between p-3 bg-white/5 rounded-xl hover:bg-white/10 transition-all text-left border border-transparent hover:border-white/10"
+                              >
+                                <span className="text-[10px] font-medium text-white/60 line-clamp-1 group-hover:text-white transition-colors">
+                                  {p.title}
+                                </span>
+                                <Plus size={10} className="text-gold opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                              </button>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
 
-                    {/* Journal Entries — FIX 9: Truck → BookOpen */}
-                    {blogs.length > 0 && (
-                      <div className="space-y-2 pb-4">
-                        <label className="text-[9px] font-black uppercase tracking-[0.2em] text-white/20 px-1 flex justify-between items-center">
-                          <span>Journal Entries</span>
-                          <BookOpen size={10} className="text-gold/40" />
-                        </label>
-                        <div className="space-y-1.5">
-                          {blogs.slice(0, 5).map(b => (
-                            <button
-                              key={`palette-blog-${b.id}`}
-                              onClick={() => addItemTo({ label: b.title, url: `/blog/${b.slug}` })}
-                              className="w-full flex items-center justify-between px-4 py-3 bg-white/[0.03] rounded-[1.25rem] border border-white/5 hover:bg-gold/[0.05] hover:border-gold/30 transition-all text-left group"
-                            >
-                              <span className="text-[11px] font-bold text-white/80 group-hover:text-white transition-colors line-clamp-1">
-                                {b.title}
-                              </span>
-                              <div className="w-7 h-7 shrink-0 rounded-full bg-white/5 flex items-center justify-center text-white/20 group-hover:bg-gold group-hover:text-black transition-all ml-2">
-                                <Plus size={11} />
-                              </div>
-                            </button>
-                          ))}
-                        </div>
+                    {/* Blogs Tab */}
+                    {paletteTab === 'blogs' && (
+                      <div className="space-y-2">
+                        {blogs.filter(i => i.title.toLowerCase().includes(paletteSearch.toLowerCase())).map(b => {
+                          const item = { label: b.title, url: `/blog/${b.slug}`, id: b.id };
+                          const isSelected = selectedPaletteItems.some(si => si.id === b.id);
+                          return (
+                            <div key={`palette-blog-${b.id}`} className="group flex items-center gap-2">
+                              <button 
+                                onClick={() => {
+                                  if (isSelected) {
+                                    setSelectedPaletteItems(selectedPaletteItems.filter(si => si.id !== b.id));
+                                  } else {
+                                    setSelectedPaletteItems([...selectedPaletteItems, item]);
+                                  }
+                                }}
+                                className={cn(
+                                  "w-4 h-4 rounded border flex items-center justify-center transition-all shrink-0",
+                                  isSelected ? "bg-gold border-gold text-black" : "border-white/10 group-hover:border-white/30"
+                                )}
+                              >
+                                {isSelected && <Check size={10} />}
+                              </button>
+                              <button
+                                onClick={() => addItemTo(item)}
+                                className="flex-1 flex items-center justify-between p-3 bg-white/5 rounded-xl hover:bg-white/10 transition-all text-left border border-transparent hover:border-white/10"
+                              >
+                                <span className="text-[10px] font-medium text-white/60 line-clamp-1 group-hover:text-white transition-colors">
+                                  {b.title}
+                                </span>
+                                <Plus size={10} className="text-gold opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                              </button>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
