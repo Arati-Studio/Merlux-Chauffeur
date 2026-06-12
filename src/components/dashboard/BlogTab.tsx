@@ -137,6 +137,8 @@ const BlogTab: React.FC<BlogTabProps> = ({
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
   const [editingBlog, setEditingBlog] = useState<any>(null);
   const [showBlogModal, setShowBlogModal] = useState(false);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [lastSavedContent, setLastSavedContent] = useState<string>('');
 
   // Bulk Selection and Edit States
   const [selectedBlogs, setSelectedBlogs] = useState<string[]>([]);
@@ -277,7 +279,8 @@ const BlogTab: React.FC<BlogTabProps> = ({
     }
   };
 
-  const handleUpdateBlog = async (id: string | null, data: any) => {
+  const handleUpdateBlog = async (id: string | null, data: any, isAutoSave = false) => {
+    if (isAutoSave) setAutoSaveStatus('saving');
     try {
       // Clean up data
       const { id: _id, createdAt: _ca, updatedAt: _ua, ...rest } = data;
@@ -305,22 +308,64 @@ const BlogTab: React.FC<BlogTabProps> = ({
           ...processedData,
           updatedAt: serverTimestamp()
         });
-        showDashboardNotice('success', 'Blog post updated');
+        if (!isAutoSave) showDashboardNotice('success', 'Blog post updated');
       } else {
-        await addDoc(collection(db, 'blogs'), {
+        // For new posts, we only auto-save if they have a title at least
+        if (isAutoSave && !data.title) {
+          setAutoSaveStatus('idle');
+          return;
+        }
+        
+        const newDocRef = await addDoc(collection(db, 'blogs'), {
           ...processedData,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         });
-        showDashboardNotice('success', 'Blog post published');
+        
+        // Update editingBlog with the new ID so subsequent auto-saves use updateDoc
+        setEditingBlog((prev: any) => ({ ...prev, id: newDocRef.id }));
+        
+        if (!isAutoSave) showDashboardNotice('success', 'Blog post published');
       }
-      setShowBlogModal(false);
-      setEditingBlog(null);
+      
+      if (!isAutoSave) {
+        setShowBlogModal(false);
+        setEditingBlog(null);
+      } else {
+        setAutoSaveStatus('saved');
+        setTimeout(() => setAutoSaveStatus('idle'), 3000);
+      }
     } catch (err) {
       console.error('Error updating blog:', err);
-      handleFirestoreError(err, id ? OperationType.UPDATE : OperationType.CREATE, 'blogs');
+      if (isAutoSave) {
+        setAutoSaveStatus('error');
+      } else {
+        handleFirestoreError(err, id ? OperationType.UPDATE : OperationType.CREATE, 'blogs');
+      }
     }
   };
+
+  // Auto-save logic
+  useEffect(() => {
+    if (!showBlogModal || !editingBlog) return;
+
+    // Don't auto-save if content hasn't changed or it's a fresh load
+    const currentContent = JSON.stringify(editingBlog);
+    if (currentContent === lastSavedContent) return;
+
+    const timer = setTimeout(() => {
+      handleUpdateBlog(editingBlog.id || 'new', editingBlog, true);
+      setLastSavedContent(currentContent);
+    }, 5000); // Debounce for 5 seconds
+
+    return () => clearTimeout(timer);
+  }, [editingBlog, showBlogModal, lastSavedContent]);
+
+  useEffect(() => {
+    if (showBlogModal && editingBlog) {
+      setLastSavedContent(JSON.stringify(editingBlog));
+    }
+  }, [showBlogModal]);
 
   const handleDeleteBlog = (id: string) => {
     const blog = blogs.find(b => b.id === id);
@@ -505,9 +550,6 @@ const BlogTab: React.FC<BlogTabProps> = ({
                 <option value="All" className="bg-[#111111] text-white py-1">All Statuses ({blogs.length})</option>
                 <option value="Active" className="bg-[#111111] text-white py-1">
                   Active ({blogs.filter(b => b.active !== false && (!b.publishAt || new Date(b.publishAt) <= new Date())).length})
-                </option>
-                <option value="Scheduled" className="bg-[#111111] text-white py-1">
-                  Scheduled ({blogs.filter(b => b.active !== false && b.publishAt && new Date(b.publishAt) > new Date()).length})
                 </option>
                 <option value="Inactive" className="bg-[#111111] text-white py-1">
                   Inactive ({blogs.filter(b => b.active === false).length})
@@ -827,9 +869,24 @@ const BlogTab: React.FC<BlogTabProps> = ({
               className="w-full max-w-2xl glass p-8 rounded-xl border border-gold/20 max-h-[90vh] overflow-y-auto custom-scrollbar"
             >
               <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-display text-gold">
-                  {editingBlog?.id ? 'Edit Blog Post' : 'Add Blog Post'}
-                </h3>
+                <div className="flex items-center gap-4">
+                  <h3 className="text-xl font-display text-gold">
+                    {editingBlog?.id ? 'Edit Blog Post' : 'Add Blog Post'}
+                  </h3>
+                  {autoSaveStatus !== 'idle' && (
+                    <div className={cn(
+                      "flex items-center gap-2 px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest transition-all",
+                      autoSaveStatus === 'saving' ? "bg-gold/10 text-gold animate-pulse" : 
+                      autoSaveStatus === 'saved' ? "bg-green-500/10 text-green-500" : 
+                      "bg-red-500/10 text-red-500"
+                    )}>
+                      {autoSaveStatus === 'saving' && <Loader2 size={10} className="animate-spin" />}
+                      {autoSaveStatus === 'saved' && <Check size={10} />}
+                      {autoSaveStatus === 'error' && <ShieldAlert size={10} />}
+                      <span>{autoSaveStatus === 'saving' ? 'Saving...' : autoSaveStatus === 'saved' ? 'All changes saved' : 'Auto-save failed'}</span>
+                    </div>
+                  )}
+                </div>
                 <button onClick={() => setShowBlogModal(false)} className="text-white/40 hover:text-white">
                   <X size={20} />
                 </button>
@@ -1103,6 +1160,20 @@ const BlogTab: React.FC<BlogTabProps> = ({
                     <!DOCTYPE html>
                     <html>
                       <head>
+                        <meta charset="utf-8">
+                        <meta name="viewport" content="width=device-width, initial-scale=1">
+                        <script src="https://cdn.tailwindcss.com"></script>
+                        <script>
+                          tailwind.config = {
+                            theme: {
+                              extend: {
+                                colors: {
+                                  gold: '#D4AF37',
+                                }
+                              }
+                            }
+                          }
+                        </script>
                         <link rel="preconnect" href="https://fonts.googleapis.com">
                         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
                         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -1112,8 +1183,12 @@ const BlogTab: React.FC<BlogTabProps> = ({
                             color: #ffffff;
                             font-family: 'Inter', sans-serif;
                             margin: 0;
-                            padding: 40px;
+                            padding: 20px;
                             line-height: 1.6;
+                            box-sizing: border-box;
+                          }
+                          @media (min-width: 768px) {
+                            body { padding: 40px; }
                           }
                           .cms-rendered-content {
                             max-width: 800px;
@@ -1170,7 +1245,7 @@ const BlogTab: React.FC<BlogTabProps> = ({
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-6xl glass p-4 sm:p-8 rounded-xl border border-white/10 shadow-2xl max-h-[95vh] overflow-y-auto custom-scrollbar"
+              className="relative w-full max-w-3xl glass p-4 sm:p-8 rounded-xl border border-white/10 shadow-2xl max-h-[95vh] overflow-y-auto custom-scrollbar"
               onClick={e => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-6">
@@ -1185,7 +1260,7 @@ const BlogTab: React.FC<BlogTabProps> = ({
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+              <div className="max-w-3xl mx-auto space-y-6">
                 <div className="space-y-6">
                   {/* Status Toggle */}
                   <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/10">
@@ -1238,177 +1313,6 @@ const BlogTab: React.FC<BlogTabProps> = ({
                     {cssEditingLoading ? <Loader2 className="animate-spin" /> : <Save size={18} />}
                     <span className="text-xs font-bold uppercase tracking-widest">Save CSS Profile</span>
                   </button>
-                </div>
-
-                {/* Preview Section */}
-                <div className="space-y-4 flex flex-col min-h-[400px] xl:min-h-0 h-full">
-                  <div className="flex justify-between items-center">
-                    <label className="text-[10px] uppercase tracking-widest font-bold text-white/40">SEO Live Style Preview</label>
-                    <button
-                      onClick={() => {
-                        const slug = cssConfig.slug || cssConfig.title?.replace('CSS: ', '').toLowerCase().replace(/\s+/g, '-');
-                        const prefix = cssConfig.type === 'blog' ? '/blog/' : '/';
-                        window.open(`${prefix}${slug}`, '_blank');
-                      }}
-                      className="text-[10px] text-gold hover:text-white transition-colors flex items-center gap-1 uppercase tracking-widest font-bold"
-                    >
-                      <Eye size={12} />
-                      View Live
-                    </button>
-                  </div>
-                  <div className="flex-1 min-h-[400px] bg-[#0a0a0a] border border-white/10 rounded-2xl overflow-hidden relative shadow-2xl">
-                    <iframe
-                      title="SEO Preview"
-                      className="w-full h-full min-h-[400px] border-none"
-                      srcDoc={`
-                          <!DOCTYPE html>
-                          <html>
-                            <head>
-                              <script src="https://cdn.tailwindcss.com"></script>
-                              <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
-                              <script>
-                                tailwind.config = {
-                                  theme: {
-                                    extend: {
-                                      colors: {
-                                        gold: '#D4AF37',
-                                      },
-                                      fontFamily: {
-                                        display: ['Playfair Display', 'serif'],
-                                        sans: ['Inter', 'sans-serif'],
-                                      }
-                                    }
-                                  }
-                                }
-                              </script>
-                              <style type="text/css">
-                                body { 
-                                  margin: 0; 
-                                  padding: 0; 
-                                  background: #0a0a0a; 
-                                  color: white; 
-                                  font-family: 'Inter', sans-serif;
-                                  min-height: 100vh;
-                                  overflow-x: hidden;
-                                }
-                                .glass { backdrop-filter: blur(12px); background: rgba(255,255,255,0.03); }
-                                
-                                /* Site Branding Overlays (Simplified Merlux Look) */
-                                .nav-shadow { background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent); }
-                                .footer-shadow { background: linear-gradient(to top, rgba(0,0,0,0.8), transparent); }
-                                
-                                .content-area h1, .content-area h2, .content-area h3 { font-family: 'Playfair Display', serif; color: #D4AF37; margin-top: 1.5rem; margin-bottom: 1rem; }
-                                .content-area p { margin-bottom: 1rem; line-height: 1.8; color: rgba(255,255,255,0.8); }
-                                .content-area ul { list-style: disc; padding-left: 1.5rem; margin-bottom: 1rem; color: rgba(255,255,255,0.7); }
-                                .content-area strong { color: white; }
-
-                                /* Scrollbar */
-                                ::-webkit-scrollbar { width: 4px; }
-                                ::-webkit-scrollbar-track { background: transparent; }
-                                ::-webkit-scrollbar-thumb { background: #D4AF37; border-radius: 10px; }
-
-                                /* Global SEO CSS */
-                                ${systemSettings?.seo?.isGlobalCssActive ? systemSettings?.seo?.globalCmsCss.replace(/([^\r\n,{}]+)(?=[^{}]*{)/g, (m) => m.split(',').map(s => s.trim() ? `.cms-rendered-content ${s.trim()}` : s).join(', ')) : ''}
-                                
-                                /* Current Active CSS (Scoped to this Preview) */
-                                ${cssConfig.isActive ? cssConfig.content.replace(/([^\r\n,{}]+)(?=[^{}]*{)/g, (m) => m.split(',').map(s => s.trim() ? `.cms-rendered-content ${s.trim()}` : s).join(', ')) : ''}
-                              </style>
-                            </head>
-                            <body>
-                              <div class="max-w-4xl mx-auto p-8 sm:p-12 space-y-12 animate-fade-in">
-                                ${cssConfig.type === 'global' ? `
-                                  <div class="cms-rendered-content preview-container space-y-8">
-                                    <div class="space-y-4">
-                                      <h1 class="preview-title text-5xl font-display text-gold leading-tight">Elite Travel Refined</h1>
-                                      <p class="preview-text text-xl text-white/40 font-light max-w-2xl">
-                                        This Global CSS preview showcases how your styles affect the entire Merlux CMS ecosystem. 
-                                        Target classes like <span class="text-gold font-bold">.preview-title</span> or 
-                                        <span class="text-gold font-bold">.preview-card</span> below.
-                                      </p>
-                                    </div>
-                                    
-                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                      <div class="preview-card glass p-8 rounded-3xl border border-white/10 hover:border-gold/30 transition-all">
-                                        <div class="w-12 h-12 bg-gold/10 rounded-2xl flex items-center justify-center mb-6">
-                                          <div class="w-6 h-6 border-2 border-gold rounded-lg"></div>
-                                        </div>
-                                        <h3 class="text-xl text-white font-bold mb-3">Service Mastery</h3>
-                                        <p class="text-sm text-white/50 leading-relaxed">Experience a new standard in luxury transportation across Melbourne and beyond.</p>
-                                      </div>
-                                      <div class="preview-card glass p-8 rounded-3xl border border-white/10">
-                                        <div class="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center mb-6">
-                                          <div class="w-2 h-6 bg-white/20"></div>
-                                        </div>
-                                        <h3 class="text-xl text-white font-bold mb-3">Bespoke Design</h3>
-                                        <p class="text-sm text-white/50 leading-relaxed">Every detail of your journey is crafted to ensure comfort, privacy, and punctuality.</p>
-                                      </div>
-                                    </div>
-
-                                    <button class="preview-button w-full sm:w-auto px-12 py-5 bg-gold text-black rounded-2xl font-bold uppercase tracking-[0.2em] text-xs hover:bg-white transition-all shadow-2xl shadow-gold/20">
-                                      Reserve Your Route
-                                    </button>
-                                  </div>
-                                ` : `
-                                  <div class="cms-rendered-content actual-content-preview">
-                                    <div class="mb-12">
-                                      <div class="flex items-center gap-3 text-[10px] text-gold uppercase tracking-[0.3em] font-bold mb-4">
-                                        <span class="w-8 h-[1px] bg-gold"></span>
-                                        ${cssConfig.type.toUpperCase()} PREVIEW
-                                      </div>
-                                      <h1 class="text-4xl sm:text-6xl font-display text-white leading-tight mb-6">
-                                        ${cssConfig.title?.replace('CSS: ', '')}
-                                      </h1>
-                                      <div class="flex items-center gap-4 text-white/30 text-xs py-6 border-y border-white/5 uppercase tracking-widest">
-                                        <span>BY Merlux Editorial</span>
-                                        <span class="w-1 h-1 bg-white/10 rounded-full"></span>
-                                        <span>${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
-                                      </div>
-                                    </div>
-
-                                    ${(cssConfig.type === 'page' || cssConfig.type === 'blog') ? `
-                                      <div class="rounded-[2rem] overflow-hidden aspect-[21/9] mb-12 border border-white/10">
-                                        <img src="\${cssConfig.featuredImage || (cssConfig.type === 'page' ? 'https://picsum.photos/seed/page/1200/600' : 'https://picsum.photos/seed/blog/1200/600')}" class="w-full h-full object-cover opacity-80" />
-                                      </div>
-                                    ` : ''}
-
-                                    <div class="content-area text-lg text-white/80 leading-relaxed font-light">
-                                      ${cssConfig.itemContent || '<p class="italic opacity-20 text-center py-20 border border-dashed border-white/10 rounded-3xl">No content available to preview. Add text in the main blog/page editor to see it here.</p>'}
-                                    </div>
-
-                                    <div class="mt-20 p-8 glass rounded-3xl border border-white/10 text-center">
-                                      <h4 class="text-gold font-display text-2xl mb-4 italic">Experience the Merlux standard.</h4>
-                                      <p class="text-white/40 text-[10px] uppercase tracking-widest font-bold">Professional Chauffeur Services Melbourne</p>
-                                    </div>
-                                  </div>
-                                `}
-
-                                <div class="mt-20 pt-8 border-t border-white/5">
-                                  <p class="text-[8px] uppercase tracking-widest font-black text-gold/30 mb-2">Technical Meta Information</p>
-                                  <div class="grid grid-cols-2 gap-4 text-[9px] text-white/20 font-bold uppercase tracking-widest">
-                                    <div class="bg-white/5 p-3 rounded-xl border border-white/5">
-                                      TYPE: ${cssConfig.type}
-                                    </div>
-                                    <div class="bg-white/5 p-3 rounded-xl border border-white/5">
-                                      REF: ${cssConfig.id || 'GLOBAL_ROOT'}
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </body>
-                          </html>
-                        `}
-                    />
-
-                    {!cssConfig.isActive && (
-                      <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex items-center justify-center">
-                        <div className="text-center p-6 glass rounded-2xl border border-white/10">
-                          <Ban className="text-red-500 mx-auto mb-2" size={24} />
-                          <p className="text-xs font-bold uppercase tracking-widest text-white/60">Preview Disabled</p>
-                          <p className="text-[9px] text-white/30 mt-1">Activate CSS to see preview</p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
                 </div>
               </div>
             </motion.div>
