@@ -35,6 +35,16 @@ export default function DynamicPage() {
         if (!snap.empty) {
           const docSnap = snap.docs[0];
           const data = docSnap.data();
+
+          // Check if page is active and released
+          const isNotActive = data.active === false;
+          const isFuture = data.publishAt && new Date(data.publishAt) > new Date();
+          if (isNotActive || isFuture) {
+            setError(true);
+            setLoading(false);
+            return;
+          }
+
           setPageData(data);
           setPageId(docSnap.id);
           setError(false);
@@ -43,10 +53,14 @@ export default function DynamicPage() {
           const relatedQ = query(
             collection(db, 'pages'),
             where('slug', '!=', slug),
-            limit(3)
+            limit(10)
           );
           const relatedSnap = await getDocs(relatedQ);
-          setRelatedPages(relatedSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+          const filteredRelated = relatedSnap.docs
+            .map(d => ({ id: d.id, ...d.data() }))
+            .filter((p: any) => p.active !== false && (!p.publishAt || new Date(p.publishAt) <= new Date()))
+            .slice(0, 3);
+          setRelatedPages(filteredRelated);
 
           window.scrollTo(0, 0);
 
@@ -59,10 +73,8 @@ export default function DynamicPage() {
               globalStyleTag.id = globalStyleId;
               document.head.appendChild(globalStyleTag);
             }
-            // Scope CSS to content area
-            const scopedGlobal = settings.seo.globalCmsCss.replace(/([^\r\n,{}]+)(?=[^{}]*{)/g, (m: string) =>
-              m.split(',').map(s => s.trim() ? `.cms-rendered-content ${s.trim()}` : s).join(', ')
-            );
+            // Scope CSS to content area using modern CSS nesting
+            const scopedGlobal = `.cms-rendered-content { ${settings.seo.globalCmsCss} }`;
             globalStyleTag.innerHTML = scopedGlobal;
           } else if (globalStyleTag) {
             globalStyleTag.remove();
@@ -77,10 +89,8 @@ export default function DynamicPage() {
               styleTag.id = styleId;
               document.head.appendChild(styleTag);
             }
-            // Scope CSS to content area
-            const scopedIndividual = data.customCss.replace(/([^\r\n,{}]+)(?=[^{}]*{)/g, (m: string) =>
-              m.split(',').map(s => s.trim() ? `.cms-rendered-content ${s.trim()}` : s).join(', ')
-            );
+            // Scope CSS to content area using modern CSS nesting
+            const scopedIndividual = `.cms-rendered-content { ${data.customCss} }`;
             styleTag.innerHTML = scopedIndividual;
           } else if (styleTag) {
             styleTag.remove();

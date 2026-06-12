@@ -315,7 +315,7 @@ export default function AppDashboard() {
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto no-scrollbar" ref={mainScrollRef}>
+      <main className="flex-1 overflow-y-auto custom-scrollbar" ref={mainScrollRef}>
         <div className="max-w-7xl mx-auto w-full p-1 lg:p-2">
           {dashboardNotice && (
             <div className="mb-6">

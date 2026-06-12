@@ -287,7 +287,7 @@ export default function Navbar() {
                   <ChevronDown size={14} className={cn("transition-transform duration-300", isMoreOpen && "rotate-180")} />
                   <span
                     className={cn(
-                      'absolute inset-x-0 -bottom-1 h-[1px] bg-gold transition-transform duration-500 origin-left',
+                      'absolute inset-x-0 -bottom-1 h-[2px] bg-gold transition-transform duration-500 origin-left',
                       displayMoreLinks.some((l: any) => (l.path || l.url) === location.pathname) ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
                     )}
                   />

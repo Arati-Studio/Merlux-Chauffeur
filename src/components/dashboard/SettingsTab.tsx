@@ -11,7 +11,7 @@ import { cn } from '../../lib/utils';
 import { FormNotice } from '../FormNotice';
 import ConfirmationModal from './ConfirmationModal';
 import { db, handleFirestoreError, storage, OperationType } from '../../lib/firebase';
-import { collection, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, setDoc, getDoc, getDocs, writeBatch, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, setDoc, getDoc, getDocs, writeBatch, query, orderBy, onSnapshot, Timestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject, uploadBytesResumable } from 'firebase/storage';
 
 const GOOGLE_MAPS_API_KEY =
@@ -718,8 +718,11 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
         totalDocs += snapshot.docs.length;
       }
 
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_');
-      const filename = `Export_Backup_${totalDocs}_Records_${timestamp}.json`;
+      const now = new Date();
+      const dateStr = now.toISOString().split('T')[0];
+      const timeStr = now.getHours().toString().padStart(2, '0') + '-' + now.getMinutes().toString().padStart(2, '0');
+      const collections = selectedCollectionsForExport.join('-');
+      const filename = `${collections}-${totalDocs}_${dateStr}_${timeStr}_export.json`;
 
       const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -762,6 +765,36 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
       let newCount = 0;
       let overwriteCount = 0;
       let skipCount = 0;
+
+      // Recursive helper to convert potential timestamp fields to real Firestore Timestamp objects
+      const convertToTimestamps = (obj: any): any => {
+        if (obj === null || obj === undefined) return obj;
+        
+        if (typeof obj === 'object') {
+          // Check if it's a serialized Firestore Timestamp { seconds: ..., nanoseconds: ... }
+          if (typeof obj.seconds === 'number' && typeof obj.nanoseconds === 'number') {
+            return new Timestamp(obj.seconds, obj.nanoseconds);
+          }
+          
+          // Check if it's an array
+          if (Array.isArray(obj)) {
+            return obj.map(item => convertToTimestamps(item));
+          }
+          
+          // Check if it's a plain object
+          const result: any = {};
+          for (const [key, value] of Object.entries(obj)) {
+            if (typeof value === 'string' && (key.endsWith('At') || key === 'date' || key === 'dateTime') && !isNaN(Date.parse(value))) {
+              result[key] = Timestamp.fromDate(new Date(value));
+            } else {
+              result[key] = convertToTimestamps(value);
+            }
+          }
+          return result;
+        }
+        
+        return obj;
+      };
 
       // Deep compare helper to see if the backup doc differs from existing DB doc
       const isIdentical = (existingDoc: any, backupDoc: any) => {
@@ -814,8 +847,41 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
         const existingColDocs = existingData[colId] || [];
 
         for (const d of normalizedDocs) {
-          const { id, ...rest } = d;
+          const { id, ...rawRest } = d;
           if (!id) continue;
+
+          // Convert nested structure and serialized times back to real Firestore Timestamp fields
+          const rest = convertToTimestamps(rawRest);
+
+          // Ensure createdAt & updatedAt boundaries are satisfied to support list order and schema queries
+          if (!rest.createdAt) {
+            rest.createdAt = Timestamp.now();
+          }
+          if (!rest.updatedAt) {
+            rest.updatedAt = Timestamp.now();
+          }
+
+          // Auto calculate readingTime for blogs and pages based on content word/character counts
+          if (colId === 'blogs' || colId === 'pages') {
+            const content = rest.content || rest.html || '';
+            if (content) {
+              const text = content.replace(/<[^>]*>/g, ' '); // Strip HTML tags
+              const words = text.trim().split(/\s+/).filter((word: string) => word.length > 0);
+              const wordCount = words.length;
+              const charCount = text.replace(/\s+/g, '').length;
+
+              // 200 words per minute is standard English, 400 characters per minute for CJK / non-space-separated languages
+              const minsByWords = Math.ceil(wordCount / 200);
+              const minsByChars = Math.ceil(charCount / 400);
+              const minutes = Math.max(1, Math.max(minsByWords, minsByChars));
+
+              rest.readingTime = `${minutes} min read`;
+              rest.readTime = `${minutes} min read`;
+            } else if (!rest.readingTime && !rest.readTime) {
+              rest.readingTime = "1 min read";
+              rest.readTime = "1 min read";
+            }
+          }
 
           // Special Offers Auto-Calculate Sale Prices of Fleets on Import time based on discountValue & discountType
           if (colId === 'offers') {
@@ -835,7 +901,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
           const existingDoc = existingColDocs.find(ex => ex.id === id);
           if (!existingDoc) {
             // New Document
-            batch.set(doc(db, colId, id), { ...rest, updatedAt: serverTimestamp() });
+            batch.set(doc(db, colId, id), { ...rest });
             newCount++;
           } else {
             // Document exists, check if content changed
@@ -844,7 +910,12 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
               skipCount++;
             } else {
               // Different contents -> Overwrite
-              batch.set(doc(db, colId, id), { ...rest, updatedAt: serverTimestamp() });
+              const finalDoc = {
+                ...rest,
+                createdAt: rest.createdAt || existingDoc.createdAt || Timestamp.now(),
+                updatedAt: Timestamp.now()
+              };
+              batch.set(doc(db, colId, id), finalDoc);
               overwriteCount++;
             }
           }

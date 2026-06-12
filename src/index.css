@@ -38,26 +38,29 @@
 
   /* Date & Time picker icons */
   input[type="date"]::-webkit-calendar-picker-indicator,
-  input[type="time"]::-webkit-calendar-picker-indicator {
-    filter: invert(67%) sepia(92%) saturate(500%) hue-rotate(10deg);
+  input[type="time"]::-webkit-calendar-picker-indicator,
+  input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    filter: invert(75%) sepia(50%) saturate(1000%) hue-rotate(10deg) brightness(90%) contrast(90%);
     cursor: pointer;
+    background-size: contain;
   }
 
   /* Optional: Firefox support (though limited) */
   input[type="date"],
-  input[type="time"] {
+  input[type="time"],
+  input[type="datetime-local"] {
     color-scheme: dark;
     /* ensures icons adapt to dark backgrounds */
   }
 
-  /* Hide default chevron in date/time inputs */
-input[type="date"],
-input[type="time"] {
-  appearance: none;        /* Standard */
-  -webkit-appearance: none; /* Safari/Chrome */
-  -moz-appearance: none;    /* Firefox */
-  background-image: none;   /* Remove background icon */
-}
+  /* Hide default appearance artifacts */
+  input[type="date"],
+  input[type="time"],
+  input[type="datetime-local"] {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+  }
 
   .custom-select {
     @apply bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-xs text-white outline-none focus:border-gold transition-all cursor-pointer appearance-none font-bold tracking-widest;

@@ -20,10 +20,10 @@ export default function Contact() {
   });
 
   const contact = settings?.contact || {
-    address: 'Collins Street, Melbourne VIC 3000, Australia',
-    phone: '+61 3 0000 0000',
-    email: 'bookings@merlux.com.au',
-    bookingEmail: 'bookings@merlux.com.au',
+    address: 'Melbourne VIC, Australia',
+    phone: '+61426444449',
+    email: 'bookings@merlux.au',
+    bookingEmail: 'bookings@merlux.au',
     lat: '-37.8172',
     lng: '144.9625'
   };

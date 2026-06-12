@@ -56,6 +56,15 @@ export default function BlogPost() {
         }
 
         if (targetDoc) {
+          // Check if post is active and released
+          const isNotActive = targetDoc.active === false;
+          const isFuture = targetDoc.publishAt && new Date(targetDoc.publishAt) > new Date();
+          if (isNotActive || isFuture) {
+            setError(true);
+            setLoading(false);
+            return;
+          }
+
           setPost(targetDoc);
           setPostId(targetId);
           setError(false);
@@ -64,10 +73,14 @@ export default function BlogPost() {
           const relatedQ = query(
             collection(db, 'blogs'),
             where('slug', '!=', targetDoc.slug || ''),
-            limit(3)
+            limit(10)
           );
           const relatedSnap = await getDocs(relatedQ);
-          setRelatedPosts(relatedSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+          const filteredRelated = relatedSnap.docs
+            .map(d => ({ id: d.id, ...d.data() }))
+            .filter((p: any) => p.active !== false && (!p.publishAt || new Date(p.publishAt) <= new Date()))
+            .slice(0, 3);
+          setRelatedPosts(filteredRelated);
 
           window.scrollTo(0, 0);
 
@@ -80,10 +93,8 @@ export default function BlogPost() {
               globalStyleTag.id = globalStyleId;
               document.head.appendChild(globalStyleTag);
             }
-            // Scope CSS to content area
-            const scopedGlobal = settings.seo.globalCmsCss.replace(/([^\r\n,{}]+)(?=[^{}]*{)/g, (m: string) =>
-              m.split(',').map(s => s.trim() ? `.cms-rendered-content ${s.trim()}` : s).join(', ')
-            );
+            // Scope CSS to content area using modern CSS nesting
+            const scopedGlobal = `.cms-rendered-content { ${settings.seo.globalCmsCss} }`;
             globalStyleTag.innerHTML = scopedGlobal;
           } else if (globalStyleTag) {
             globalStyleTag.remove();
@@ -98,10 +109,8 @@ export default function BlogPost() {
               styleTag.id = styleId;
               document.head.appendChild(styleTag);
             }
-            // Scope CSS to content area
-            const scopedIndividual = targetDoc.customCss.replace(/([^\r\n,{}]+)(?=[^{}]*{)/g, (m: string) =>
-              m.split(',').map(s => s.trim() ? `.cms-rendered-content ${s.trim()}` : s).join(', ')
-            );
+            // Scope CSS to content area using modern CSS nesting
+            const scopedIndividual = `.cms-rendered-content { ${targetDoc.customCss} }`;
             styleTag.innerHTML = scopedIndividual;
           } else if (styleTag) {
             styleTag.remove();
@@ -152,7 +161,7 @@ export default function BlogPost() {
     );
   }
 
-  const articleDate = formatDate(post.createdAt || post.date);
+  const articleDate = formatDate(post.publishAt || post.createdAt || post.date);
 
   return (
     <div className="bg-black min-h-screen pb-24">
@@ -168,7 +177,7 @@ export default function BlogPost() {
           "@type": "BlogPosting",
           "headline": post.title,
           "image": [getAssetPath(post.featuredImage || post.image)],
-          "datePublished": post.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+          "datePublished": post.publishAt || post.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
           "author": [{
             "@type": "Organization",
             "name": "Merlux Chauffeur Services",

@@ -56,8 +56,14 @@ export default function Home() {
     let active = true;
     const fetchData = async () => {
       try {
-        const blogsSnap = await getDocs(query(collection(db, 'blogs'), orderBy('createdAt', 'desc'), limit(3)));
-        if (active) setBlogsList(blogsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const blogsSnap = await getDocs(query(collection(db, 'blogs'), orderBy('createdAt', 'desc'), limit(15)));
+        if (active) {
+          const filteredBlogs = blogsSnap.docs
+            .map(doc => ({ id: doc.id, ...doc.data() }))
+            .filter((b: any) => b.active !== false && (!b.publishAt || new Date(b.publishAt) <= new Date()))
+            .slice(0, 3);
+          setBlogsList(filteredBlogs);
+        }
 
         const fleetSnap = await getDocs(collection(db, 'fleet'));
         if (active) setFleetList(fleetSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));

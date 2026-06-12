@@ -53,8 +53,8 @@ export function formatDate(date: any): string {
   return '';
 }
 
-export function getAssetPath(path: string | null | undefined): string {
-  if (!path) return '';
+export function getAssetPath(path: string | null | undefined): string | null {
+  if (!path) return null;
   if (path.startsWith('http') || path.startsWith('data:')) return path;
   
   let formatted = path;
@@ -64,4 +64,17 @@ export function getAssetPath(path: string | null | undefined): string {
   
   // Encode spaces for robustness
   return formatted.replace(/ /g, '%20');
+}
+
+export function getLocalDatetimeString(dateInput?: any): string {
+  const now = dateInput 
+    ? (dateInput.seconds ? new Date(dateInput.seconds * 1000) : new Date(dateInput)) 
+    : new Date();
+  if (isNaN(now.getTime())) return '';
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
 }

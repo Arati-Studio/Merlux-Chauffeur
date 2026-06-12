@@ -1,11 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
-  Globe, Plus, Power, Eye, Code2, Copy, Edit2, Trash, X, Save, CheckCircle, Loader2, Ban, Info
+  Globe, Plus, Power, Eye, Code2, Copy, Edit2, Trash, X, Save, CheckCircle, Loader2, Ban, Info,
+  Check, CheckSquare, Square, ChevronDown, Tag, Trash2, ShieldAlert, Clock, Search, Calendar,
+  Monitor, Smartphone, Tablet
 } from 'lucide-react';
-import { cn } from '../../lib/utils';
+import { cn, getLocalDatetimeString } from '../../lib/utils';
 import { db, handleFirestoreError, OperationType } from '../../lib/firebase';
-import { collection, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, setDoc, query, onSnapshot, orderBy } from 'firebase/firestore';
+import { collection, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, setDoc, query, onSnapshot, orderBy, writeBatch, limit } from 'firebase/firestore';
 
 interface BlogTabProps {
   isAdmin: boolean;
@@ -21,13 +23,64 @@ const BlogTab: React.FC<BlogTabProps> = ({
   setConfirmDelete,
 }) => {
   const [blogs, setBlogs] = useState<any[]>([]);
+  const [blogsLimit, setBlogsLimit] = useState(12);
+  const [hasMoreBlogs, setHasMoreBlogs] = useState(true);
+  const [categoryFilter, setCategoryFilter] = useState("All");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [systemSettings, setSystemSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
+  const uniqueCategories = Array.from(new Set(blogs.map(b => b.category).filter(Boolean)));
+  const allFilterCategories = ["All", ...Array.from(new Set([...BLOG_CATEGORIES, ...uniqueCategories]))];
+
+  const filteredBlogs = useMemo(() => {
+    let result = blogs.filter(blog => {
+      const categoryMatches = categoryFilter === "All" || blog.category === categoryFilter;
+
+      let statusMatches = true;
+      if (statusFilter !== "All") {
+        const isActive = blog.active !== false;
+        const publishDate = blog.publishAt ? new Date(blog.publishAt) : null;
+        const isFuture = publishDate && publishDate > new Date();
+
+        if (statusFilter === "Active") {
+          statusMatches = isActive && (!isFuture);
+        } else if (statusFilter === "Scheduled") {
+          statusMatches = isActive && isFuture;
+        } else if (statusFilter === "Inactive") {
+          statusMatches = !isActive;
+        }
+      }
+
+      const searchMatches = searchQuery === "" || 
+        blog.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (blog.excerpt || "").toLowerCase().includes(searchQuery.toLowerCase());
+
+      return categoryMatches && statusMatches && searchMatches;
+    });
+
+    // Sort by date
+    return result.sort((a, b) => {
+      const dateA = new Date(a.publishAt || a.createdAt?.toDate?.() || a.createdAt || 0).getTime();
+      const dateB = new Date(b.publishAt || b.createdAt?.toDate?.() || b.createdAt || 0).getTime();
+      return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
+    });
+  }, [blogs, categoryFilter, statusFilter, searchQuery, sortOrder]);
+
   useEffect(() => {
-    const unsubscribeBlogs = onSnapshot(query(collection(db, 'blogs'), orderBy('createdAt', 'desc')), (snapshot) => {
+    const q = query(
+      collection(db, 'blogs'), 
+      limit(blogsLimit)
+    ); // We sort client-side now because we want to sort by publishAt which isn't always indexed easily with createdAt
+    const unsubscribeBlogs = onSnapshot(q, (snapshot) => {
       setBlogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       setLoading(false);
+      setHasMoreBlogs(snapshot.docs.length >= blogsLimit);
+    }, (error) => {
+      console.error("Error loading dashboard blogs:", error);
+      handleFirestoreError(error, OperationType.GET, 'blogs');
     });
 
     const unsubscribeSettings = onSnapshot(doc(db, 'settings', 'system'), (snap) => {
@@ -38,9 +91,138 @@ const BlogTab: React.FC<BlogTabProps> = ({
       unsubscribeBlogs();
       unsubscribeSettings();
     };
-  }, []);
+  }, [blogsLimit]);
+  useEffect(() => {
+    if (!blogs.length) return;
+    
+    const now = new Date();
+    const needsUpdate = blogs.filter(blog => {
+      const publishAt = blog.publishAt;
+      if (!publishAt) return false;
+      
+      const publishDate = new Date(publishAt);
+      const isFuture = publishDate > now;
+      const isActive = blog.active !== false;
+      const isNoIndex = blog.noindex === true;
+      
+      // We only auto-transition items that are explicitly "Scheduled" or should be "Published"
+      // If something is Inactive but its date is in the past, it should probably be Active now if it was a schedule.
+      // However, we should be careful not to overwrite manual "Inactive" entries.
+      // But user said: "if page published active=true, noindex=false auto changed Publication Date based"
+      
+      if (isFuture) {
+        // Should be inactive and noindexed
+        return isActive || !isNoIndex;
+      } else {
+        // Should be active and indexed
+        return !isActive || isNoIndex;
+      }
+    });
+
+    if (needsUpdate.length > 0) {
+      const batch = writeBatch(db);
+      needsUpdate.forEach(blog => {
+        const isFuture = new Date(blog.publishAt) > now;
+        batch.update(doc(db, 'blogs', blog.id), {
+          active: !isFuture,
+          noindex: isFuture,
+          updatedAt: serverTimestamp()
+        });
+      });
+      batch.commit().catch(err => console.error("Auto-status update failed:", err));
+    }
+  }, [blogs]);
+
+  const [showHtmlPreviewModal, setShowHtmlPreviewModal] = useState(false);
+  const [previewDevice, setPreviewDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
   const [editingBlog, setEditingBlog] = useState<any>(null);
   const [showBlogModal, setShowBlogModal] = useState(false);
+
+  // Bulk Selection and Edit States
+  const [selectedBlogs, setSelectedBlogs] = useState<string[]>([]);
+  const [bulkCategoryOpen, setBulkCategoryOpen] = useState(false);
+
+  const handleToggleSelectBlog = (id: string | undefined) => {
+    if (!id) return;
+    setSelectedBlogs(prev => 
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAllBlogs = () => {
+    if (selectedBlogs.length === filteredBlogs.length) {
+      setSelectedBlogs([]);
+    } else {
+      setSelectedBlogs(filteredBlogs.map(b => b.id).filter(Boolean));
+    }
+  };
+
+  const executeBulkDeleteBlogs = async (ids: string[]) => {
+    setConfirmDelete({
+      title: 'Delete Selected Blog Posts?',
+      message: `Are you sure you want to permanently delete ${ids.length} selected blog posts? This action is irreversible.`,
+      onConfirm: async () => {
+        try {
+          const batch = writeBatch(db);
+          ids.forEach(id => {
+            batch.delete(doc(db, 'blogs', id));
+          });
+          await batch.commit();
+          setSelectedBlogs([]);
+          showDashboardNotice('success', `Successfully deleted ${ids.length} blog posts.`, 'Bulk Success');
+        } catch (err: any) {
+          console.error("Bulk delete blogs failed:", err);
+          handleFirestoreError(err, OperationType.DELETE, 'blogs-bulk');
+        }
+      }
+    });
+  };
+
+  const executeBulkUpdateBlogsStatus = async (ids: string[], active: boolean) => {
+    try {
+      const batch = writeBatch(db);
+      ids.forEach(id => {
+        batch.update(doc(db, 'blogs', id), { active, updatedAt: serverTimestamp() });
+      });
+      await batch.commit();
+      setSelectedBlogs([]);
+      showDashboardNotice('success', `Updated active status of ${ids.length} blog posts to ${active ? 'Active' : 'Inactive'}.`, 'Bulk Success');
+    } catch (err: any) {
+      console.error("Bulk status update failed:", err);
+      handleFirestoreError(err, OperationType.UPDATE, 'blogs-bulk');
+    }
+  };
+
+  const executeBulkUpdateBlogsIndex = async (ids: string[], noindex: boolean) => {
+    try {
+      const batch = writeBatch(db);
+      ids.forEach(id => {
+        batch.update(doc(db, 'blogs', id), { noindex, updatedAt: serverTimestamp() });
+      });
+      await batch.commit();
+      setSelectedBlogs([]);
+      showDashboardNotice('success', `Updated search indexing of ${ids.length} blog posts to ${noindex ? 'No Index' : 'Index'}.`, 'Bulk Success');
+    } catch (err: any) {
+      console.error("Bulk indexing update failed:", err);
+      handleFirestoreError(err, OperationType.UPDATE, 'blogs-bulk');
+    }
+  };
+
+  const executeBulkUpdateBlogsCategory = async (ids: string[], category: string) => {
+    try {
+      const batch = writeBatch(db);
+      ids.forEach(id => {
+        batch.update(doc(db, 'blogs', id), { category, updatedAt: serverTimestamp() });
+      });
+      await batch.commit();
+      setSelectedBlogs([]);
+      setBulkCategoryOpen(false);
+      showDashboardNotice('success', `Updated category of ${ids.length} blog posts to "${category}".`, 'Bulk Success');
+    } catch (err: any) {
+      console.error("Bulk category update failed:", err);
+      handleFirestoreError(err, OperationType.UPDATE, 'blogs-bulk');
+    }
+  };
 
   // CSS State
   const [showCssModal, setShowCssModal] = useState(false);
@@ -103,24 +285,30 @@ const BlogTab: React.FC<BlogTabProps> = ({
       // Calculate reading time
       const readingTime = calculateReadingTime(data.content || "");
 
+      const publishDateValue = data.publishAt || (data.createdAt ? getLocalDatetimeString(data.createdAt) : getLocalDatetimeString());
+      const isFuture = new Date(publishDateValue) > new Date();
+
       // Convert keywords string to array if it's a string
       const processedData = {
         ...rest,
         readingTime,
+        active: !isFuture,
+        noindex: isFuture,
         keywords: typeof data.keywords === 'string'
           ? data.keywords.split(',').map((k: string) => k.trim()).filter((k: string) => k !== '')
-          : (data.keywords || [])
+          : (data.keywords || []),
+        publishAt: publishDateValue
       };
 
       if (id && id !== 'new') {
         await updateDoc(doc(db, 'blogs', id), {
-          ...data,
+          ...processedData,
           updatedAt: serverTimestamp()
         });
         showDashboardNotice('success', 'Blog post updated');
       } else {
         await addDoc(collection(db, 'blogs'), {
-          ...data,
+          ...processedData,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         });
@@ -198,7 +386,24 @@ const BlogTab: React.FC<BlogTabProps> = ({
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:flex-row sm:w-auto items-center">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          {filteredBlogs.length > 0 && (
+            <button
+              onClick={handleSelectAllBlogs}
+              className={cn(
+                "border px-4 py-2 rounded-xl flex items-center justify-center gap-2 transition-all text-xs font-bold uppercase tracking-widest leading-none w-full sm:w-auto whitespace-nowrap",
+                selectedBlogs.length === filteredBlogs.length
+                  ? "bg-gold border-gold text-black hover:bg-gold/80"
+                  : "bg-white/5 border-white/10 text-white/60 hover:text-gold hover:border-gold"
+              )}
+            >
+              <CheckSquare size={14} className="shrink-0" />
+              <span>
+                {selectedBlogs.length === filteredBlogs.length ? 'Deselect All' : `Select All (${filteredBlogs.length})`}
+              </span>
+            </button>
+          )}
+
           <button
             onClick={() => {
               setCssConfig({
@@ -209,10 +414,10 @@ const BlogTab: React.FC<BlogTabProps> = ({
               });
               setShowCssModal(true);
             }}
-            className="bg-white/5 border border-white/10 text-white/60 hover:text-gold hover:border-gold px-4 py-2 rounded-xl flex items-center justify-center gap-2 transition-all w-full whitespace-nowrap"
+            className="bg-white/5 border border-white/10 text-white/60 hover:text-gold hover:border-gold px-4 py-2 rounded-xl flex items-center justify-center gap-2 transition-all w-full sm:w-auto whitespace-nowrap text-xs font-bold uppercase tracking-widest leading-none"
           >
             <Globe size={14} className="shrink-0" />
-            <span className="text-[10px] font-bold uppercase tracking-widest leading-none">Global CSS</span>
+            <span>Global CSS</span>
           </button>
 
           <button
@@ -231,11 +436,12 @@ const BlogTab: React.FC<BlogTabProps> = ({
                 readingTime: '1 min read',
                 includeInSitemap: true,
                 noindex: false,
-                active: true
+                active: true,
+                publishAt: getLocalDatetimeString()
               });
               setShowBlogModal(true);
             }}
-            className="btn-primary px-4 py-2 flex items-center justify-center gap-2 w-full whitespace-nowrap"
+            className="btn-primary px-4 py-2 flex items-center justify-center gap-2 w-full sm:w-auto overflow-hidden whitespace-nowrap"
           >
             <Plus size={14} className="shrink-0" />
             <span className="text-xs font-bold uppercase tracking-widest leading-none">Add Post</span>
@@ -243,14 +449,131 @@ const BlogTab: React.FC<BlogTabProps> = ({
         </div>
       </div>
 
+      {/* Filters Toolbar */}
+      <div className="flex flex-col xl:flex-row gap-4 bg-white/[0.02] border border-white/5 rounded-2xl p-4 xl:items-center xl:justify-between">
+        <div className="flex flex-wrap gap-4 items-stretch sm:items-center flex-1">
+          <div className="flex flex-col gap-1 w-full sm:w-64 lg:w-72">
+            <span className="text-[9px] uppercase tracking-widest font-bold text-white/40 leading-none mb-1">Search Posts</span>
+            <div className="relative">
+              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/20" />
+              <input
+                type="text"
+                placeholder="Search title or excerpt..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs font-bold uppercase tracking-widest text-white outline-none focus:border-gold transition-all h-10"
+              />
+              {searchQuery && (
+                <button 
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1 w-full sm:flex-1 sm:min-w-[160px] lg:max-w-[200px]">
+            <span className="text-[9px] uppercase tracking-widest font-bold text-white/40 leading-none mb-1">Filter Category</span>
+            <div className="relative">
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="custom-select w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs font-bold uppercase tracking-widest text-gold outline-none focus:border-gold transition-all cursor-pointer h-10"
+              >
+                {allFilterCategories.map(cat => {
+                  const count = cat === "All" ? blogs.length : blogs.filter(b => b.category === cat).length;
+                  return (
+                    <option key={cat} value={cat} className="bg-[#111111] text-white py-1">
+                      {cat} ({count})
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1 w-full sm:flex-1 sm:min-w-[160px] lg:max-w-[200px]">
+            <span className="text-[9px] uppercase tracking-widest font-bold text-white/40 leading-none mb-1">Filter Status</span>
+            <div className="relative">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="custom-select w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs font-bold uppercase tracking-widest text-gold outline-none focus:border-gold transition-all cursor-pointer h-10"
+              >
+                <option value="All" className="bg-[#111111] text-white py-1">All Statuses ({blogs.length})</option>
+                <option value="Active" className="bg-[#111111] text-white py-1">
+                  Active ({blogs.filter(b => b.active !== false && (!b.publishAt || new Date(b.publishAt) <= new Date())).length})
+                </option>
+                <option value="Scheduled" className="bg-[#111111] text-white py-1">
+                  Scheduled ({blogs.filter(b => b.active !== false && b.publishAt && new Date(b.publishAt) > new Date()).length})
+                </option>
+                <option value="Inactive" className="bg-[#111111] text-white py-1">
+                  Inactive ({blogs.filter(b => b.active === false).length})
+                </option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1 w-full sm:w-auto">
+            <span className="text-[9px] uppercase tracking-widest font-bold text-white/40 leading-none mb-1">Sort Date</span>
+            <button
+              onClick={() => setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
+              className={cn(
+                "h-10 px-4 bg-black/40 border border-white/10 rounded-xl flex items-center justify-center gap-2 transition-all hover:border-gold group",
+                sortOrder === 'asc' ? "text-gold" : "text-white/60"
+              )}
+              title={sortOrder === 'desc' ? "Sorted Newest First" : "Sorted Oldest First"}
+            >
+              <Calendar size={14} className={cn("transition-transform", sortOrder === 'asc' && "rotate-180")} />
+              <span className="text-[10px] font-bold uppercase tracking-widest">
+                {sortOrder === 'desc' ? 'Newest' : 'Oldest'}
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between xl:justify-end gap-4 border-t border-white/5 pt-4 xl:border-0 xl:pt-0">
+          <div className="text-[10px] uppercase tracking-wider font-bold text-white/40">
+            Showing <span className="text-gold">{filteredBlogs.length}</span> of <span className="text-white">{blogs.length}</span>
+          </div>
+          {(categoryFilter !== "All" || statusFilter !== "All" || searchQuery !== "" || sortOrder !== 'desc') && (
+            <button
+              onClick={() => {
+                setCategoryFilter("All");
+                setStatusFilter("All");
+                setSearchQuery("");
+                setSortOrder('desc');
+              }}
+              className="text-red-400 hover:text-red-300 transition-colors uppercase font-bold tracking-widest text-[9px] border border-red-500/10 px-2.5 py-1 rounded"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {(blogs || []).length > 0 ? (blogs || []).map((blog, idx) => (
-          <div key={blog.id || `blog-${idx}`} className="glass rounded-2xl overflow-hidden border border-white/5 group hover:border-gold/30 transition-all relative">
+        {(filteredBlogs || []).length > 0 ? (filteredBlogs || []).map((blog, idx) => (
+          <div
+            key={blog.id || `blog-${idx}`}
+            className={cn(
+              "glass rounded-2xl overflow-hidden border transition-all relative flex flex-col justify-between h-full group",
+              selectedBlogs.includes(blog.id)
+                ? "border-gold bg-gold/[0.03] shadow-[0_0_15px_rgba(212,175,55,0.1)]"
+                : "border-white/5 hover:border-gold/30"
+            )}
+          >
             <div className={cn(
               "absolute top-0 right-0 text-white text-[8px] font-bold uppercase tracking-widest px-3 py-1 rounded-bl-xl z-10",
-              blog.active !== false ? "bg-green-600" : "bg-red-500"
+              (blog.publishAt && new Date(blog.publishAt) > new Date()) 
+                ? "bg-amber-600" 
+                : (blog.active !== false ? "bg-green-600" : "bg-red-500")
             )}>
-              {blog.active !== false ? 'Active' : 'Inactive'}
+              {(blog.publishAt && new Date(blog.publishAt) > new Date()) 
+                ? 'Scheduled' 
+                : (blog.active !== false ? 'Active' : 'Inactive')}
             </div>
             <div className="h-48 relative overflow-hidden">
               <img
@@ -262,29 +585,58 @@ const BlogTab: React.FC<BlogTabProps> = ({
               <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
               <div className="absolute bottom-4 left-4 right-4">
                 <p className="text-lg font-display text-white line-clamp-2 leading-tight mb-2">{blog.title}</p>
-                <div className="flex items-center gap-3">
-                  <p className="text-[10px] text-gold uppercase tracking-[0.2em] font-bold">{blog.category}</p>
-                  <span className="w-1 h-1 bg-white/20 rounded-full"></span>
-                  <p className="text-[9px] text-white/40 uppercase font-bold tracking-widest">
-                    {blog.date || (blog.createdAt?.toDate ? blog.createdAt.toDate().toLocaleDateString() : (blog.createdAt?.seconds ? new Date(blog.createdAt.seconds * 1000).toLocaleDateString() : 'Draft'))}
-                  </p>
+                <div className="flex flex-wrap items-center gap-y-1 gap-x-3">
+                  <p className="text-[10px] text-gold uppercase tracking-[0.2em] font-bold whitespace-nowrap">{blog.category}</p>
+                  <span className="w-1 h-1 bg-white/20 rounded-full hidden sm:block"></span>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Clock size={10} className="text-white/40" />
+                    <p className="text-[9px] text-white/40 uppercase font-bold tracking-widest">
+                      {blog.publishAt ? new Date(blog.publishAt).toLocaleDateString() : (blog.createdAt?.toDate ? blog.createdAt.toDate().toLocaleDateString() : 'Draft')}
+                    </p>
+                  </div>
                 </div>
+                {blog.publishAt && new Date(blog.publishAt) > new Date() && (
+                  <div className="flex items-center gap-1.5 mt-2 text-[8px] font-bold text-amber-400 uppercase tracking-widest">
+                    <Clock size={10} className="shrink-0" />
+                    <span>Scheduled: {new Date(blog.publishAt).toLocaleString()}</span>
+                  </div>
+                )}
               </div>
             </div>
             <div className="p-4 flex items-center justify-between border-t border-white/5 bg-white/[0.02]">
-              <div className="flex gap-1">
-                <span className={cn("text-[7px] uppercase font-black tracking-widest px-1.5 py-0.5 rounded border", blog.noindex ? "bg-red-500/10 text-red-400 border-red-500/10" : "bg-green-500/10 text-green-400 border-green-500/10")}>
-                  {blog.noindex ? 'No Index' : 'Index'}
-                </span>
+              <div className="flex gap-2 items-center">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleToggleSelectBlog(blog.id);
+                  }}
+                  className={cn(
+                    "w-8 h-8 rounded-xl flex items-center justify-center transition-all border",
+                    selectedBlogs.includes(blog.id)
+                      ? "bg-gold border-gold text-black"
+                      : "bg-white/5 border-white/10 text-white/20 hover:border-gold/50 hover:text-gold"
+                  )}
+                  title={selectedBlogs.includes(blog.id) ? "Deselect Post" : "Select Post"}
+                >
+                  {selectedBlogs.includes(blog.id) ? (
+                    <CheckSquare size={14} />
+                  ) : (
+                    <Square size={14} />
+                  )}
+                </button>
               </div>
               <div className="flex gap-1.5">
                 <button
                   onClick={() => handleToggleBlogActive(blog)}
                   className={cn(
                     "p-2 rounded-xl transition-all border",
-                    blog.active !== false ? "bg-white/5 text-green-400 hover:bg-green-500 hover:text-white border-white/5" : "bg-white/5 text-red-500 hover:bg-red-500 hover:text-white border-white/5"
+                    blog.active === false 
+                      ? "bg-white/5 text-red-500 hover:bg-red-500 hover:text-white border-white/5" 
+                      : (blog.publishAt && new Date(blog.publishAt) > new Date() 
+                          ? "bg-amber-500/10 text-amber-500 hover:bg-amber-500 hover:text-white border-amber-500/20" 
+                          : "bg-white/5 text-green-400 hover:bg-green-500 hover:text-white border-white/5")
                   )}
-                  title={blog.active !== false ? "Set as Inactive" : "Set as Active"}
+                  title={blog.active !== false ? (blog.publishAt && new Date(blog.publishAt) > new Date() ? "Scheduled (Hidden from public)" : "Set as Inactive") : "Set as Active"}
                 >
                   <Power size={14} />
                 </button>
@@ -351,6 +703,114 @@ const BlogTab: React.FC<BlogTabProps> = ({
           </div>
         )}
       </div>
+
+      {hasMoreBlogs && (
+        <div className="flex justify-center mt-8 mb-6">
+          <button
+            onClick={() => setBlogsLimit(prev => prev + 12)}
+            className="px-6 py-3 bg-white/5 hover:bg-gold/10 hover:text-gold border border-white/10 hover:border-gold/30 rounded-xl transition-all text-white/80 uppercase tracking-widest text-[9px] font-bold"
+          >
+            Show More Blogs
+          </button>
+        </div>
+      )}
+
+      {/* Floating Bulk Management Bar */}
+      <AnimatePresence>
+        {selectedBlogs.length > 0 && (
+          <motion.div
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] w-[95%] max-w-3xl px-4"
+          >
+            <div className="glass border border-gold/30 shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-3 w-full md:w-auto">
+                <div className="w-10 h-10 rounded-xl bg-gold/10 flex items-center justify-center border border-gold/20 shrink-0">
+                  <span className="text-gold font-display font-bold">{selectedBlogs.length}</span>
+                </div>
+                <div>
+                  <h4 className="text-[10px] uppercase tracking-[0.2em] font-black text-gold leading-none mb-1">Bulk Blog Management</h4>
+                  <p className="text-[9px] text-white/40 uppercase tracking-widest font-bold">Manage {selectedBlogs.length} selected posts</p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-center md:justify-end gap-2 w-full md:w-auto">
+                <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-xl p-0.5">
+                  <button
+                    onClick={() => executeBulkUpdateBlogsStatus(selectedBlogs, true)}
+                    className="p-2 text-green-400 hover:bg-green-500 hover:text-white rounded-lg transition-all"
+                    title="Set as Active"
+                  >
+                    <Power size={14} />
+                  </button>
+                  <button
+                    onClick={() => executeBulkUpdateBlogsStatus(selectedBlogs, false)}
+                    className="p-2 text-red-500 hover:bg-red-500 hover:text-white rounded-lg transition-all"
+                    title="Set as Inactive"
+                  >
+                    <Ban size={14} />
+                  </button>
+                </div>
+
+                <div className="relative">
+                  <button
+                    onClick={() => setBulkCategoryOpen(!bulkCategoryOpen)}
+                    className="p-2 bg-purple-500/10 border border-purple-500/20 text-purple-400 rounded-xl hover:bg-purple-500 hover:text-white transition-all flex items-center gap-1 h-[34px]"
+                    title="Change Category"
+                  >
+                    <Tag size={13} />
+                    <span className="text-[9px] font-bold uppercase tracking-widest ml-1 hidden sm:inline">Category</span>
+                    <ChevronDown size={10} />
+                  </button>
+
+                  <AnimatePresence>
+                    {bulkCategoryOpen && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={() => setBulkCategoryOpen(false)} />
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                          className="absolute bottom-full right-0 mb-3 w-48 bg-black/95 p-2 rounded-2xl border border-gold/30 shadow-2xl z-20 flex flex-col gap-1 max-h-[250px] overflow-y-auto custom-scrollbar backdrop-blur-xl"
+                        >
+                          <div className="text-[8px] uppercase tracking-[0.15em] text-gold px-2 py-1 font-bold border-b border-white/5 mb-1">Set Category</div>
+                          {BLOG_CATEGORIES.map((cat, idx) => (
+                            <button
+                              key={`bulk-cat-${cat}-${idx}`}
+                              onClick={() => executeBulkUpdateBlogsCategory(selectedBlogs, cat)}
+                              className="text-left px-3 py-1.5 text-[10px] uppercase tracking-wider font-semibold text-white/70 hover:bg-gold/10 hover:text-gold rounded-xl transition-all"
+                            >
+                              {cat}
+                            </button>
+                          ))}
+                        </motion.div>
+                      </>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                <button
+                  onClick={() => executeBulkDeleteBlogs(selectedBlogs)}
+                  className="p-2 bg-red-600 hover:bg-red-700 text-white border border-red-500/30 rounded-xl transition-all flex items-center gap-1 shadow-lg shadow-red-500/10"
+                  title="Bulk Delete"
+                >
+                  <Trash2 size={14} />
+                </button>
+
+                <button
+                  onClick={() => setSelectedBlogs([])}
+                  className="p-2 bg-white/5 text-white/55 border border-white/10 hover:border-white/30 rounded-xl transition-all text-xs font-bold uppercase tracking-widest"
+                  title="Clear Selection"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {/* Blog Modal */}
@@ -455,7 +915,16 @@ const BlogTab: React.FC<BlogTabProps> = ({
                 </div>
 
                 <div>
-                  <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-1 block">Post Content (HTML)</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 block">Post Content (HTML)</label>
+                    <button 
+                      onClick={() => setShowHtmlPreviewModal(true)}
+                      className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-bold text-gold hover:text-white transition-colors"
+                    >
+                      <Eye size={12} />
+                      Preview Content
+                    </button>
+                  </div>
                   <textarea
                     value={editingBlog?.content || ''}
                     onChange={(e) => setEditingBlog({ ...editingBlog, content: e.target.value })}
@@ -482,6 +951,21 @@ const BlogTab: React.FC<BlogTabProps> = ({
                     <p className="text-[10px] text-white/50 leading-relaxed font-sans">
                       To prevent SEO conflict and data drift, all Meta titles, descriptions, focus keywords, indexing permissions (noindex), and JSON-LD Rich Schema Markups are centrally maintained under the **SEO → Index Console** tab of your primary dashboard.
                     </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 pt-1">
+                    <div>
+                      <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-1 block">Scheduled Publication Date & Time (Optional)</label>
+                      <input
+                        type="datetime-local"
+                        value={editingBlog?.publishAt || ''}
+                        onChange={(e) => setEditingBlog({ ...editingBlog, publishAt: e.target.value })}
+                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-gold text-white/90 transition-all"
+                      />
+                      <p className="text-[9px] text-white/30 tracking-wide mt-1 uppercase font-semibold">
+                        Leave blank to publish immediately once Status is Active. If set, post is auto-hidden on customer page until target date/time.
+                      </p>
+                    </div>
                   </div>
 
                   <div className="flex flex-wrap gap-6 pt-1">
@@ -533,6 +1017,144 @@ const BlogTab: React.FC<BlogTabProps> = ({
         )}
       </AnimatePresence>
 
+        {/* Blog HTML Preview Modal */}
+        {showHtmlPreviewModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[110] flex items-center justify-center p-4 sm:p-10"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="w-full max-w-5xl h-full glass border border-gold/20 rounded-2xl overflow-hidden flex flex-col"
+            >
+              <div className="p-6 border-b border-white/10 flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl font-display text-gold">Live HTML Content Preview</h3>
+                  <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold mt-1">
+                    Visualizing with Global CMS CSS and custom content styling
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/10">
+                  <button
+                    onClick={() => setPreviewDevice('desktop')}
+                    className={cn(
+                      "p-2 rounded-lg transition-all flex items-center gap-2",
+                      previewDevice === 'desktop' ? "bg-gold text-black shadow-lg" : "text-white/40 hover:text-white"
+                    )}
+                    title="Desktop View"
+                  >
+                    <Monitor size={16} />
+                    <span className="text-[10px] font-bold uppercase tracking-widest hidden md:inline">Desktop</span>
+                  </button>
+                  <button
+                    onClick={() => setPreviewDevice('tablet')}
+                    className={cn(
+                      "p-2 rounded-lg transition-all flex items-center gap-2",
+                      previewDevice === 'tablet' ? "bg-gold text-black shadow-lg" : "text-white/40 hover:text-white"
+                    )}
+                    title="Tablet View"
+                  >
+                    <Tablet size={16} />
+                    <span className="text-[10px] font-bold uppercase tracking-widest hidden md:inline">Tablet</span>
+                  </button>
+                  <button
+                    onClick={() => setPreviewDevice('mobile')}
+                    className={cn(
+                      "p-2 rounded-lg transition-all flex items-center gap-2",
+                      previewDevice === 'mobile' ? "bg-gold text-black shadow-lg" : "text-white/40 hover:text-white"
+                    )}
+                    title="Mobile View"
+                  >
+                    <Smartphone size={16} />
+                    <span className="text-[10px] font-bold uppercase tracking-widest hidden md:inline">Mobile</span>
+                  </button>
+                </div>
+
+                <button 
+                  onClick={() => setShowHtmlPreviewModal(false)}
+                  className="p-2 hover:bg-white/5 rounded-full text-white/40 hover:text-white transition-colors"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              <div className="flex-1 bg-[#050505] relative overflow-hidden flex items-center justify-center p-4">
+                <div className={cn(
+                  "h-full w-full transition-all duration-500 bg-[#0c0c0c] shadow-2xl relative overflow-hidden rounded-sm",
+                  previewDevice === 'desktop' ? "max-w-full" : 
+                  previewDevice === 'tablet' ? "max-w-[768px] border-[12px] border-black rounded-[40px]" : 
+                  "max-w-[375px] border-[12px] border-black rounded-[40px]"
+                )}>
+                  {/* Device-specific camera/notch for mobile/tablet */}
+                  {(previewDevice === 'mobile' || previewDevice === 'tablet') && (
+                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-20 h-6 bg-black rounded-b-2xl z-20 flex items-center justify-center">
+                      <div className="w-2 h-2 rounded-full bg-white/10" />
+                    </div>
+                  )}
+                  <iframe
+                    title="Content Preview"
+                    className="w-full h-full border-none"
+                  srcDoc={`
+                    <!DOCTYPE html>
+                    <html>
+                      <head>
+                        <link rel="preconnect" href="https://fonts.googleapis.com">
+                        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+                        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+                        <style>
+                          body {
+                            background-color: #0c0c0c;
+                            color: #ffffff;
+                            font-family: 'Inter', sans-serif;
+                            margin: 0;
+                            padding: 40px;
+                            line-height: 1.6;
+                          }
+                          .cms-rendered-content {
+                            max-width: 800px;
+                            margin: 0 auto;
+                          }
+                          ${systemSettings?.seo?.isGlobalCssActive ? systemSettings?.seo?.globalCmsCss : ''}
+                          ${editingBlog?.customCss || ''}
+                        </style>
+                        <style>
+                          /* Additional baseline content styles if Global CSS is empty */
+                          .cms-rendered-content h1, .cms-rendered-content h2, .cms-rendered-content h3 { font-family: 'Outfit', sans-serif; color: #D4AF37; }
+                          .cms-rendered-content img { max-width: 100%; border-radius: 12px; margin: 20px 0; }
+                        </style>
+                      </head>
+                      <body>
+                        <div class="cms-rendered-content">
+                          ${editingBlog?.content || '<p class="text-white/20 italic text-center py-20 uppercase tracking-[0.2em]">No content to preview...</p>'}
+                        </div>
+                      </body>
+                    </html>
+                  `}
+                />
+              </div>
+            </div>
+
+            <div className="p-4 bg-black/40 border-t border-white/5 flex justify-end items-center gap-4">
+                <div className="flex items-center gap-2 text-[10px] text-white/40 uppercase tracking-widest font-bold mr-auto px-4">
+                  <div className={cn("w-2 h-2 rounded-full", systemSettings?.seo?.isGlobalCssActive ? "bg-green-500" : "bg-red-500")} />
+                  Global CSS: {systemSettings?.seo?.isGlobalCssActive ? 'Applied' : 'Disabled'}
+                </div>
+                <button
+                  onClick={() => setShowHtmlPreviewModal(false)}
+                  className="px-8 py-2.5 bg-gold text-black rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white transition-all shadow-lg"
+                >
+                  Close Preview
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
       {/* CSS Editor Modal */}
       <AnimatePresence>
         {showCssModal && (
@@ -548,35 +1170,35 @@ const BlogTab: React.FC<BlogTabProps> = ({
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-5xl glass p-8 rounded-xl border border-white/10 shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar"
+              className="relative w-full max-w-6xl glass p-4 sm:p-8 rounded-xl border border-white/10 shadow-2xl max-h-[95vh] overflow-y-auto custom-scrollbar"
               onClick={e => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h3 className="text-xl sm:text-2xl font-display text-gold">{cssConfig.title}</h3>
-                  <p className="text-white/40 text-[10px] uppercase tracking-widest">
+                  <p className="text-white/40 text-[10px] uppercase tracking-widest font-bold">
                     {cssConfig.type === 'global' ? 'Applies to all CMS pages/blogs' : 'Applies to this specific item only'}
                   </p>
                 </div>
-                <button onClick={() => setShowCssModal(false)} className="p-2 hover:bg-white/5 rounded-full transition-colors">
+                <button onClick={() => setShowCssModal(false)} className="p-2 hover:bg-white/5 rounded-full transition-colors shrink-0">
                   <X size={24} />
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
                 <div className="space-y-6">
                   {/* Status Toggle */}
                   <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/10">
-                    <div>
+                    <div className="pr-4">
                       <p className="text-sm font-bold">CSS Status</p>
-                      <p className="text-[10px] text-white/40 uppercase tracking-widest">
+                      <p className="text-[10px] text-white/40 uppercase tracking-widest font-medium">
                         {cssConfig.isActive ? 'Active and applying styles' : 'Inactive (styles ignored)'}
                       </p>
                     </div>
                     <button
                       onClick={() => setCssConfig({ ...cssConfig, isActive: !cssConfig.isActive })}
                       className={cn(
-                        "w-12 h-6 rounded-full transition-all relative",
+                        "w-12 h-6 rounded-full transition-all relative shrink-0",
                         cssConfig.isActive ? "bg-gold" : "bg-white/10"
                       )}
                     >
@@ -590,20 +1212,20 @@ const BlogTab: React.FC<BlogTabProps> = ({
                   </div>
 
                   {/* Editor */}
-                  <div className="space-y-2 custom-scrollbar">
+                  <div className="space-y-2">
                     <label className="text-[10px] uppercase tracking-widest font-bold text-white/40">CSS Content</label>
                     <div className="relative group">
                       <textarea
                         value={cssConfig.content}
                         onChange={e => setCssConfig({ ...cssConfig, content: e.target.value })}
-                        className="w-full h-80 bg-black/50 border border-white/10 rounded-2xl p-6 font-mono text-sm focus:border-gold outline-none transition-all resize-none shadow-inner"
+                        className="w-full h-[300px] xl:h-[500px] bg-black/50 border border-white/10 rounded-2xl p-6 font-mono text-xs sm:text-sm focus:border-gold outline-none transition-all resize-none shadow-inner custom-scrollbar"
                         placeholder=".custom-class { color: gold; }"
                       />
-                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
                         <Code2 size={16} className="text-white/20" />
                       </div>
                     </div>
-                    <p className="text-[9px] text-white/30 italic">
+                    <p className="text-[10px] text-white/30 italic font-medium">
                       Individual CSS overwrites Global CSS. Use unique selectors to avoid conflicts.
                     </p>
                   </div>
@@ -619,7 +1241,7 @@ const BlogTab: React.FC<BlogTabProps> = ({
                 </div>
 
                 {/* Preview Section */}
-                <div className="space-y-4 flex flex-col h-full">
+                <div className="space-y-4 flex flex-col min-h-[400px] xl:min-h-0 h-full">
                   <div className="flex justify-between items-center">
                     <label className="text-[10px] uppercase tracking-widest font-bold text-white/40">SEO Live Style Preview</label>
                     <button
@@ -631,13 +1253,13 @@ const BlogTab: React.FC<BlogTabProps> = ({
                       className="text-[10px] text-gold hover:text-white transition-colors flex items-center gap-1 uppercase tracking-widest font-bold"
                     >
                       <Eye size={12} />
-                      View Live Site
+                      View Live
                     </button>
                   </div>
-                  <div className="flex-1 min-h-[500px] bg-[#0a0a0a] border border-white/10 rounded-2xl overflow-hidden relative shadow-2xl">
+                  <div className="flex-1 min-h-[400px] bg-[#0a0a0a] border border-white/10 rounded-2xl overflow-hidden relative shadow-2xl">
                     <iframe
                       title="SEO Preview"
-                      className="w-full h-full min-h-[500px] border-none"
+                      className="w-full h-full min-h-[400px] border-none"
                       srcDoc={`
                           <!DOCTYPE html>
                           <html>

@@ -1,6 +1,6 @@
 import { useState, FormEvent, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plane, Car, ArrowRight, Tag, MapPin, Star, User, Mail, Phone, Calendar, Clock, CreditCard, Banknote, ChevronRight, FileText, LayoutGrid, Info, AlertCircle, Search, XCircle, CheckCircle, LocateFixed, Earth, Luggage, Handbag } from 'lucide-react';
+import { Plane, Car, ArrowRight, Tag, MapPin, Star, User, Mail, Phone, Calendar, Clock, CreditCard, Banknote, ChevronRight, ChevronLeft, FileText, LayoutGrid, Info, AlertCircle, Search, XCircle, CheckCircle, LocateFixed, Earth, Luggage, Handbag } from 'lucide-react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { collection, onSnapshot, query, where, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -147,6 +147,12 @@ export default function Offers() {
   const [tagFilter, setTagFilter] = useState('all');
   const [discountFilter, setDiscountFilter] = useState('all');
   const [priceSort, setPriceSort] = useState<'none' | 'asc' | 'desc'>('none');
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, tagFilter, discountFilter, priceSort]);
 
   // Selection States
   const [selectedPackage, setSelectedPackage] = useState<any>(null);
@@ -469,6 +475,14 @@ export default function Offers() {
 
     return result;
   }, [offers, searchQuery, tagFilter, discountFilter, priceSort]);
+
+  const ITEMS_PER_PAGE = 12;
+  const totalPages = Math.max(1, Math.ceil(filteredOffers.length / ITEMS_PER_PAGE));
+
+  const paginatedOffers = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredOffers.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredOffers, currentPage]);
 
   const calculateOfferPriceBreakdown = () => {
     if (!selectedFleet) return { base: 0, subtotal: 0, appliedAddons: [], total: 0, addonTotal: 0 };
@@ -1018,8 +1032,8 @@ export default function Offers() {
                           <div className="w-16 h-16 border-2 border-gold/10 border-t-gold rounded-full animate-spin-slow mb-6" />
                           <p className="text-gold/60 text-[10px] uppercase tracking-[0.3em] animate-pulse">Initializing Portals...</p>
                         </div>
-                      ) : filteredOffers.length > 0 ? (
-                        filteredOffers.map((pkg) => {
+                      ) : paginatedOffers.length > 0 ? (
+                        paginatedOffers.map((pkg) => {
                           const range = getPriceRange(pkg);
                           return (
                             <motion.div
@@ -1078,6 +1092,35 @@ export default function Offers() {
                         </div>
                       )}
                     </div>
+
+                    {/* Next/Previous Pagination Controls */}
+                    {totalPages > 1 && (
+                      <div className="flex items-center justify-center gap-4 mt-12 pb-4">
+                        <button
+                          disabled={currentPage === 1}
+                          onClick={() => {
+                            setCurrentPage(p => Math.max(1, p - 1));
+                            window.scrollTo({ top: 400, behavior: 'smooth' });
+                          }}
+                          className="flex items-center justify-center w-10 h-10 rounded-full border border-white/10 text-white hover:border-gold hover:text-gold transition-all duration-300 disabled:opacity-20 disabled:hover:text-white disabled:hover:border-white/10 cursor-pointer"
+                        >
+                          <ChevronLeft size={16} />
+                        </button>
+                        <span className="text-[9px] uppercase tracking-[0.2em] font-bold text-white/40">
+                          Page <span className="text-gold font-black">{currentPage}</span> of {totalPages}
+                        </span>
+                        <button
+                          disabled={currentPage === totalPages}
+                          onClick={() => {
+                            setCurrentPage(p => Math.min(totalPages, p + 1));
+                            window.scrollTo({ top: 400, behavior: 'smooth' });
+                          }}
+                          className="flex items-center justify-center w-10 h-10 rounded-full border border-white/10 text-white hover:border-gold hover:text-gold transition-all duration-300 disabled:opacity-20 disabled:hover:text-white disabled:hover:border-white/10 cursor-pointer"
+                        >
+                          <ChevronRight size={16} />
+                        </button>
+                      </div>
+                    )}
 
                     {/* Luxury CTA Below Offers */}
                     <motion.div

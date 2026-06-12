@@ -1,11 +1,11 @@
 import { useState, useMemo, useEffect } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { 
-  Plus, Upload, Search, CircleX, Check, CheckCheck, XCircle, Car, ChevronDown,
+  Plus, Search, CircleX, Check, CheckCheck, XCircle, Car, ChevronDown,
   CheckCircle, Ban, Copy, Trash2, LayoutGrid, List, SquareCheck, 
   Square, Edit2, Clock, X, DollarSign, Info, MapPin, Tag, Save,
   Plus as PlusIcon, Trash2 as TrashIcon, Info as InfoIcon,
-  LayoutGrid as LayoutGridIcon, RefreshCw, Download
+  LayoutGrid as LayoutGridIcon, Download
 } from 'lucide-react';
 import { cn, getAssetPath } from '../../lib/utils';
 import { db, handleFirestoreError, OperationType } from '../../lib/firebase';
@@ -25,8 +25,6 @@ const OffersToursTab: React.FC<OffersToursTabProps> = ({
   const [offers, setOffers] = useState<any[]>([]);
   const [tours, setTours] = useState<any[]>([]);
   const [fleet, setFleet] = useState<any[]>([]);
-  const [showCsvImportModal, setShowCsvImportModal] = useState(false);
-  const [csvImportType, setCsvImportType] = useState<'offers' | 'tours'>('offers');
 
   useEffect(() => {
     const unsubscribeOffers = onSnapshot(collection(db, 'offers'), (snapshot) => {
@@ -47,23 +45,7 @@ const OffersToursTab: React.FC<OffersToursTabProps> = ({
       unsubscribeFleet();
     };
   }, []);
-  const [dragActive, setDragActive] = useState(false);
-  const [isUploadingCsv, setIsUploadingCsv] = useState(false);
 
-  const handleCsvUpload = async (type: 'offers' | 'tours', file: File) => {
-    setIsUploadingCsv(true);
-    try {
-      // CSV Upload logic here
-      console.log(`Importing ${type} CSV:`, file.name);
-      showDashboardNotice('success', `${type.charAt(0).toUpperCase() + type.slice(1)} bulk import successful`, 'Import Complete');
-      setShowCsvImportModal(false);
-    } catch (err) {
-      console.error(err);
-      showDashboardNotice('error', 'CSV import failed. Please check format.', 'Import Error');
-    } finally {
-      setIsUploadingCsv(false);
-    }
-  };
   const [editingOffer, setEditingOffer] = useState<any>(null);
   const [showOfferModal, setShowOfferModal] = useState(false);
   const [editingTour, setEditingTour] = useState<any>(null);
@@ -79,6 +61,18 @@ const OffersToursTab: React.FC<OffersToursTabProps> = ({
   const [isToursSelectionMode, setIsToursSelectionMode] = useState(false);
   const [toursSearchQuery, setToursSearchQuery] = useState('');
   const [toursLayout, setToursLayout] = useState<'grid' | 'list'>('grid');
+
+  const [toursLimit, setToursLimit] = useState(6);
+  const [offersLimit, setOffersLimit] = useState(6);
+
+  // Reset pagination when search queries change
+  useEffect(() => {
+    setToursLimit(6);
+  }, [toursSearchQuery]);
+
+  useEffect(() => {
+    setOffersLimit(6);
+  }, [offersSearchQuery]);
 
   // Filtered lists
   const filteredOffers = useMemo(() => (offers || []).filter((o: any) => {
@@ -101,6 +95,14 @@ const OffersToursTab: React.FC<OffersToursTabProps> = ({
       t.slug?.toLowerCase().includes(q)
     );
   }), [tours, toursSearchQuery]);
+
+  const paginatedTours = useMemo(() => {
+    return (filteredTours || []).slice(0, toursLimit);
+  }, [filteredTours, toursLimit]);
+
+  const paginatedOffers = useMemo(() => {
+    return (filteredOffers || []).slice(0, offersLimit);
+  }, [filteredOffers, offersLimit]);
 
   // Handlers
   const handleUpdateOffer = async (id: string | null, data: any) => {
@@ -316,16 +318,6 @@ const OffersToursTab: React.FC<OffersToursTabProps> = ({
           <div className="flex items-center gap-3">
             <button
               onClick={() => {
-                setCsvImportType('tours');
-                setShowCsvImportModal(true);
-              }}
-              className="bg-white/5 border border-white/10 hover:border-gold/50 text-white/60 hover:text-white px-4 py-2 rounded-xl transition-all flex items-center gap-2"
-            >
-              <Upload size={16} />
-              <span className="text-[10px] font-bold uppercase tracking-widest leading-none">Import</span>
-            </button>
-            <button
-              onClick={() => {
                 setEditingTour({ title: '', description: '', price: 0, image: '', active: true, slug: '', duration: '', capacity: 0, locations: [] });
                 setShowTourModal(true);
               }}
@@ -478,7 +470,7 @@ const OffersToursTab: React.FC<OffersToursTabProps> = ({
         {toursLayout === 'grid' ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {(filteredTours || []).length > 0 ? (
-              (filteredTours || []).map((tour, idx) => {
+              (paginatedTours || []).map((tour, idx) => {
                 let isActive = tour.active;
                 if (tour.availability?.endDate) {
                   const endDate = new Date(tour.availability.endDate);
@@ -631,7 +623,7 @@ const OffersToursTab: React.FC<OffersToursTabProps> = ({
                 </thead>
                 <tbody className="divide-y divide-white/5">
                   {(filteredTours || []).length > 0 ? (
-                    (filteredTours || []).map((tour, idx) => {
+                    (paginatedTours || []).map((tour, idx) => {
                       let isActive = tour.active;
                       if (tour.availability?.endDate) {
                         const endDate = new Date(tour.availability.endDate);
@@ -743,6 +735,17 @@ const OffersToursTab: React.FC<OffersToursTabProps> = ({
             </div>
           </div>
         )}
+
+        {filteredTours.length > toursLimit && (
+          <div className="flex justify-center mt-8">
+            <button
+              onClick={() => setToursLimit(prev => prev + 6)}
+              className="bg-white/5 hover:bg-gold hover:text-black border border-gold/30 hover:border-gold text-gold font-bold uppercase tracking-widest text-[10px] px-8 py-3.5 rounded-xl transition-all duration-300 shadow-md cursor-pointer"
+            >
+              Show More Tours
+            </button>
+          </div>
+        )}
       </div>
 
             {/* Products Section */}
@@ -755,16 +758,6 @@ const OffersToursTab: React.FC<OffersToursTabProps> = ({
             <p className="text-white/40 text-[10px] uppercase tracking-widest">Premium fixed-rate seasonal packages</p>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => {
-                setCsvImportType('offers');
-                setShowCsvImportModal(true);
-              }}
-              className="bg-white/5 border border-white/10 hover:border-gold/50 text-white/60 hover:text-white px-4 py-2 rounded-xl transition-all flex items-center gap-2"
-            >
-              <Upload size={16} />
-              <span className="text-[10px] font-bold uppercase tracking-widest leading-none">Import</span>
-            </button>
             <button
               onClick={() => {
                 setEditingOffer({
@@ -929,7 +922,7 @@ const OffersToursTab: React.FC<OffersToursTabProps> = ({
         {offerViewMode === 'grid' ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {(filteredOffers || []).length > 0 ? (
-              (filteredOffers || []).map((offer, idx) => (
+              (paginatedOffers || []).map((offer, idx) => (
                 <div key={offer.id || `offer-${idx}`} className={cn("glass rounded-2xl overflow-hidden border transition-all flex flex-col group relative", (selectedOffers || []).includes(offer.id) ? "border-gold shadow-[0_0_15px_rgba(212,175,55,0.2)]" : "border-white/5 hover:border-gold/30")}>
 
                   <div className="h-40 relative">
@@ -1073,7 +1066,7 @@ const OffersToursTab: React.FC<OffersToursTabProps> = ({
                 </thead>
                 <tbody className="divide-y divide-white/5">
                   {(filteredOffers || []).length > 0 ? (
-                    (filteredOffers || []).map((offer, idx) => {
+                    (paginatedOffers || []).map((offer, idx) => {
                       const prices = (offer.fleets || []).map((f: any) => Number(f.salePrice || f.basePrice || f.price || 0)).filter((p: number) => p > 0);
                       const min = prices.length ? Math.min(...prices) : 0;
                       const max = prices.length ? Math.max(...prices) : 0;
@@ -1176,6 +1169,17 @@ const OffersToursTab: React.FC<OffersToursTabProps> = ({
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+
+        {filteredOffers.length > offersLimit && (
+          <div className="flex justify-center mt-8">
+            <button
+              onClick={() => setOffersLimit(prev => prev + 6)}
+              className="bg-white/5 hover:bg-gold hover:text-black border border-gold/30 hover:border-gold text-gold font-bold uppercase tracking-widest text-[10px] px-8 py-3.5 rounded-xl transition-all duration-300 shadow-md cursor-pointer"
+            >
+              Show More Offers
+            </button>
           </div>
         )}
       </div>
@@ -2036,137 +2040,6 @@ const OffersToursTab: React.FC<OffersToursTabProps> = ({
                 >
                   {editingTour.id ? 'Authorize & Sync Changes' : 'Initialize Luxury Tour'}
                 </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-
-        {/* CSV Import Modal */}
-        {showCsvImportModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
-          >
-            <motion.div
-              initial={{ scale: 0.9, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              className="w-full max-w-xl glass p-8 rounded-3xl border border-gold/20"
-            >
-              <div className="flex justify-between items-center mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-gold/10 rounded-lg">
-                    <Upload size={20} className="text-gold" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-display text-gold">Import {csvImportType === 'offers' ? 'Offers' : 'Tours'}</h3>
-                    <p className="text-white/40 text-[10px] uppercase tracking-widest font-bold">Bulk upload via CSV</p>
-                  </div>
-                </div>
-                <button onClick={() => setShowCsvImportModal(false)} className="text-white/40 hover:text-white">
-                  <X size={20} />
-                </button>
-              </div>
-
-              <div className="space-y-6">
-                {/* Drag & Drop Area */}
-                <div
-                  onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setDragActive(true); }}
-                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragActive(true); }}
-                  onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setDragActive(false); }}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setDragActive(false);
-                    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                      handleCsvUpload(csvImportType, e.dataTransfer.files[0]);
-                    }
-                  }}
-                  className={cn(
-                    "relative py-8 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center transition-all duration-300", // reduced py-12 → py-8
-                    dragActive
-                      ? "border-gold bg-gold/5 scale-[1.02]"
-                      : "border-white/10 bg-white/5 hover:border-gold/30"
-                  )}
-                >
-                  <input
-                    type="file"
-                    accept=".csv"
-                    className="absolute inset-0 opacity-0 cursor-pointer"
-                    onChange={(e) => {
-                      if (e.target.files && e.target.files[0]) {
-                        handleCsvUpload(csvImportType, e.target.files[0]);
-                      }
-                    }}
-                  />
-                  <div
-                    className={cn(
-                      "w-12 h-12 rounded-full flex items-center justify-center mb-3 transition-transform duration-500", // reduced w-16 h-16 → w-12 h-12
-                      dragActive ? "bg-gold text-black scale-110 rotate-12" : "bg-white/10 text-gold"
-                    )}
-                  >
-                    {isUploadingCsv ? (
-                      <RefreshCw size={24} className="animate-spin" />
-                    ) : (
-                      <Upload size={24} />
-                    )}
-                  </div>
-                  <p className="text-sm font-bold text-white mb-1">
-                    {isUploadingCsv ? 'Uploading...' : 'Drop your CSV here'}
-                  </p>
-                  <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold">
-                    or click to browse files
-                  </p>
-                </div>
-
-                {/* Format Sample */}
-                <div className="bg-white/5 border border-white/5 rounded-2xl p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <Info size={14} className="text-gold" />
-                      <span className="text-[10px] uppercase tracking-widest font-black text-white/60">Required CSV Format</span>
-                    </div>
-                    <a
-                      href={csvImportType === 'offers' ? '/assets/csv/sample-offers.csv' : '/assets/csv/sample-tours.csv'}
-                      download
-                      className="bg-gold/10 hover:bg-gold hover:text-black text-gold px-3 py-1.5 rounded text-[9px] uppercase tracking-widest font-black transition-all flex items-center gap-1.5"
-                    >
-                      <Download size={12} /> Download Sample CSV
-                    </a>
-                  </div>
-                  <div className="overflow-x-auto custom-scrollbar border border-white/10 rounded-xl bg-black/40">
-                    <table className="w-full border-collapse text-[9px] text-left">
-                      <thead>
-                        <tr className="bg-gold/10 border-b border-gold/20">
-                          {(csvImportType === 'offers'
-                            ? ['title', 'description', 'image', 'active', 'tags', 'discounttype', 'discountvalue', 'fleets_data']
-                            : ['title', 'image', 'duration', 'maxPeople', 'ageRange', 'startPlace', 'active', 'availabilityStartDate', 'availabilityEndDate', 'shortDescription', 'fullDescription', 'gallery', 'inclusions', 'exclusions', 'activities', 'placesToVisit', 'tags', 'fleets', 'extras', 'itinerary', 'faqs', 'promoTag', 'category', 'customerNote']
-                          ).map((h) => (
-                            <th key={h} className="px-3 py-2 text-gold font-black uppercase tracking-widest border-r border-gold/10 last:border-0 whitespace-nowrap">
-                              {h}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr className="bg-white/[0.02]">
-                          {(csvImportType === 'offers'
-                            ? ['Autumn Special', 'Experience our autumn special.', 'https://...', 'true', 'Seasonal|Featured', 'percentage', '25', 'Sedan|url|Desc|3|2|150|Free Wi-Fi']
-                            : ['Wine Tour', 'https://...', '8 Hours', '6', 'Adults', 'CBD', 'true', '2024-01-01', '2024-12-31', 'Short summary.', 'Long text...', 'url1|url2', 'Lunch|Tasting', 'Tips', 'Tasting', 'Valley', 'Luxury', 'Sedan|url|3|2|150|120|Info', 'Photos|Pro|150|10', 'Stop 1|img|desc', 'Q|A', 'Best Seller', 'Wine', 'Note']
-                          ).map((v, i) => (
-                            <td key={i} className="px-3 py-2 text-white/50 font-mono border-r border-white/5 last:border-0 whitespace-nowrap italic">
-                              {v}
-                            </td>
-                          ))}
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                  <p className="text-[9px] text-white/30 mt-3 italic text-left">
-                    * Use ';' for major separations (e.g. lists of fleets or extras) and '|' for internal attributes. Review the sample CSV for exact formatting.
-                  </p>
-                </div>
               </div>
             </motion.div>
           </motion.div>

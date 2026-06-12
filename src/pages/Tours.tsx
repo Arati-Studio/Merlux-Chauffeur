@@ -301,6 +301,12 @@ export default function Tours() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [durationFilter, setDurationFilter] = useState("all");
   const [priceSort, setPriceSort] = useState<"none" | "asc" | "desc">("none");
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, categoryFilter, durationFilter, priceSort]);
 
   const categories = useMemo(() => {
     const cats = new Set(tours.map(t => t.category).filter(Boolean));
@@ -369,6 +375,14 @@ export default function Tours() {
 
     return result;
   }, [tours, searchQuery, categoryFilter, durationFilter, priceSort]);
+
+  const ITEMS_PER_PAGE = 12;
+  const totalPages = Math.max(1, Math.ceil(filteredTours.length / ITEMS_PER_PAGE));
+
+  const paginatedTours = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredTours.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredTours, currentPage]);
 
   useEffect(() => {
     const q = query(collection(db, 'tours'), where('active', '==', true));
@@ -1435,8 +1449,8 @@ export default function Tours() {
                     <div className="w-12 h-12 border-4 border-gold/20 border-t-gold rounded-full animate-spin mb-4" />
                     <p className="text-white/40 uppercase tracking-[0.2em] text-[10px] font-bold text-center">Orchestrating exclusive tours...</p>
                   </div>
-                ) : filteredTours.length > 0 ? (
-                  filteredTours.map((tour, tourIdx) => (
+                ) : paginatedTours.length > 0 ? (
+                  paginatedTours.map((tour, tourIdx) => (
                     <div
                       key={tour.id ? `tour-${tour.id}` : `tour-idx-${tourIdx}`}
                       onClick={() => handleTourSelect(tour)}
@@ -1492,6 +1506,35 @@ export default function Tours() {
                   </div>
                 )}
               </motion.div>
+            )}
+
+            {/* Next/Previous Pagination Controls */}
+            {step === 1 && !showFullDetails && totalPages > 1 && (
+              <div className="flex items-center justify-center gap-4 mt-12 pb-4">
+                <button
+                  disabled={currentPage === 1}
+                  onClick={() => {
+                    setCurrentPage(p => Math.max(1, p - 1));
+                    window.scrollTo({ top: 400, behavior: 'smooth' });
+                  }}
+                  className="flex items-center justify-center w-10 h-10 rounded-full border border-white/10 text-white hover:border-gold hover:text-gold transition-all duration-300 disabled:opacity-20 disabled:hover:text-white disabled:hover:border-white/10 cursor-pointer"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <span className="text-[9px] uppercase tracking-[0.2em] font-bold text-white/40">
+                  Page <span className="text-gold font-black">{currentPage}</span> of {totalPages}
+                </span>
+                <button
+                  disabled={currentPage === totalPages}
+                  onClick={() => {
+                    setCurrentPage(p => Math.min(totalPages, p + 1));
+                    window.scrollTo({ top: 400, behavior: 'smooth' });
+                  }}
+                  className="flex items-center justify-center w-10 h-10 rounded-full border border-white/10 text-white hover:border-gold hover:text-gold transition-all duration-300 disabled:opacity-20 disabled:hover:text-white disabled:hover:border-white/10 cursor-pointer"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
             )}
 
             {!showFullDetails && step === 1 && (

@@ -33,7 +33,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
   return (
     <div className="flex flex-1 overflow-hidden">
       {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto no-scrollbar bg-[#020202] relative" ref={mainScrollRef}>
+      <main className="flex-1 overflow-y-auto custom-scrollbar bg-[#020202] relative" ref={mainScrollRef}>
 
         <div className="p-4 lg:p-10 max-w-7xl mx-auto w-full min-h-full pb-32">
           {props.dashboardNotice && (
