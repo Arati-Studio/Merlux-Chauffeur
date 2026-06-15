@@ -494,7 +494,7 @@ export default function Navbar() {
 
       {/* Mobile Bottom Navigation */}
       <div className="fixed inset-x-0 bottom-0 z-50 md:hidden bg-transparent select-none pb-safe">
-        <div className="mx-auto max-w-sm px-4 pb-3 filter drop-shadow-[0_-12px_24px_rgba(212,175,55,0.35)]">
+        <div className="mx-auto max-w-sm px-4 pb-5 filter drop-shadow-[0_-12px_24px_rgba(212,175,55,0.35)]">
           <div className="flex h-14 items-end relative w-full overflow-visible">
             
             {/* Left Wing Container */}
@@ -531,6 +531,14 @@ export default function Navbar() {
             </div>
 
             {/* Custom Background Notch SVG (placed between Left and Right wings) */}
+            <div className="w-[80px] h-14 relative overflow-visible pointer-events-none -mx-px flex justify-center">
+              <svg width="80" height="56" viewBox="0 0 80 56" fill="none" xmlns="http://www.w3.org/2000/svg" className="absolute top-0 left-0 w-full h-full">
+                {/* Custom Curved Segment Background */}
+                <path d="M0 0 L20 0 C27 0 29 8 31 16 C33 24 35 34 40 34 C45 34 47 24 49 16 C51 8 53 0 60 0 L80 0 L80 56 L0 56 Z" fill="rgba(0,0,0,0.95)" />
+                {/* Golden/White top border tracing the curve */}
+                <path d="M0 0.5 L20 0.5 C27 0.5 29 8.5 31 16.5 C33 24.5 35 34.5 40 34.5 C45 34.5 47 24.5 49 16.5 C51 8.5 53 0.5 60 0.5 L80 0.5" stroke="rgba(212,175,55,0.25)" strokeWidth="1" />
+              </svg>
+              
               {/* Dot active state for booking */}
               {location.pathname === '/booking' && (
                 <div className="w-1 h-1 bg-gold rounded-full absolute bottom-1.5 left-1/2 -translate-x-1/2" />
@@ -558,7 +566,7 @@ export default function Navbar() {
                   }}
                   className="flex shrink-0 text-black animate-pulse"
                 >
-                  <Car size={22} />
+                  <Car size={18} />
                 </motion.div>
               </div>
             </Link>
