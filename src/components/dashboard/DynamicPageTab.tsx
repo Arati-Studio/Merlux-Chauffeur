@@ -96,6 +96,7 @@ const DynamicPageTab: React.FC<DynamicPageTabProps> = ({
   const [showPageModal, setShowPageModal] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [lastSavedContent, setLastSavedContent] = useState<string>('');
+  const [lastSavedTime, setLastSavedTime] = useState<Date | null>(null);
 
   // CSS State
   const [showCssModal, setShowCssModal] = useState(false);
@@ -195,6 +196,7 @@ const DynamicPageTab: React.FC<DynamicPageTabProps> = ({
         setEditingPage(null);
       } else {
         setAutoSaveStatus('saved');
+        setLastSavedTime(new Date());
         setTimeout(() => setAutoSaveStatus('idle'), 3000);
       }
     } catch (err) {
@@ -886,26 +888,13 @@ const DynamicPageTab: React.FC<DynamicPageTabProps> = ({
                   <h3 className="text-xl font-display text-gold">
                     {editingPage?.id ? 'Edit Page' : 'Add Dynamic Page'}
                   </h3>
-                  {autoSaveStatus !== 'idle' && (
-                    <div className={cn(
-                      "flex items-center gap-2 px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest transition-all",
-                      autoSaveStatus === 'saving' ? "bg-gold/10 text-gold animate-pulse" : 
-                      autoSaveStatus === 'saved' ? "bg-green-500/10 text-green-500" : 
-                      "bg-red-500/10 text-red-500"
-                    )}>
-                      {autoSaveStatus === 'saving' && <Loader2 size={10} className="animate-spin" />}
-                      {autoSaveStatus === 'saved' && <Check size={10} />}
-                      {autoSaveStatus === 'error' && <ShieldAlert size={10} />}
-                      <span>{autoSaveStatus === 'saving' ? 'Saving...' : autoSaveStatus === 'saved' ? 'All changes saved' : 'Auto-save failed'}</span>
-                    </div>
-                  )}
                 </div>
                 <button onClick={() => setShowPageModal(false)} className="text-white/40 hover:text-white">
                   <X size={20} />
                 </button>
               </div>
 
-              <div className="space-y-6">
+              <div className="space-y-6 pb-16 relative">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-1 block">Page Title</label>
@@ -1146,10 +1135,47 @@ const DynamicPageTab: React.FC<DynamicPageTabProps> = ({
                   </button>
                   <button
                     onClick={() => handleUpdatePage(editingPage.id || 'new', editingPage)}
-                    className="flex-1 bg-gold text-black py-3 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-white transition-all"
+                    className="flex-1 bg-gold text-black py-3 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-white transition-all shadow-lg shadow-gold/10"
                   >
                     {editingPage?.id ? 'Save Changes' : 'Create Page'}
                   </button>
+                </div>
+              </div>
+
+              {/* Fixed Auto-save Indicator at the bottom */}
+              <div className="absolute bottom-5 left-8 right-8 flex items-center justify-between pointer-events-none">
+                <div className="flex items-center gap-3">
+                  <AnimatePresence mode="wait">
+                    {autoSaveStatus !== 'idle' && (
+                      <motion.div
+                        key={autoSaveStatus}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 10 }}
+                        className={cn(
+                          "flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest backdrop-blur-md shadow-xl border",
+                          autoSaveStatus === 'saving' ? "bg-gold/10 text-gold border-gold/20 animate-pulse" : 
+                          autoSaveStatus === 'saved' ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : 
+                          "bg-red-500/10 text-red-500 border-red-500/20"
+                        )}
+                      >
+                        {autoSaveStatus === 'saving' && <Loader2 size={10} className="animate-spin" />}
+                        {autoSaveStatus === 'saved' && <Check size={10} />}
+                        {autoSaveStatus === 'error' && <ShieldAlert size={10} />}
+                        <span>{autoSaveStatus === 'saving' ? 'Saving Progress...' : autoSaveStatus === 'saved' ? 'Changes Protected' : 'Sync Error'}</span>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                  
+                  {lastSavedTime && autoSaveStatus === 'idle' && (
+                    <motion.span 
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="text-[9px] uppercase tracking-[0.2em] font-black text-white/20"
+                    >
+                      Last Saved At {lastSavedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </motion.span>
+                  )}
                 </div>
               </div>
             </motion.div>

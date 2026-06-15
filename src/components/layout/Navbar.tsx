@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Home, Gift, MapPin, Briefcase, MoreHorizontal, User, CalendarDays, LogOut, ChevronDown, LogIn, ShieldCheck, Truck, UserCircle, LayoutDashboard, Search, Car } from 'lucide-react';
+import { Home, Gift, MapPin, Briefcase, MoreHorizontal, User, CalendarDays, LogOut, ChevronDown, ChevronUp, LogIn, ShieldCheck, Truck, UserCircle, LayoutDashboard, Search, Car, BookOpen, Phone, HelpCircle, Sparkles } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { cn } from '../../lib/utils';
 import { auth, db } from '../../lib/firebase';
@@ -125,6 +125,33 @@ export default function Navbar() {
     : (hasManualMore 
         ? headerMenu.filter((m: any) => m.isMore) 
         : headerMenu.slice(4));
+
+  // Static config for More menu (independent of backend CMS/settings changes)
+  const gridMoreLinks = [
+    { name: 'Services', path: '/services', type: 'link', icon: Briefcase },
+    { name: 'Fleet', path: '/fleet', type: 'link', icon: Car },
+    { name: 'Blog', path: '/blog', type: 'link', icon: BookOpen },
+    { name: 'About', path: '/about', type: 'link', icon: User },
+    { name: 'Contact', path: '/contact', type: 'link', icon: Phone },
+    { name: 'Search', type: 'search', icon: Search },
+    { name: 'Dashboard', path: '/app', type: 'link', icon: LayoutDashboard },
+    { name: 'Auth', type: 'auth' }
+  ];
+
+  const getIconForPage = (nameStr: string) => {
+    const name = nameStr.toLowerCase();
+    if (name.includes('fleet')) return Car;
+    if (name.includes('blog')) return BookOpen;
+    if (name.includes('about')) return User;
+    if (name.includes('contact')) return Phone;
+    if (name.includes('services')) return Briefcase;
+    if (name.includes('tour')) return MapPin;
+    if (name.includes('offer')) return Gift;
+    if (name.includes('home')) return Home;
+    if (name.includes('dashboard')) return LayoutDashboard;
+    if (name.includes('faq')) return HelpCircle;
+    return Sparkles;
+  };
 
   return (
     <>
@@ -372,7 +399,7 @@ export default function Navbar() {
               </div>
             )}
 
-            <div className="flex items-center md:gap-4 lg:gap-6">
+            <div className="hidden md:flex items-center md:gap-4 lg:gap-6">
               <button 
                 id="navbar-search-trigger"
                 onClick={() => window.dispatchEvent(new Event('open-search-dialog'))}
@@ -430,7 +457,8 @@ export default function Navbar() {
                   <LogIn size={20} />
                 </Link>
               )}
-              <Link to="/booking" className="group relative overflow-hidden bg-gold text-black px-3 py-1 rounded-full text-[10px] lg:text-xs font-black uppercase tracking-[0.2em] shadow-[0_0_20px_rgba(212,175,55,0.2)] transition-all duration-500 hover:shadow-[0_0_30px_rgba(212,175,55,0.5)] hover:scale-105 active:scale-95 whitespace-nowrap flex items-center gap-3">
+              
+              <Link to="/booking" className="group relative overflow-hidden bg-gold text-black px-4 py-1.5 rounded-full text-[10px] lg:text-xs font-black uppercase tracking-[0.2em] shadow-[0_0_20px_rgba(212,175,55,0.2)] transition-all duration-500 hover:shadow-[0_0_30px_rgba(212,175,55,0.5)] hover:scale-105 active:scale-95 whitespace-nowrap flex items-center gap-3">
                 <div className="relative z-10 flex items-center overflow-hidden w-6 h-6 group-hover:text-gold transition-colors duration-500">
                   <motion.div 
                     animate={{ x: [ -25, 25 ] }}
@@ -439,7 +467,7 @@ export default function Navbar() {
                       duration: 3,
                       ease: "linear"
                     }}
-                    className="flex shrink-0"
+                    className="flex shrink-0 font-bold"
                   >
                     <Car size={18} />
                   </motion.div>
@@ -460,171 +488,323 @@ export default function Navbar() {
             >
               <Search size={16} />
             </button>
-
-            {user ? (
-              <Link
-                to="/app"
-                className={cn(
-                  'transition-colors',
-                  roleColor
-                )}
-                title="Dashboard"
-              >
-                {userProfile?.role === 'admin' ? (
-                  <div className="bg-red-700 hover:bg-red-800 border border-red-700 rounded-md p-1.5">
-                    <ShieldCheck size={16} className="text-white" />
-                  </div>
-                ) : userProfile?.role === 'driver' ? (
-                  <div className="bg-blue-700 hover:bg-blue-800 border border-blue-700 rounded-md p-1.5">
-                    <Truck size={16} className="text-white" />
-                  </div>
-                ) : (
-                  <div className="bg-yellow-700 hover:bg-yellow-800 border border-yellow-700 rounded-md p-1.5">
-                    <UserCircle size={16} className="text-white" />
-                  </div>
-                )}
-              </Link>
-            ) : (
-              <Link
-                to="/login"
-                className="border border-blue-700 rounded-md p-1.5 shadow-sm bg-blue-500 text-white hover:bg-blue-600 transition-colors"
-                title="Login"
-              >
-                <LogIn size={16} />
-              </Link>
-            )}
-
-            <Link
-              to="/booking"
-              className="border border-gold/40 rounded-md p-1.5 shadow-[0_0_15px_rgba(212,175,55,0.2)] bg-gold text-black hover:bg-black hover:text-gold transition-all duration-500 overflow-hidden"
-              title="Book Now"
-            >
-              <div className="relative w-4 h-4 overflow-hidden">
-                <motion.div
-                  animate={{ x: [-20, 20] }}
-                  transition={{ 
-                    repeat: Infinity, 
-                    duration: 2.5,
-                    ease: "linear"
-                  }}
-                  className="flex shrink-0"
-                >
-                  <Car size={16} />
-                </motion.div>
-              </div>
-            </Link>
-
-            {user && (
-              <button
-                onClick={handleLogout}
-                className="bg-red-500/10 border border-red-500 rounded-md p-1.5 shadow-sm text-red-500 hover:bg-red-800 hover:text-white transition-colors"
-                title="Logout"
-              >
-                <LogOut size={16} />
-              </button>
-            )}
           </div>
         </div>
       </nav>
 
       {/* Mobile Bottom Navigation */}
-      <div className="fixed inset-x-0 bottom-0 z-50 md:hidden">
-        <div className="mx-auto flex max-w-7xl items-center justify-between rounded-t-3xl border-t border-white/10 bg-black/95 px-4 py-2 shadow-[0_-12px_40px_rgba(0,0,0,0.35)]">
-          {(headerMenu.length > 0 ? headerMenu.slice(0, 4) : mobileNavItems.slice(0, 4)).map((item: any, idx: number) => {
-            const path = item.url || item.path;
-            const name = item.label || item.name;
-            const Icon = item.Icon || (idx === 0 ? Home : idx === 1 ? Gift : idx === 2 ? MapPin : Briefcase);
-
-            return (
+      <div className="fixed inset-x-0 bottom-0 z-50 md:hidden bg-transparent select-none pb-safe">
+        <div className="mx-auto max-w-sm px-4 pb-3 filter drop-shadow-[0_-12px_24px_rgba(212,175,55,0.35)]">
+          <div className="flex h-14 items-end relative w-full overflow-visible">
+            
+            {/* Left Wing Container */}
+            <div className="flex-1 h-14 bg-black/95 backdrop-blur-md rounded-l-[24px] border-t border-l border-b border-gold/15 flex items-center justify-around px-1">
+              {/* Home */}
               <Link
-                key={`${name}-${idx}`}
-                to={path}
+                to="/"
                 className={cn(
-                  'flex flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-[10px] uppercase tracking-widest transition-colors',
-                  location.pathname === path ? 'text-gold' : 'text-white/70'
+                  'flex flex-col items-center justify-center gap-0.5 rounded-xl py-1 px-1.5 transition-all duration-300 relative min-w-[50px] active:scale-95',
+                  location.pathname === '/' ? 'text-gold font-bold' : 'text-white/60 hover:text-white'
                 )}
               >
-                <Icon size={20} />
-                <span className="line-clamp-1">{name}</span>
+                <Home size={18} className={cn("transition-all duration-300", location.pathname === '/' ? "scale-110 text-gold" : "opacity-80")} />
+                <span className="text-[8px] uppercase tracking-widest font-semibold line-clamp-1">Home</span>
+                {location.pathname === '/' && (
+                  <motion.div layoutId="mobileDot" className="w-1 h-1 bg-gold rounded-full absolute -bottom-1 left-1/2 -translate-x-1/2" />
+                )}
               </Link>
-            );
-          })}
-          <button
-            type="button"
-            onClick={() => setIsMoreOpen(!isMoreOpen)}
-            className={cn(
-              'flex flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-[10px] uppercase tracking-widest transition-colors',
-              isMoreOpen ? 'text-gold' : 'text-white/70'
-            )}
-          >
-            <MoreHorizontal size={20} />
-            <span>More</span>
-          </button>
+
+              {/* Offers */}
+              <Link
+                to="/offers"
+                className={cn(
+                  'flex flex-col items-center justify-center gap-0.5 rounded-xl py-1 px-1.5 transition-all duration-300 relative min-w-[50px] active:scale-95',
+                  location.pathname === '/offers' ? 'text-gold font-bold' : 'text-white/60 hover:text-white'
+                )}
+              >
+                <Gift size={18} className={cn("transition-all duration-300", location.pathname === '/offers' ? "scale-110 text-gold" : "opacity-80")} />
+                <span className="text-[8px] uppercase tracking-widest font-semibold line-clamp-1">Offers</span>
+                {location.pathname === '/offers' && (
+                  <motion.div layoutId="mobileDot" className="w-1 h-1 bg-gold rounded-full absolute -bottom-1 left-1/2 -translate-x-1/2" />
+                )}
+              </Link>
+            </div>
+
+            {/* Custom Background Notch SVG (placed between Left and Right wings) */}
+              {/* Dot active state for booking */}
+              {location.pathname === '/booking' && (
+                <div className="w-1 h-1 bg-gold rounded-full absolute bottom-1.5 left-1/2 -translate-x-1/2" />
+              )}
+            </div>
+
+            {/* Floating Booking Button */}
+            <Link
+              to="/booking"
+              className={cn(
+                "absolute left-1/2 -translate-x-1/2 z-20 w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 border-2 border-[#090909] active:scale-95 overflow-hidden shadow-[0_4px_15px_rgba(212,175,55,0.5)]",
+                location.pathname === '/booking' 
+                  ? "bg-[#D4AF37] text-black ring-4 ring-gold/20" 
+                  : "bg-gradient-to-br from-[#dfaf37] via-[#D4AF37] to-[#aa841c] text-black hover:scale-105"
+              )}
+              style={{ bottom: '16px' }}
+            >
+              <div className="relative w-8 h-8 flex items-center justify-center overflow-hidden">
+                <motion.div 
+                  animate={{ x: [ -22, 22 ] }}
+                  transition={{ 
+                    repeat: Infinity, 
+                    duration: 2.5,
+                    ease: "linear"
+                  }}
+                  className="flex shrink-0 text-black animate-pulse"
+                >
+                  <Car size={22} />
+                </motion.div>
+              </div>
+            </Link>
+
+            {/* Right Wing Container */}
+            <div className="flex-1 h-14 bg-black/95 backdrop-blur-md rounded-r-[24px] border-t border-r border-b border-gold/15 flex items-center justify-around px-1">
+              {/* Tours */}
+              <Link
+                to="/tours"
+                className={cn(
+                  'flex flex-col items-center justify-center gap-0.5 rounded-xl py-1 px-1.5 transition-all duration-300 relative min-w-[50px] active:scale-95',
+                  location.pathname === '/tours' ? 'text-gold font-bold' : 'text-white/60 hover:text-white'
+                )}
+              >
+                <MapPin size={18} className={cn("transition-all duration-300", location.pathname === '/tours' ? "scale-110 text-gold" : "opacity-80")} />
+                <span className="text-[8px] uppercase tracking-widest font-semibold line-clamp-1">Tours</span>
+                {location.pathname === '/tours' && (
+                  <motion.div layoutId="mobileDot" className="w-1 h-1 bg-gold rounded-full absolute -bottom-1 left-1/2 -translate-x-1/2" />
+                )}
+              </Link>
+
+              {/* More */}
+              <button
+                type="button"
+                onClick={() => setIsMoreOpen(!isMoreOpen)}
+                className={cn(
+                  'flex flex-col items-center justify-center gap-0.5 rounded-xl py-1 px-1.5 transition-all duration-300 relative min-w-[50px] active:scale-95',
+                  isMoreOpen ? 'text-gold font-bold' : 'text-white/60 hover:text-white'
+                )}
+              >
+                <ChevronUp size={18} className={cn("transition-all duration-300", isMoreOpen ? "rotate-180 scale-110 text-gold" : "opacity-80")} />
+                <span className="text-[8px] uppercase tracking-widest font-semibold line-clamp-1">More</span>
+                {isMoreOpen && (
+                  <motion.div layoutId="mobileDot" className="w-1 h-1 bg-gold rounded-full absolute -bottom-1 left-1/2 -translate-x-1/2" />
+                )}
+              </button>
+            </div>
+
+          </div>
         </div>
 
+        {/* More bottomsheet modal - Grid Arrangement */}
         <AnimatePresence>
           {isMoreOpen && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 20 }}
-              className="fixed inset-x-4 bottom-20 z-50 rounded-[32px] border border-white/10 bg-black/95 p-6 shadow-2xl md:hidden overflow-y-auto max-h-[60vh] custom-scrollbar"
-            >
-              <div className="flex flex-col gap-4 text-left">
-                {(headerMenu.length > 4 ? headerMenu.slice(4) : moreLinks).map((link: any, lIdx: number) => (
-                  <div key={`${link.label || link.name}-${lIdx}`} className="space-y-3">
-                    <div className="flex items-center gap-2">
+            <>
+              {/* Semi-transparent Overlay Background */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsMoreOpen(false)}
+                className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40 md:hidden"
+              />
+
+              <motion.div
+                initial={{ opacity: 0, y: '100%' }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: '100%' }}
+                transition={{ type: 'spring', damping: 25, stiffness: 220 }}
+                className="fixed inset-x-0 bottom-0 z-50 rounded-t-[32px] border-t border-gold/20 bg-black/98 p-6 shadow-[0_-20px_50px_rgba(0,0,0,0.95)] md:hidden max-h-[80vh] overflow-y-auto custom-scrollbar pb-12"
+              >
+                {/* Visual Pill Grab Handle */}
+                <div className="w-12 h-1.5 bg-white/20 rounded-full mx-auto mb-6" />
+
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xs font-black uppercase tracking-[0.25em] text-gold">Explore Menu</h3>
+                  <button
+                    onClick={() => setIsMoreOpen(false)}
+                    className="text-[9px] uppercase font-bold tracking-widest text-[#D4AF37] hover:text-white bg-gold/10 px-3 py-1.5 rounded-full border border-gold/20"
+                  >
+                    Close
+                  </button>
+                </div>
+
+                {/* Modular Touch Grid Arrangement (4 Columns) */}
+                <div className="grid grid-cols-4 gap-2 pb-8">
+                  {gridMoreLinks.map((link: any, lIdx: number) => {
+                    const name = link.name;
+                    const IconComponent = link.icon || Sparkles;
+
+                    if (link.type === 'search') {
+                      return (
+                        <button
+                          key={`more-grid-search-${lIdx}`}
+                          onClick={() => {
+                            setIsMoreOpen(false);
+                            window.dispatchEvent(new Event('open-search-dialog'));
+                          }}
+                          className="w-full rounded-2xl border border-gold/15 bg-[#090909] py-3.5 px-1 flex flex-col items-center justify-center text-center gap-1.5 aspect-square transition-all duration-300 active:scale-95 hover:border-gold/35 hover:bg-[#0d0d0d]"
+                        >
+                          <div className="p-1.5 rounded-xl bg-gold text-black shadow-lg shadow-gold/25">
+                            <IconComponent size={14} />
+                          </div>
+                          <span className="text-[8px] uppercase tracking-widest font-bold text-white/85 line-clamp-1">
+                            Search
+                          </span>
+                        </button>
+                      );
+                    }
+
+                    if (name === 'Dashboard') {
+                      const isLogged = !!user;
+                      const role = userProfile?.role;
+                      const isActive = location.pathname === link.path;
+                      
+                      // Role specific properties
+                      let RoleIcon = LayoutDashboard;
+                      let roleBadgeClass = "bg-white/5 text-gold/90 border-white/5";
+                      let roleButtonBorderClass = "border-white/5 text-white/80 hover:border-gold/15 hover:bg-[#0d0d0d]";
+                      
+                      if (isLogged) {
+                        if (role === 'admin') {
+                          RoleIcon = ShieldCheck;
+                          roleBadgeClass = isActive ? "bg-red-500 text-black shadow-lg shadow-red-500/20" : "bg-red-500/10 text-red-400";
+                          roleButtonBorderClass = isActive 
+                            ? "border-red-500/40 text-red-00 bg-red-500/5 shadow-[0_4px_12px_rgba(239,68,68,0.1)]" 
+                            : "border-red-500/15 text-red-400 hover:border-red-500/30 hover:bg-[#120808]";
+                        } else if (role === 'driver') {
+                          RoleIcon = Truck;
+                          roleBadgeClass = isActive ? "bg-blue-500 text-black shadow-lg shadow-blue-500/20" : "bg-blue-500/10 text-blue-400";
+                          roleButtonBorderClass = isActive 
+                            ? "border-blue-500/40 text-blue-00 bg-blue-500/5 shadow-[0_4px_12px_rgba(59,130,246,0.1)]" 
+                            : "border-blue-500/15 text-blue-400 hover:border-blue-500/35 hover:bg-[#080d12]";
+                        } else {
+                          // customer/user
+                          RoleIcon = UserCircle;
+                          roleBadgeClass = isActive ? "bg-gold text-black shadow-lg shadow-gold/20" : "bg-gold/10 text-gold";
+                          roleButtonBorderClass = isActive 
+                            ? "border-gold/40 text-gold bg-gold/5 shadow-[0_4px_12px_rgba(212,175,55,0.08)]" 
+                            : "border-gold/15 text-gold/90 hover:border-gold/25 hover:bg-[#121008]";
+                        }
+                      } else {
+                        // Default Guest
+                        RoleIcon = LayoutDashboard;
+                        roleBadgeClass = isActive ? "bg-gold text-black shadow-lg shadow-gold/20" : "bg-white/5 text-gold/90";
+                        roleButtonBorderClass = isActive 
+                          ? "border-gold/40 text-gold bg-gold/5 shadow-[0_4px_12px_rgba(212,175,55,0.08)]" 
+                          : "border-white/5 text-white/80 hover:border-gold/15 hover:bg-[#0d0d0d]";
+                      }
+
+                      return (
+                        <Link
+                          key={`more-grid-dashboard-${lIdx}`}
+                          to={link.path}
+                          onClick={() => setIsMoreOpen(false)}
+                          className={cn(
+                            "w-full rounded-2xl border py-3.5 px-1 flex flex-col items-center justify-center text-center gap-1.5 aspect-square transition-all duration-300 active:scale-95",
+                            roleButtonBorderClass
+                          )}
+                        >
+                          <div className={cn(
+                            "p-1.5 rounded-xl transition-all duration-300",
+                            roleBadgeClass
+                          )}>
+                            <RoleIcon size={14} />
+                          </div>
+                          <span className="text-[8px] uppercase tracking-widest font-bold line-clamp-1">
+                            Dashboard
+                          </span>
+                        </Link>
+                      );
+                    }
+
+                    if (link.type === 'auth') {
+                      const isLogged = !!user;
+                      const authIcon = isLogged ? LogOut : LogIn;
+                      const authLabel = isLogged ? 'Logout' : 'Login';
+                      
+                      const handleAuthClick = () => {
+                        setIsMoreOpen(false);
+                        if (isLogged) {
+                          handleLogout();
+                        }
+                      };
+
+                      if (isLogged) {
+                        return (
+                          <button
+                            key={`more-grid-auth-${lIdx}`}
+                            onClick={handleAuthClick}
+                            className="w-full rounded-2xl border border-red-500/10 bg-[#090909] py-3.5 px-1 flex flex-col items-center justify-center text-center gap-1.5 aspect-square transition-all duration-300 active:scale-95 hover:border-red-500/30 hover:bg-[#120808]"
+                          >
+                            <div className="p-1.5 rounded-xl bg-red-500/10 text-red-400">
+                              <LogOut size={14} />
+                            </div>
+                            <span className="text-[8px] uppercase tracking-widest font-bold text-red-400 line-clamp-1">
+                              Logout
+                            </span>
+                          </button>
+                        );
+                      } else {
+                        return (
+                          <Link
+                            key={`more-grid-auth-${lIdx}`}
+                            to="/login"
+                            onClick={() => setIsMoreOpen(false)}
+                            className={cn(
+                              "w-full rounded-2xl border border-white/5 bg-[#090909] py-3.5 px-1 flex flex-col items-center justify-center text-center gap-1.5 aspect-square transition-all duration-300 active:scale-95",
+                              location.pathname === '/login'
+                                ? "border-gold/40 text-gold bg-gold/5 shadow-[0_4px_12px_rgba(212,175,55,0.08)]"
+                                : "text-white/80 hover:border-gold/15 hover:bg-[#0d0d0d]"
+                            )}
+                          >
+                            <div className={cn(
+                              "p-1.5 rounded-xl transition-all duration-300",
+                              location.pathname === '/login' ? "bg-gold text-black" : "bg-white/5 text-gold/90"
+                            )}>
+                              <LogIn size={14} />
+                            </div>
+                            <span className="text-[8px] uppercase tracking-widest font-bold line-clamp-1">
+                              Login
+                            </span>
+                          </Link>
+                        );
+                      }
+                    }
+
+                    // Default links (Services, Fleet, Blog, About, Contact)
+                    const isActive = location.pathname === link.path;
+                    return (
                       <Link
-                        to={link.path || link.url || '#'}
-                        onClick={() => !link.items && setIsMoreOpen(false)}
+                        key={`more-grid-link-${link.name}-${lIdx}`}
+                        to={link.path}
+                        onClick={() => setIsMoreOpen(false)}
                         className={cn(
-                          'flex-1 rounded-2xl border border-white/10 bg-white/5 px-6 py-4 text-[10px] uppercase tracking-widest font-black transition-all hover:bg-gold hover:text-black',
-                          location.pathname === (link.path || link.url) ? 'text-gold border-gold/40' : 'text-white/70'
+                          "w-full rounded-2xl border border-white/5 bg-[#090909] py-3.5 px-1 flex flex-col items-center justify-center text-center gap-1.5 aspect-square transition-all duration-300 active:scale-95",
+                          isActive 
+                            ? "border-gold/40 text-gold bg-gold/5 shadow-[0_4px_12px_rgba(212,175,55,0.08)]" 
+                            : "text-white/80 hover:border-gold/15 hover:bg-[#0d0d0d]"
                         )}
                       >
-                        {link.name || link.label}
+                        <div className={cn(
+                          "p-1.5 rounded-xl transition-all duration-300",
+                          isActive ? "bg-gold text-black" : "bg-white/5 text-gold/90"
+                        )}>
+                          <IconComponent size={14} />
+                        </div>
+                        <span className="text-[8px] uppercase tracking-widest font-bold line-clamp-1">
+                          {name}
+                        </span>
                       </Link>
-                      {link.items && link.items.length > 0 && (
-                        <button
-                          onClick={() => {
-                            const key = `mobile-${link.url || link.path || lIdx}`;
-                            setActiveSubMenu(activeSubMenu === key ? null : key);
-                          }}
-                          className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white/40 hover:text-gold transition-all"
-                        >
-                          <ChevronDown size={18} className={cn("transition-transform duration-300", activeSubMenu === `mobile-${link.url || link.path || lIdx}` && "rotate-180")} />
-                        </button>
-                      )}
-                    </div>
-                    
-                    <AnimatePresence>
-                      {link.items && link.items.length > 0 && activeSubMenu === `mobile-${link.url || link.path || lIdx}` && (
-                        <motion.div
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: 'auto', opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          className="overflow-hidden border-l-2 border-gold/20 ml-4 pl-6 space-y-3 pt-1"
-                        >
-                          {link.items.map((sub: any, sIdx: number) => (
-                            <Link
-                              key={`${link.label || link.name}-mobile-sub-${sIdx}`}
-                              to={sub.url}
-                              onClick={() => {
-                                setIsMoreOpen(false);
-                                setActiveSubMenu(null);
-                              }}
-                              className="block text-[10px] uppercase tracking-widest font-bold text-white/40 hover:text-gold transition-colors py-1"
-                            >
-                              {sub.label}
-                            </Link>
-                          ))}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                ))}
-              </div>
-            </motion.div>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            </>
           )}
         </AnimatePresence>
       </div>
