@@ -655,6 +655,30 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
     return true;
   });
 
+  const [isGeneratingSitemap, setIsGeneratingSitemap] = useState(false);
+
+  const handleGenerateSitemap = async () => {
+    setIsGeneratingSitemap(true);
+    try {
+      const response = await fetch('/api/admin/generate-sitemap', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await response.json();
+      if (response.ok && data.success) {
+        showDashboardNotice('success', 'Sitemap generated successfully! All XML & HTML files updated in workspace.', 'Sitemap Generated');
+      } else {
+        showDashboardNotice('error', `Failed to generate sitemap: ${data.error || 'Server error'}`, 'Generation Failed');
+      }
+    } catch (err: any) {
+      showDashboardNotice('error', `Network error generating sitemap: ${err.message || 'Check connection'}`, 'Generation Failed');
+    } finally {
+      setIsGeneratingSitemap(false);
+    }
+  };
+
   const handleUpdateRobots = async (robotsText: string) => {
     setIsSaving(true);
     try {
@@ -1384,9 +1408,33 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
               <div className="bg-white/5 p-8 rounded-3xl border border-white/5 space-y-6 text-left">
                 <div className="flex items-center justify-between border-b border-white/5 pb-4">
                   <p className="text-[10px] text-white/40 uppercase tracking-widest">Active crawable indexes (static & dynamic)</p>
-                  <div className="flex items-center gap-1.5 font-mono text-[9px] text-gold uppercase tracking-wider bg-gold/10 px-2.5 py-1 rounded border border-gold/15">
-                    <CheckCircle size={10} className="text-gold" />
-                    Dynamic XML live
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={handleGenerateSitemap}
+                      disabled={isGeneratingSitemap}
+                      className={cn(
+                        "flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold tracking-wider uppercase border transition-all cursor-pointer",
+                        isGeneratingSitemap
+                          ? "bg-gold/5 border-gold/10 text-gold/40 cursor-not-allowed"
+                          : "bg-gold text-black border-gold hover:bg-black hover:text-gold"
+                      )}
+                    >
+                      {isGeneratingSitemap ? (
+                        <>
+                          <Loader2 size={13} className="animate-spin" />
+                          Generating...
+                        </>
+                      ) : (
+                        <>
+                          <Globe size={13} />
+                          Generate Sitemap
+                        </>
+                      )}
+                    </button>
+                    <div className="flex items-center gap-1.5 font-mono text-[9px] text-gold uppercase tracking-wider bg-gold/10 px-2.5 py-1 rounded border border-gold/15">
+                      <CheckCircle size={10} className="text-gold" />
+                      Dynamic XML live
+                    </div>
                   </div>
                 </div>
 

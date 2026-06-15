@@ -294,6 +294,28 @@ async function startServer() {
     }
   });
 
+  // Manual Sitemap Generation Endpoint
+  app.post('/api/admin/generate-sitemap', async (req, res) => {
+    try {
+      const { exec } = await import('child_process');
+      const scriptPath = path.join(process.cwd(), 'scripts', 'generate-sitemap.ts');
+      
+      console.log(`Manual sitemap trigger executing: npx tsx "${scriptPath}"`);
+      
+      exec(`npx tsx "${scriptPath}"`, (error, stdout, stderr) => {
+        if (error) {
+          console.error(`Sitemap generation execution error: ${error.message}`);
+          return res.status(500).json({ success: false, error: error.message, stderr: stderr || '' });
+        }
+        console.log(`Sitemap generation execution success:\n${stdout}`);
+        res.json({ success: true, message: 'Sitemap files regenerated successfully.', stdout });
+      });
+    } catch (err: any) {
+      console.error('Error in manual sitemap trigger:', err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   // Favicon Redirect
   app.get('/favicon.ico', async (req, res, next) => {
     try {

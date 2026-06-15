@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Home, Gift, MapPin, Briefcase, MoreHorizontal, User, CalendarDays, LogOut, ChevronDown, ChevronUp, LogIn, ShieldCheck, Truck, UserCircle, LayoutDashboard, Search, Car, BookOpen, Phone, HelpCircle, Sparkles } from 'lucide-react';
+import { Home, Gift, MapPin, Briefcase, MoreHorizontal, User, CalendarDays, LogOut, ChevronDown, ChevronUp, LogIn, ShieldCheck, Truck, UserCircle, LayoutDashboard, Search, Car, BookOpen, Phone, HelpCircle, Sparkles, ChevronsUp, CarFront } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { cn } from '../../lib/utils';
 import { auth, db } from '../../lib/firebase';
@@ -41,14 +41,6 @@ export default function Navbar() {
     : userProfile?.role === 'driver'
       ? 'text-blue-400'
       : 'text-gold';
-
-  const mobileNavItems = [
-    { name: 'Home', path: '/', Icon: Home },
-    { name: 'Offers', path: '/offers', Icon: Gift },
-    { name: 'Tours', path: '/tours', Icon: MapPin },
-    { name: 'Services', path: '/services', Icon: Briefcase },
-    { name: 'More', action: () => setIsMoreOpen(!isMoreOpen), Icon: MoreHorizontal },
-  ];
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 50);
@@ -108,23 +100,23 @@ export default function Navbar() {
     await signOut(auth);
   };
 
-  const headerMenu = systemSettings?.menus?.headerActive && (systemSettings?.menus?.header || []).length > 0 
-    ? systemSettings.menus.header 
+  const headerMenu = systemSettings?.menus?.headerActive && (systemSettings?.menus?.header || []).length > 0
+    ? systemSettings.menus.header
     : navLinks;
 
   const hasManualMore = headerMenu !== navLinks && headerMenu.some((m: any) => m.isMore);
 
-  const displayNavLinks = headerMenu === navLinks 
-    ? navLinks 
-    : (hasManualMore 
-        ? headerMenu.filter((m: any) => !m.isMore) 
-        : headerMenu.slice(0, 4));
+  const displayNavLinks = headerMenu === navLinks
+    ? navLinks
+    : (hasManualMore
+      ? headerMenu.filter((m: any) => !m.isMore)
+      : headerMenu.slice(0, 4));
 
-  const displayMoreLinks = headerMenu === navLinks 
-    ? moreLinks 
-    : (hasManualMore 
-        ? headerMenu.filter((m: any) => m.isMore) 
-        : headerMenu.slice(4));
+  const displayMoreLinks = headerMenu === navLinks
+    ? moreLinks
+    : (hasManualMore
+      ? headerMenu.filter((m: any) => m.isMore)
+      : headerMenu.slice(4));
 
   // Static config for More menu (independent of backend CMS/settings changes)
   const gridMoreLinks = [
@@ -186,7 +178,7 @@ export default function Navbar() {
                         )}
                       />
                     </Link>
-                    <button 
+                    <button
                       onClick={(e) => {
                         e.preventDefault();
                         const key = `${link.name || link.label}-${linkIdx}`;
@@ -400,7 +392,7 @@ export default function Navbar() {
             )}
 
             <div className="hidden md:flex items-center md:gap-4 lg:gap-6">
-              <button 
+              <button
                 id="navbar-search-trigger"
                 onClick={() => window.dispatchEvent(new Event('open-search-dialog'))}
                 className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-white/70 hover:text-gold hover:border-gold/50 hover:bg-white/[0.08] transition-all text-[9px] lg:text-xs font-bold uppercase tracking-wider cursor-pointer"
@@ -457,19 +449,20 @@ export default function Navbar() {
                   <LogIn size={20} />
                 </Link>
               )}
-              
-              <Link to="/booking" className="group relative overflow-hidden bg-gold text-black px-4 py-1.5 rounded-full text-[10px] lg:text-xs font-black uppercase tracking-[0.2em] shadow-[0_0_20px_rgba(212,175,55,0.2)] transition-all duration-500 hover:shadow-[0_0_30px_rgba(212,175,55,0.5)] hover:scale-105 active:scale-95 whitespace-nowrap flex items-center gap-3">
+
+              <Link to="/booking" className="group relative overflow-hidden bg-gold text-black px-4 py-1.5 rounded-full text-[10px] lg:text-xs font-black uppercase tracking-[0.2em] shadow-[0_0_20px_rgba(212,175,55,0.2)] transition-all duration-500 hover:shadow-[0_0_30px_rgba(212,175,55,0.5)] hover:scale-105 active:scale-95 whitespace-nowrap flex items-center gap-1">
                 <div className="relative z-10 flex items-center overflow-hidden w-6 h-6 group-hover:text-gold transition-colors duration-500">
-                  <motion.div 
-                    animate={{ x: [ -25, 25 ] }}
-                    transition={{ 
-                      repeat: Infinity, 
-                      duration: 3,
-                      ease: "linear"
+                  <motion.div
+                    animate={{ scale: [1, 1.1, 1] }}
+                    transition={{
+                      repeat: Infinity,
+                      duration: 1.5,
+                      ease: "easeInOut"
                     }}
                     className="flex shrink-0 font-bold"
                   >
-                    <Car size={18} />
+
+                    <CarFront size={18} />
                   </motion.div>
                 </div>
                 <span className="relative z-10 group-hover:text-gold transition-colors duration-500 hidden md:inline-block">Book Now</span>
@@ -494,97 +487,127 @@ export default function Navbar() {
 
       {/* Mobile Bottom Navigation */}
       <div className="fixed inset-x-0 bottom-0 z-50 md:hidden bg-transparent select-none pb-safe">
-        <div className="mx-auto max-w-sm px-4 pb-5 filter drop-shadow-[0_-12px_24px_rgba(212,175,55,0.35)]">
-          <div className="flex h-14 items-end relative w-full overflow-visible">
-            
+        <div className="mx-auto max-w-sm px-4 pb-3 filter drop-shadow-[0_12px_24px_rgba(212,175,55,0.35)]">
+          <div className="flex h-11 items-end relative w-full overflow-visible">
+
             {/* Left Wing Container */}
-            <div className="flex-1 h-14 bg-black/95 backdrop-blur-md rounded-l-[24px] border-t border-l border-b border-gold/15 flex items-center justify-around px-1">
+            <div className="flex-1 h-12 bg-black/95 backdrop-blur-md rounded-l-2xl border-l border-b border-gold/15 flex items-center justify-around px-1 relative">
+              {/* Left Wing Gradient Top Border */}
+              <div 
+                className="absolute top-0 left-0 right-0 h-[1.2px] pointer-events-none"
+                style={{
+                  background: 'linear-gradient(to right, rgba(197, 160, 40, 0.15), rgba(197, 160, 40, 0.6))',
+                  borderTopLeftRadius: 'rounded-2xl'
+                }}
+              />
               {/* Home */}
               <Link
                 to="/"
                 className={cn(
-                  'flex flex-col items-center justify-center gap-0.5 rounded-xl py-1 px-1.5 transition-all duration-300 relative min-w-[50px] active:scale-95',
+                  'flex items-center justify-center transition-all duration-300 relative min-w-[50px] h-full active:scale-95',
                   location.pathname === '/' ? 'text-gold font-bold' : 'text-white/60 hover:text-white'
                 )}
               >
-                <Home size={18} className={cn("transition-all duration-300", location.pathname === '/' ? "scale-110 text-gold" : "opacity-80")} />
-                <span className="text-[8px] uppercase tracking-widest font-semibold line-clamp-1">Home</span>
-                {location.pathname === '/' && (
-                  <motion.div layoutId="mobileDot" className="w-1 h-1 bg-gold rounded-full absolute -bottom-1 left-1/2 -translate-x-1/2" />
+                <Home size={18} className={cn("transition-all duration-300 -mt-1", location.pathname === '/' ? "scale-110 text-gold" : "opacity-80")} />
+                {location.pathname === '/' ? (
+                  <motion.div layoutId="mobileDot" className="w-1 h-1 bg-gold rounded-full absolute bottom-1 left-1/2 -translate-x-1/2" />
+                ) : (
+                  <span className="absolute bottom-[2px] left-1/2 -translate-x-1/2 text-[8px] uppercase tracking-wider font-extrabold text-white/40 block whitespace-nowrap scale-90">Home</span>
                 )}
-              </Link>
+               </Link>
 
               {/* Offers */}
               <Link
                 to="/offers"
                 className={cn(
-                  'flex flex-col items-center justify-center gap-0.5 rounded-xl py-1 px-1.5 transition-all duration-300 relative min-w-[50px] active:scale-95',
+                  'flex items-center justify-center transition-all duration-300 relative min-w-[50px] h-full active:scale-95',
                   location.pathname === '/offers' ? 'text-gold font-bold' : 'text-white/60 hover:text-white'
                 )}
               >
-                <Gift size={18} className={cn("transition-all duration-300", location.pathname === '/offers' ? "scale-110 text-gold" : "opacity-80")} />
-                <span className="text-[8px] uppercase tracking-widest font-semibold line-clamp-1">Offers</span>
-                {location.pathname === '/offers' && (
-                  <motion.div layoutId="mobileDot" className="w-1 h-1 bg-gold rounded-full absolute -bottom-1 left-1/2 -translate-x-1/2" />
+                <Gift size={18} className={cn("transition-all duration-300 -mt-1", location.pathname === '/offers' ? "scale-110 text-gold" : "opacity-80")} />
+                {location.pathname === '/offers' ? (
+                  <motion.div layoutId="mobileDot" className="w-1 h-1 bg-gold rounded-full absolute bottom-1 left-1/2 -translate-x-1/2" />
+                ) : (
+                  <span className="absolute bottom-[2px] left-1/2 -translate-x-1/2 text-[8px] uppercase tracking-wider font-extrabold text-white/40 block whitespace-nowrap scale-90">Offers</span>
                 )}
               </Link>
             </div>
 
             {/* Custom Background Notch SVG (placed between Left and Right wings) */}
-            <div className="w-[80px] h-14 relative overflow-visible pointer-events-none -mx-px flex justify-center">
-              <svg width="80" height="56" viewBox="0 0 80 56" fill="none" xmlns="http://www.w3.org/2000/svg" className="absolute top-0 left-0 w-full h-full">
-                {/* Custom Curved Segment Background */}
-                <path d="M0 0 L20 0 C27 0 29 8 31 16 C33 24 35 34 40 34 C45 34 47 24 49 16 C51 8 53 0 60 0 L80 0 L80 56 L0 56 Z" fill="rgba(0,0,0,0.95)" />
-                {/* Golden/White top border tracing the curve */}
-                <path d="M0 0.5 L20 0.5 C27 0.5 29 8.5 31 16.5 C33 24.5 35 34.5 40 34.5 C45 34.5 47 24.5 49 16.5 C51 8.5 53 0.5 60 0.5 L80 0.5" stroke="rgba(212,175,55,0.25)" strokeWidth="1" />
+            <div className="w-[80px] h-12 relative overflow-visible pointer-events-none -mx-px flex justify-center">
+              <svg width="80" height="12" viewBox="0 0 80 47" fill="none" xmlns="http://w3.org" className="absolute top-0 left-0 w-full h-full">
+                <defs>
+                  <linearGradient id="goldBorderGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#C5A028" stopOpacity="0.6" />
+                    <stop offset="100%" stopColor="#AA6B39" stopOpacity="0.6" />
+                  </linearGradient>
+                </defs>
+                <path d="M 0,0 H 4 C 12,0 15.2,3 16,9 A 25 25 0 0 0 65 9 C 65,0 75,0 76,0 H 80 V 47 H 0 Z" fill="rgba(0,0,0,0.95)" />
+                <path d="M 0,0 H 4 C 12,0 15.2,3 16,9 A 25 25 0 0 0 65 9 C 65,0 75,0 76,0 H 80" stroke="url(#goldBorderGradient)" strokeWidth="1" fill="none" strokeLinecap="round" />
               </svg>
-              
-              {/* Dot active state for booking */}
-              {location.pathname === '/booking' && (
-                <div className="w-1 h-1 bg-gold rounded-full absolute bottom-1.5 left-1/2 -translate-x-1/2" />
+
+
+              {/* Centre Icon Text Label Book Now and Active time dots show Otherwise label name show */}
+              {location.pathname === '/booking' ? (
+                <div className="w-1 h-1 bg-gold rounded-full absolute bottom-1 left-1/2 -translate-x-1/2 animate-pulse" />
+              ) : (
+                <span className="absolute bottom-[2px] left-1/2 -translate-x-1/2 text-[8px] uppercase tracking-wider font-extrabold text-white/40 block whitespace-nowrap scale-90">Book Now</span>
               )}
             </div>
 
-            {/* Floating Booking Button */}
+            {/* Floating Booking Button - Perfectly nested down but not overshooting the curve */}
             <Link
               to="/booking"
               className={cn(
-                "absolute left-1/2 -translate-x-1/2 z-20 w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 border-2 border-[#090909] active:scale-95 overflow-hidden shadow-[0_4px_15px_rgba(212,175,55,0.5)]",
-                location.pathname === '/booking' 
-                  ? "bg-[#D4AF37] text-black ring-4 ring-gold/20" 
-                  : "bg-gradient-to-br from-[#dfaf37] via-[#D4AF37] to-[#aa841c] text-black hover:scale-105"
+                "absolute left-1/2 -translate-x-1/2 z-20 w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 active:scale-95 overflow-hidden shadow-[0_4px_15px_rgba(212,175,55,0.4)]",
+                location.pathname === '/booking'
+                  ? "ring-2 ring-black/20"
+                  : "hover:scale-105"
               )}
-              style={{ bottom: '16px' }}
+              style={{ 
+                top: '-17px', 
+                bottom: 'auto',
+                background: 'linear-gradient(135deg, #C5A028 0%, #AA6B39 100%)'
+              }}
             >
-              <div className="relative w-8 h-8 flex items-center justify-center overflow-hidden">
-                <motion.div 
-                  animate={{ x: [ -22, 22 ] }}
-                  transition={{ 
-                    repeat: Infinity, 
-                    duration: 2.5,
-                    ease: "linear"
+              <div className="relative w-6 h-6 flex items-center justify-center overflow-hidden">
+                <motion.div
+                  animate={{ scale: [1, 1.1, 1], opacity: [1, 0.8, 1] }}
+                  transition={{
+                    repeat: Infinity,
+                    duration: 2,
+                    ease: "easeInOut"
                   }}
-                  className="flex shrink-0 text-black animate-pulse"
+                  className="flex shrink-0 text-black font-bold"
                 >
-                  <Car size={18} />
+                  <CarFront size={20} />
                 </motion.div>
               </div>
             </Link>
 
             {/* Right Wing Container */}
-            <div className="flex-1 h-14 bg-black/95 backdrop-blur-md rounded-r-[24px] border-t border-r border-b border-gold/15 flex items-center justify-around px-1">
+            <div className="flex-1 h-12 bg-black/95 backdrop-blur-md rounded-r-2xl border-r border-b border-gold/15 flex items-center justify-around px-1 relative">
+              {/* Right Wing Gradient Top Border */}
+              <div 
+                className="absolute top-0 left-0 right-0 h-[1.2px] pointer-events-none"
+                style={{
+                  background: 'linear-gradient(to left, rgba(197, 160, 40, 0.15), rgba(197, 160, 40, 0.6))',
+                  borderTopRightRadius: 'rounded-2xl'
+                }}
+              />
               {/* Tours */}
               <Link
                 to="/tours"
                 className={cn(
-                  'flex flex-col items-center justify-center gap-0.5 rounded-xl py-1 px-1.5 transition-all duration-300 relative min-w-[50px] active:scale-95',
+                  'flex items-center justify-center transition-all duration-300 relative min-w-[50px] h-full active:scale-95',
                   location.pathname === '/tours' ? 'text-gold font-bold' : 'text-white/60 hover:text-white'
                 )}
               >
-                <MapPin size={18} className={cn("transition-all duration-300", location.pathname === '/tours' ? "scale-110 text-gold" : "opacity-80")} />
-                <span className="text-[8px] uppercase tracking-widest font-semibold line-clamp-1">Tours</span>
-                {location.pathname === '/tours' && (
-                  <motion.div layoutId="mobileDot" className="w-1 h-1 bg-gold rounded-full absolute -bottom-1 left-1/2 -translate-x-1/2" />
+                <MapPin size={18} className={cn("transition-all duration-300 -mt-1", location.pathname === '/tours' ? "scale-110 text-gold" : "opacity-80")} />
+                {location.pathname === '/tours' ? (
+                  <motion.div layoutId="mobileDot" className="w-1 h-1 bg-gold rounded-full absolute bottom-1 left-1/2 -translate-x-1/2" />
+                ) : (
+                  <span className="absolute bottom-[2px] left-1/2 -translate-x-1/2 text-[8px] uppercase tracking-wider font-extrabold text-white/40 block whitespace-nowrap scale-90">Tours</span>
                 )}
               </Link>
 
@@ -593,14 +616,15 @@ export default function Navbar() {
                 type="button"
                 onClick={() => setIsMoreOpen(!isMoreOpen)}
                 className={cn(
-                  'flex flex-col items-center justify-center gap-0.5 rounded-xl py-1 px-1.5 transition-all duration-300 relative min-w-[50px] active:scale-95',
+                  'flex items-center justify-center transition-all duration-300 relative min-w-[50px] h-full active:scale-95',
                   isMoreOpen ? 'text-gold font-bold' : 'text-white/60 hover:text-white'
                 )}
               >
-                <ChevronUp size={18} className={cn("transition-all duration-300", isMoreOpen ? "rotate-180 scale-110 text-gold" : "opacity-80")} />
-                <span className="text-[8px] uppercase tracking-widest font-semibold line-clamp-1">More</span>
-                {isMoreOpen && (
-                  <motion.div layoutId="mobileDot" className="w-1 h-1 bg-gold rounded-full absolute -bottom-1 left-1/2 -translate-x-1/2" />
+                <ChevronsUp size={18} className={cn("transition-all duration-300 -mt-1", isMoreOpen ? "rotate-180 scale-110 text-gold" : "opacity-80")} />
+                {isMoreOpen ? (
+                  <motion.div layoutId="mobileDot" className="w-1 h-1 bg-gold rounded-full absolute bottom-1 left-1/2 -translate-x-1/2" />
+                ) : (
+                  <span className="absolute bottom-[2px] left-1/2 -translate-x-1/2 text-[8px] uppercase tracking-wider font-extrabold text-white/40 block whitespace-nowrap scale-90">More</span>
                 )}
               </button>
             </div>
@@ -671,39 +695,39 @@ export default function Navbar() {
                       const isLogged = !!user;
                       const role = userProfile?.role;
                       const isActive = location.pathname === link.path;
-                      
+
                       // Role specific properties
                       let RoleIcon = LayoutDashboard;
                       let roleBadgeClass = "bg-white/5 text-gold/90 border-white/5";
                       let roleButtonBorderClass = "border-white/5 text-white/80 hover:border-gold/15 hover:bg-[#0d0d0d]";
-                      
+
                       if (isLogged) {
                         if (role === 'admin') {
                           RoleIcon = ShieldCheck;
                           roleBadgeClass = isActive ? "bg-red-500 text-black shadow-lg shadow-red-500/20" : "bg-red-500/10 text-red-400";
-                          roleButtonBorderClass = isActive 
-                            ? "border-red-500/40 text-red-00 bg-red-500/5 shadow-[0_4px_12px_rgba(239,68,68,0.1)]" 
+                          roleButtonBorderClass = isActive
+                            ? "border-red-500/40 text-red-00 bg-red-500/5 shadow-[0_4px_12px_rgba(239,68,68,0.1)]"
                             : "border-red-500/15 text-red-400 hover:border-red-500/30 hover:bg-[#120808]";
                         } else if (role === 'driver') {
                           RoleIcon = Truck;
                           roleBadgeClass = isActive ? "bg-blue-500 text-black shadow-lg shadow-blue-500/20" : "bg-blue-500/10 text-blue-400";
-                          roleButtonBorderClass = isActive 
-                            ? "border-blue-500/40 text-blue-00 bg-blue-500/5 shadow-[0_4px_12px_rgba(59,130,246,0.1)]" 
+                          roleButtonBorderClass = isActive
+                            ? "border-blue-500/40 text-blue-00 bg-blue-500/5 shadow-[0_4px_12px_rgba(59,130,246,0.1)]"
                             : "border-blue-500/15 text-blue-400 hover:border-blue-500/35 hover:bg-[#080d12]";
                         } else {
                           // customer/user
                           RoleIcon = UserCircle;
                           roleBadgeClass = isActive ? "bg-gold text-black shadow-lg shadow-gold/20" : "bg-gold/10 text-gold";
-                          roleButtonBorderClass = isActive 
-                            ? "border-gold/40 text-gold bg-gold/5 shadow-[0_4px_12px_rgba(212,175,55,0.08)]" 
+                          roleButtonBorderClass = isActive
+                            ? "border-gold/40 text-gold bg-gold/5 shadow-[0_4px_12px_rgba(212,175,55,0.08)]"
                             : "border-gold/15 text-gold/90 hover:border-gold/25 hover:bg-[#121008]";
                         }
                       } else {
                         // Default Guest
                         RoleIcon = LayoutDashboard;
                         roleBadgeClass = isActive ? "bg-gold text-black shadow-lg shadow-gold/20" : "bg-white/5 text-gold/90";
-                        roleButtonBorderClass = isActive 
-                          ? "border-gold/40 text-gold bg-gold/5 shadow-[0_4px_12px_rgba(212,175,55,0.08)]" 
+                        roleButtonBorderClass = isActive
+                          ? "border-gold/40 text-gold bg-gold/5 shadow-[0_4px_12px_rgba(212,175,55,0.08)]"
                           : "border-white/5 text-white/80 hover:border-gold/15 hover:bg-[#0d0d0d]";
                       }
 
@@ -734,7 +758,7 @@ export default function Navbar() {
                       const isLogged = !!user;
                       const authIcon = isLogged ? LogOut : LogIn;
                       const authLabel = isLogged ? 'Logout' : 'Login';
-                      
+
                       const handleAuthClick = () => {
                         setIsMoreOpen(false);
                         if (isLogged) {
@@ -793,8 +817,8 @@ export default function Navbar() {
                         onClick={() => setIsMoreOpen(false)}
                         className={cn(
                           "w-full rounded-2xl border border-white/5 bg-[#090909] py-3.5 px-1 flex flex-col items-center justify-center text-center gap-1.5 aspect-square transition-all duration-300 active:scale-95",
-                          isActive 
-                            ? "border-gold/40 text-gold bg-gold/5 shadow-[0_4px_12px_rgba(212,175,55,0.08)]" 
+                          isActive
+                            ? "border-gold/40 text-gold bg-gold/5 shadow-[0_4px_12px_rgba(212,175,55,0.08)]"
                             : "text-white/80 hover:border-gold/15 hover:bg-[#0d0d0d]"
                         )}
                       >
