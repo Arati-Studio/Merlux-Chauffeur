@@ -140,6 +140,8 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [activeSubSection, setActiveSubSection] = useState<'console' | 'sitemap' | 'robots' | 'schema'>('console');
+  const [sitemapStats, setSitemapStats] = useState<any>(null);
+  const [sitemapStatsLoading, setSitemapStatsLoading] = useState(true);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [orgSchemaEdit, setOrgSchemaEdit] = useState('');
   const [localSchemaEdit, setLocalSchemaEdit] = useState('');
@@ -447,6 +449,24 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
     };
   }, []);
 
+  const fetchSitemapStats = async () => {
+    try {
+      const response = await fetch('/sitemap-stats.json');
+      if (response.ok) {
+        const data = await response.json();
+        setSitemapStats(data);
+      }
+    } catch (err) {
+      console.error('Error fetching sitemap stats:', err);
+    } finally {
+      setSitemapStatsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSitemapStats();
+  }, []);
+
   const getMergedContent = () => {
     const items: any[] = [];
     const dynamicSlugs = new Set<string>();
@@ -669,6 +689,7 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
       const data = await response.json();
       if (response.ok && data.success) {
         showDashboardNotice('success', 'Sitemap generated successfully! All XML & HTML files updated in workspace.', 'Sitemap Generated');
+        await fetchSitemapStats();
       } else {
         showDashboardNotice('error', `Failed to generate sitemap: ${data.error || 'Server error'}`, 'Generation Failed');
       }
@@ -950,6 +971,41 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
 
   const indexedCount = allContent.filter(c => !c.noindex).length;
   const noIndexCount = allContent.filter(c => c.noindex).length;
+
+  const maxUpdateTime = allContent.reduce((max, item) => {
+    const updatedAtVal = item.updatedAt;
+    let t = 0;
+    if (updatedAtVal) {
+      if (updatedAtVal.seconds !== undefined) {
+        t = updatedAtVal.seconds * 1000;
+      } else if (updatedAtVal._seconds !== undefined) {
+        t = updatedAtVal._seconds * 1000;
+      } else if (updatedAtVal.toDate && typeof updatedAtVal.toDate === 'function') {
+        t = updatedAtVal.toDate().getTime();
+      } else {
+        const d = new Date(updatedAtVal);
+        t = isNaN(d.getTime()) ? 0 : d.getTime();
+      }
+    }
+    const createdAtVal = item.createdAt;
+    let tc = 0;
+    if (createdAtVal) {
+      if (createdAtVal.seconds !== undefined) {
+        tc = createdAtVal.seconds * 1000;
+      } else if (createdAtVal._seconds !== undefined) {
+        tc = createdAtVal._seconds * 1000;
+      } else if (createdAtVal.toDate && typeof createdAtVal.toDate === 'function') {
+        tc = createdAtVal.toDate().getTime();
+      } else {
+        const d = new Date(createdAtVal);
+        tc = isNaN(d.getTime()) ? 0 : d.getTime();
+      }
+    }
+    const itemLatest = Math.max(t, tc);
+    return itemLatest > max ? itemLatest : max;
+  }, 0);
+
+  const isPending = !sitemapStats?.lastGenerated || (maxUpdateTime > new Date(sitemapStats.lastGenerated).getTime());
 
   return (
     <div className="space-y-8">
@@ -1406,9 +1462,9 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
               className="space-y-6"
             >
               <div className="bg-white/5 p-8 rounded-3xl border border-white/5 space-y-6 text-left">
-                <div className="flex items-center justify-between border-b border-white/5 pb-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-4">
                   <p className="text-[10px] text-white/40 uppercase tracking-widest">Active crawable indexes (static & dynamic)</p>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 flex-wrap">
                     <button
                       onClick={handleGenerateSitemap}
                       disabled={isGeneratingSitemap}
@@ -1435,6 +1491,45 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
                       <CheckCircle size={10} className="text-gold" />
                       Dynamic XML live
                     </div>
+                  </div>
+                </div>
+
+                {/* Sitemap Status and Build Time visual indicator panel */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-black/30 p-5 rounded-2xl border border-white/5 text-[11px] font-mono">
+                  {/* Status Badge */}
+                  <div className="flex items-center justify-between md:justify-start gap-4">
+                    <span className="text-white/40 uppercase tracking-widest text-[9px]">Sitemap Status:</span>
+                    {isPending ? (
+                      <span className="flex items-center gap-1.5 text-amber-500 bg-amber-500/10 border border-amber-500/10 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider animate-pulse">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                        Pending
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1.5 text-green-400 bg-green-500/10 border border-green-500/20 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                        <CheckCircle size={10} className="text-green-400 animate-bounce" />
+                        Generated
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Last Build/Generation Timestamp */}
+                  <div className="flex items-center justify-between md:justify-end gap-3">
+                    <span className="text-white/40 uppercase tracking-widest text-[9px]">Last Successful Build:</span>
+                    <span className="text-gold font-bold bg-white/[0.02] border border-white/5 rounded px-2.5 py-1">
+                      {sitemapStatsLoading ? (
+                        <span className="opacity-30 animate-pulse">Syncing...</span>
+                      ) : sitemapStats?.lastGenerated ? (
+                        new Date(sitemapStats.lastGenerated).toLocaleString(undefined, {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          second: '2-digit'
+                        })
+                      ) : (
+                        "Never"
+                      )}
+                    </span>
                   </div>
                 </div>
 

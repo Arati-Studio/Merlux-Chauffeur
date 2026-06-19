@@ -3,11 +3,11 @@ import { AnimatePresence, motion } from 'motion/react';
 import { 
   Globe, Plus, Power, Eye, Code2, Copy, Edit2, Trash2, X, CheckCircle, Loader2, Save, Ban, Info,
   Check, CheckSquare, Square, Trash, Clock, Search, Calendar, Tag, ChevronDown, ShieldAlert,
-  Monitor, Smartphone, Tablet
+  Monitor, Smartphone, Tablet, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight
 } from 'lucide-react';
 import { cn, getLocalDatetimeString } from '../../lib/utils';
 import { db, handleFirestoreError, OperationType } from '../../lib/firebase';
-import { collection, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, setDoc, query, onSnapshot, orderBy, writeBatch, limit } from 'firebase/firestore';
+import { collection, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, setDoc, query, onSnapshot, orderBy, writeBatch } from 'firebase/firestore';
 
 interface DynamicPageTabProps {
   isAdmin: boolean;
@@ -21,8 +21,8 @@ const DynamicPageTab: React.FC<DynamicPageTabProps> = ({
   setConfirmDelete,
 }) => {
   const [pages, setPages] = useState<any[]>([]);
-  const [pagesLimit, setPagesLimit] = useState(12);
-  const [hasMorePages, setHasMorePages] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number | 'All'>(12);
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
@@ -32,13 +32,11 @@ const DynamicPageTab: React.FC<DynamicPageTabProps> = ({
 
   useEffect(() => {
     const q = query(
-      collection(db, 'pages'), 
-      limit(pagesLimit)
+      collection(db, 'pages')
     );
     const unsubscribePages = onSnapshot(q, (snapshot) => {
       setPages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       setLoading(false);
-      setHasMorePages(snapshot.docs.length >= pagesLimit);
     }, (error) => {
       console.error("Error loading dashboard pages:", error);
       handleFirestoreError(error, OperationType.GET, 'pages');
@@ -52,7 +50,7 @@ const DynamicPageTab: React.FC<DynamicPageTabProps> = ({
       unsubscribePages();
       unsubscribeSettings();
     };
-  }, [pagesLimit]);
+  }, []);
   useEffect(() => {
     if (!pages.length) return;
     
@@ -319,9 +317,33 @@ const DynamicPageTab: React.FC<DynamicPageTabProps> = ({
     });
   }, [pages, categoryFilter, statusFilter, searchQuery, sortOrder]);
 
+  // Reset page when filters or sorting change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [categoryFilter, statusFilter, searchQuery, sortOrder, pageSize]);
+
+  // Paginated Pages
+  const paginatedPages = useMemo(() => {
+    if (pageSize === 'All') return filteredPages;
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredPages.slice(startIndex, startIndex + pageSize);
+  }, [filteredPages, currentPage, pageSize]);
+
+  const totalPages = useMemo(() => {
+    if (pageSize === 'All') return 1;
+    return Math.ceil(filteredPages.length / pageSize) || 1;
+  }, [filteredPages, pageSize]);
+
   // Bulk Selection and Edit States
   const [selectedPages, setSelectedPages] = useState<string[]>([]);
   const [bulkCategoryOpen, setBulkCategoryOpen] = useState(false);
+  const [bulkScheduleOpen, setBulkScheduleOpen] = useState(false);
+  const [bulkScheduleDate, setBulkScheduleDate] = useState(getLocalDatetimeString());
+
+  const allCurrentSelected = useMemo(() => {
+    if (paginatedPages.length === 0) return false;
+    return paginatedPages.every(p => selectedPages.includes(p.id));
+  }, [paginatedPages, selectedPages]);
 
   const handleToggleSelectPage = (id: string | undefined) => {
     if (!id) return;
@@ -331,10 +353,14 @@ const DynamicPageTab: React.FC<DynamicPageTabProps> = ({
   };
 
   const handleSelectAllPages = () => {
-    if (selectedPages.length === filteredPages.length) {
-      setSelectedPages([]);
+    const currentIds = paginatedPages.map(p => p.id).filter(Boolean);
+    if (allCurrentSelected) {
+      setSelectedPages(prev => prev.filter(id => !currentIds.includes(id)));
     } else {
-      setSelectedPages(filteredPages.map(p => p.id).filter(Boolean));
+      setSelectedPages(prev => {
+        const unique = new Set([...prev, ...currentIds]);
+        return Array.from(unique);
+      });
     }
   };
 
@@ -420,6 +446,22 @@ const DynamicPageTab: React.FC<DynamicPageTabProps> = ({
     }
   };
 
+  const executeBulkUpdatePagesPublishAt = async (ids: string[], publishAt: string) => {
+    try {
+      const batch = writeBatch(db);
+      ids.forEach(id => {
+        batch.update(doc(db, 'pages', id), { publishAt, updatedAt: serverTimestamp() });
+      });
+      await batch.commit();
+      setSelectedPages([]);
+      setBulkScheduleOpen(false);
+      showDashboardNotice('success', `Scheduled publication of ${ids.length} pages.`, 'Bulk Success');
+    } catch (err: any) {
+      console.error("Bulk scheduling update failed:", err);
+      handleFirestoreError(err, OperationType.UPDATE, 'pages-bulk');
+    }
+  };
+
   return (
     <div className="space-y-8">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
@@ -431,19 +473,19 @@ const DynamicPageTab: React.FC<DynamicPageTabProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-          {filteredPages.length > 0 && (
+          {paginatedPages.length > 0 && (
             <button
               onClick={handleSelectAllPages}
               className={cn(
                 "border px-4 py-2 rounded-xl flex items-center justify-center gap-2 transition-all text-xs font-bold uppercase tracking-widest leading-none w-full sm:w-auto whitespace-nowrap",
-                selectedPages.length === filteredPages.length
+                allCurrentSelected
                   ? "bg-gold border-gold text-black hover:bg-gold/80"
                   : "bg-white/5 border-white/10 text-white/60 hover:text-gold hover:border-gold"
               )}
             >
               <CheckSquare size={14} className="shrink-0" />
               <span>
-                {selectedPages.length === filteredPages.length ? 'Deselect All' : `Select All (${filteredPages.length})`}
+                {allCurrentSelected ? 'Deselect Page' : `Select Page (${paginatedPages.length})`}
               </span>
             </button>
           )}
@@ -595,8 +637,8 @@ const DynamicPageTab: React.FC<DynamicPageTabProps> = ({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {(filteredPages || []).length > 0 ? (
-          (filteredPages || []).map((page, idx) => (
+        {(paginatedPages || []).length > 0 ? (
+          (paginatedPages || []).map((page, idx) => (
             <div
               key={page.id || `page-${idx}`}
               className={cn(
@@ -762,14 +804,101 @@ const DynamicPageTab: React.FC<DynamicPageTabProps> = ({
         )}
       </div>
 
-      {hasMorePages && (
-        <div className="flex justify-center mt-8 mb-6">
-          <button
-            onClick={() => setPagesLimit(prev => prev + 12)}
-            className="px-6 py-3 bg-white/5 hover:bg-gold/10 hover:text-gold border border-white/10 hover:border-gold/30 rounded-xl transition-all text-white/80 uppercase tracking-widest text-[9px] font-bold"
-          >
-            Show More Pages
-          </button>
+      {filteredPages.length > 0 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-6 bg-black/40 p-5 rounded-2xl border border-white/5 mt-8 mb-6">
+          {/* Status info */}
+          <div className="text-[11px] font-mono text-white/50">
+            Showing <span className="text-gold font-bold">
+              {filteredPages.length === 0 ? 0 : (pageSize === 'All' ? 1 : (currentPage - 1) * pageSize + 1)}
+            </span> to <span className="text-gold font-bold">
+              {pageSize === 'All' ? filteredPages.length : Math.min(currentPage * pageSize, filteredPages.length)}
+            </span> of <span className="text-white font-bold">{filteredPages.length}</span> entries
+          </div>
+
+          {/* Pagination buttons */}
+          {pageSize !== 'All' && totalPages > 1 && (
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+                className="p-2 border border-white/10 rounded-xl bg-white/5 text-white/60 hover:text-gold hover:border-gold/30 disabled:opacity-20 disabled:pointer-events-none transition-all cursor-pointer"
+                title="First Page"
+              >
+                <ChevronsLeft size={14} />
+              </button>
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="p-2 border border-white/10 rounded-xl bg-white/5 text-white/60 hover:text-gold hover:border-gold/30 disabled:opacity-20 disabled:pointer-events-none transition-all cursor-pointer"
+                title="Previous Page"
+              >
+                <ChevronLeft size={14} />
+              </button>
+              
+              {(() => {
+                const pageNumbers = [];
+                const maxButtons = 5;
+                let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+                let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+                if (endPage - startPage + 1 < maxButtons) {
+                  startPage = Math.max(1, endPage - maxButtons + 1);
+                }
+                for (let i = Math.max(1, startPage); i <= endPage; i++) {
+                  pageNumbers.push(i);
+                }
+                return pageNumbers.map(num => (
+                  <button
+                    key={`page-btn-${num}`}
+                    onClick={() => setCurrentPage(num)}
+                    className={cn(
+                      "w-8 h-8 flex items-center justify-center text-[10px] rounded-xl font-mono transition-all border font-bold cursor-pointer",
+                      currentPage === num
+                        ? "bg-gold text-black border-gold shadow-[0_0_10px_rgba(212,175,55,0.2)]"
+                        : "bg-white/5 text-white/70 border-white/10 hover:border-gold/30 hover:text-gold"
+                    )}
+                  >
+                    {num}
+                  </button>
+                ));
+              })()}
+
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+                className="p-2 border border-white/10 rounded-xl bg-white/5 text-white/60 hover:text-gold hover:border-gold/30 disabled:opacity-20 disabled:pointer-events-none transition-all cursor-pointer"
+                title="Next Page"
+              >
+                <ChevronRight size={14} />
+              </button>
+              <button
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages}
+                className="p-2 border border-white/10 rounded-xl bg-white/5 text-white/60 hover:text-gold hover:border-gold/30 disabled:opacity-20 disabled:pointer-events-none transition-all cursor-pointer"
+                title="Last Page"
+              >
+                <ChevronsRight size={14} />
+              </button>
+            </div>
+          )}
+
+          {/* Page size dropdown */}
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] uppercase tracking-wider text-white/40 font-bold font-mono">Page Size:</span>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                const val = e.target.value;
+                setPageSize(val === 'All' ? 'All' : Number(val));
+                setCurrentPage(1);
+              }}
+              className="custom-select bg-black text-gold text-[10px] font-mono border border-white/10 rounded-xl px-3 py-1.5 focus:outline-none focus:border-gold font-bold uppercase cursor-pointer"
+            >
+              <option value={12}>12 Pages</option>
+              <option value={24}>24 Pages</option>
+              <option value={48}>48 Pages</option>
+              <option value="All">Show All</option>
+            </select>
+          </div>
         </div>
       )}
 
@@ -843,6 +972,51 @@ const DynamicPageTab: React.FC<DynamicPageTabProps> = ({
                               {cat}
                             </button>
                           ))}
+                        </motion.div>
+                      </>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                <div className="relative">
+                  <button
+                    onClick={() => setBulkScheduleOpen(!bulkScheduleOpen)}
+                    className="p-2 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-xl hover:bg-amber-500 hover:text-white transition-all flex items-center gap-1 h-8.5"
+                    title="Schedule Publication"
+                  >
+                    <Calendar size={13} />
+                    <span className="text-[9px] font-bold uppercase tracking-widest ml-1 hidden sm:inline">Schedule</span>
+                    <ChevronDown size={10} />
+                  </button>
+
+                  <AnimatePresence>
+                    {bulkScheduleOpen && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={() => setBulkScheduleOpen(false)} />
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                          className="absolute bottom-full right-0 mb-3 w-64 bg-black/95 p-4 rounded-2xl border border-gold/30 shadow-2xl z-20 flex flex-col gap-3 backdrop-blur-xl text-left"
+                        >
+                          <div className="text-[8px] uppercase tracking-[0.15em] text-gold font-bold border-b border-white/5 pb-1">Set Publish Date/Time</div>
+                          
+                          <div className="space-y-1">
+                            <label className="text-[9px] uppercase tracking-wider text-white/40 block">Publication Date & Time</label>
+                            <input 
+                              type="datetime-local" 
+                              className="w-full text-[11px] bg-white/5 border border-white/10 rounded-xl p-2 font-mono text-white focus:outline-none focus:border-gold"
+                              value={bulkScheduleDate}
+                              onChange={(e) => setBulkScheduleDate(e.target.value)}
+                            />
+                          </div>
+
+                          <button
+                            onClick={() => executeBulkUpdatePagesPublishAt(selectedPages, bulkScheduleDate)}
+                            className="w-full py-2 bg-gold text-black hover:bg-black hover:text-gold border border-gold rounded-xl text-[9px] font-black uppercase tracking-widest transition-all cursor-pointer text-center"
+                          >
+                            Apply Schedule
+                          </button>
                         </motion.div>
                       </>
                     )}

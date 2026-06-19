@@ -981,10 +981,14 @@ ${sitemapEntries.map(entry => `  <url>
       const globalSettings = settingsSnap.exists ? settingsSnap.data() : null;
       const globalSeo = globalSettings?.seo || {};
 
-      let slug = url.split('?')[0].split('/').pop() || '';
-      let isBlog = url.includes('/blog/');
-      let isOffer = url.includes('/offers/');
-      let isTour = url.includes('/tours/');
+      let cleanPath = url.split('?')[0];
+      cleanPath = cleanPath.replace(/^\/+|\/+$/g, ''); // Remove leading and trailing slashes
+      const parts = cleanPath.split('/');
+      let slug = parts[parts.length - 1] || '';
+
+      let isBlog = cleanPath.startsWith('blog/');
+      let isOffer = cleanPath.startsWith('offers/');
+      let isTour = cleanPath.startsWith('tours/');
 
       let seoData: any = null;
 
@@ -1006,25 +1010,55 @@ ${sitemapEntries.map(entry => `  <url>
         if (!snap.empty) seoData = snap.docs[0].data();
       }
 
+      // 1. Fetch from the unified metadata collection first to support direct overrides
+      let metadataOverride: any = null;
+      try {
+        const routeSlug = cleanPath || 'home';
+        const docId = routeSlug.replace(/\//g, '_') || 'home';
+        const docSnap = await dbAdmin.collection('metadata').doc(docId).get();
+        if (docSnap.exists) {
+          metadataOverride = docSnap.data();
+        } else {
+          // fallback query by 'slug' field
+          const qSnap = await dbAdmin.collection('metadata').where('slug', '==', routeSlug).limit(1).get();
+          if (!qSnap.empty) {
+            metadataOverride = qSnap.docs[0].data();
+          }
+        }
+      } catch (err) {
+        console.error('Metadata collection fetch failed inside injectSEO:', err);
+      }
+
+      // Merge native data and metadata overrides
+      const finalSeoData = {
+        metaTitle: metadataOverride?.metaTitle || seoData?.metaTitle || seoData?.title || '',
+        metaDescription: metadataOverride?.metaDescription || seoData?.metaDescription || seoData?.seoDescription || seoData?.description || seoData?.shortDescription || '',
+        keywords: metadataOverride?.keywords || seoData?.keywords || [],
+        noindex: metadataOverride?.noindex !== undefined ? metadataOverride.noindex : (seoData?.noindex || false),
+        schema: metadataOverride?.structuredData || seoData?.schema || seoData?.structuredData || null,
+        ogImage: seoData?.ogImage || seoData?.featuredImage || seoData?.image || null,
+        canonicalUrl: seoData?.canonicalUrl || null,
+      };
+
       const siteName = globalSeo.siteName || 'Merlux Chauffeur Services';
       const defaultTitle = globalSeo.defaultTitle || 'Luxury Chauffeur Melbourne';
       const titleTemplate = globalSeo.titleTemplate || `%s | ${siteName}`;
 
-      let title = seoData?.metaTitle || seoData?.title || defaultTitle;
+      let title = finalSeoData.metaTitle || defaultTitle;
       if (title !== defaultTitle && !title.includes(siteName)) {
         title = titleTemplate.replace('%s', title);
       }
 
-      const desc = seoData?.metaDescription || seoData?.seoDescription || seoData?.description || seoData?.shortDescription || globalSeo.defaultDescription || '';
-      const seoKeywords = Array.isArray(seoData?.keywords) ? seoData.keywords : (typeof seoData?.keywords === 'string' ? seoData.keywords.split(',').map((k: string) => k.trim()) : []);
+      const desc = finalSeoData.metaDescription || globalSeo.defaultDescription || '';
+      const seoKeywords = Array.isArray(finalSeoData.keywords) ? finalSeoData.keywords : (typeof finalSeoData.keywords === 'string' ? finalSeoData.keywords.split(',').map((k: string) => k.trim()) : []);
       const defaultKeywords = Array.isArray(globalSeo.defaultKeywords) ? globalSeo.defaultKeywords : (typeof globalSeo.defaultKeywords === 'string' ? globalSeo.defaultKeywords.split(',').map((k: string) => k.trim()) : []);
       const keywords = [...seoKeywords, ...defaultKeywords].filter(k => k !== '').join(', ');
       const favicon = globalSeo.favicon ? `<link rel="icon" href="${globalSeo.favicon}" />` : '';
-      const ogImage = seoData?.ogImage || seoData?.featuredImage || globalSeo.ogImage || globalSeo.logo || '';
-      const canonical = seoData?.canonicalUrl || `${SITE_URL}${url}`;
-      const noindex = seoData?.noindex ? '<meta name="robots" content="noindex, nofollow">' : '<meta name="robots" content="index, follow">';
+      const ogImage = finalSeoData.ogImage || globalSeo.ogImage || globalSeo.logo || '';
+      const canonical = finalSeoData.canonicalUrl || `${SITE_URL}${url}`;
+      const noindex = finalSeoData.noindex ? '<meta name="robots" content="noindex, nofollow">' : '<meta name="robots" content="index, follow">';
 
-      const pageSchema = seoData?.schema ? `<script type="application/ld+json">${JSON.stringify(seoData.schema)}</script>` : '';
+      const pageSchema = finalSeoData.schema ? `<script type="application/ld+json">${JSON.stringify(finalSeoData.schema)}</script>` : '';
       const orgSchema = globalSeo.organizationSchema ? `<script type="application/ld+json">${JSON.stringify(globalSeo.organizationSchema)}</script>` : '';
       
       const gaScript = globalSeo.googleAnalyticsId ? `
