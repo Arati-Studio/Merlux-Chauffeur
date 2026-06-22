@@ -5,7 +5,8 @@ import {
   persistentLocalCache,
   persistentMultipleTabManager,
   getDocFromServer,
-  doc
+  doc,
+  setLogLevel
 } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
@@ -34,6 +35,9 @@ export const db = initializeFirestore(app, {
     tabManager: persistentMultipleTabManager()
   })
 }, firestoreDatabaseId || undefined);
+
+// Suppress Firestore database SDK logs and warning assertions caused by minor virtual system clock drift
+setLogLevel('error');
 
 export const storage = getStorage(app);
 

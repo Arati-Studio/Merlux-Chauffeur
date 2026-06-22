@@ -10,6 +10,7 @@ import {
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, serverTimestamp, addDoc, setDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../../lib/firebase';
 import { cn } from '../../lib/utils';
+import { metadataFallback } from '../../data/fallback/metadataFallback';
 
 interface IndexTabProps {
   showDashboardNotice: (type: any, message: string, title?: string) => void;
@@ -425,7 +426,15 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
       setTours(parsed);
     });
     const unsubDocs = onSnapshot(collection(db, 'metadata'), (snap) => {
-      setMetadataDocs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      if (data.length > 0) {
+        setMetadataDocs(data);
+      } else {
+        setMetadataDocs(metadataFallback);
+      }
+    }, (err) => {
+      console.warn("Failed to listen to metadata collection, loading fallback", err);
+      setMetadataDocs(metadataFallback);
     });
     const unsubSettings = onSnapshot(doc(db, 'settings', 'system'), (snap) => {
       if (snap.exists()) {

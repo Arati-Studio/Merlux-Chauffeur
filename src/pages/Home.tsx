@@ -56,11 +56,28 @@ export default function Home() {
     let active = true;
     const fetchData = async () => {
       try {
-        const blogsSnap = await getDocs(query(collection(db, 'blogs'), orderBy('createdAt', 'desc'), limit(15)));
+        // Fetch blogs - we'll fetch a bit more then filter/sort client-side for "latest published" accuracy
+        const blogsSnap = await getDocs(query(collection(db, 'blogs'), limit(20)));
         if (active) {
-          const filteredBlogs = blogsSnap.docs
-            .map(doc => ({ id: doc.id, ...doc.data() }))
+          let blogs = blogsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+          
+          // Use fallback if Firestore is empty
+          if (blogs.length === 0) {
+            try {
+              const { blogsFallback } = await import('../data/fallback/blogsFallback');
+              blogs = blogsFallback;
+            } catch (e) {
+              console.warn('Could not load blogs fallback:', e);
+            }
+          }
+
+          const filteredBlogs = blogs
             .filter((b: any) => b.active !== false && (!b.publishAt || new Date(b.publishAt) <= new Date()))
+            .sort((a: any, b: any) => {
+              const dateA = new Date(a.publishAt || (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : a.createdAt) || 0).getTime();
+              const dateB = new Date(b.publishAt || (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : b.createdAt) || 0).getTime();
+              return dateB - dateA;
+            })
             .slice(0, 3);
           setBlogsList(filteredBlogs);
         }
@@ -198,7 +215,10 @@ export default function Home() {
 
   return (
     <div className="relative bg-black text-white overflow-x-hidden">
-      <SEO />
+      <SEO 
+        title="Melbourne's Premier Luxury Chauffeur Service"
+        description="Experience Melbourne's finest luxury travel with Merlux Chauffeur. Dedicated to providing unparalleled safety, punctuality, and comfort for every journey."
+      />
       {/* 1. Hero Section with Image Slider */}
       <section className="relative h-screen flex items-center justify-center overflow-hidden">
         <AnimatePresence mode="wait">
@@ -699,7 +719,7 @@ export default function Home() {
                       <div className="bg-black/65 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 flex items-center gap-2">
                         <Calendar size={11} className="text-gold" />
                         <p className="text-gold text-[9px] uppercase tracking-widest font-bold">
-                          {formatDate(blog.createdAt || blog.date)}
+                          {formatDate(blog.publishAt || blog.createdAt || blog.date)}
                         </p>
                       </div>
                       <div className="bg-black/65 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 flex items-center gap-2">

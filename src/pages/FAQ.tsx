@@ -5,6 +5,7 @@ import { db } from '../lib/firebase';
 import { ChevronDown, HelpCircle, MessageSquare, Search, CornerDownRight } from 'lucide-react';
 import { cn } from '../lib/utils';
 import SEO from '../components/SEO';
+import { faqFallback } from '../data/fallback/faqFallback';
 
 interface FAQ {
   id: string;
@@ -15,9 +16,9 @@ interface FAQ {
 }
 
 const FAQPage: React.FC = () => {
-  const [faqs, setFaqs] = useState<FAQ[]>([]);
+  const [faqs, setFaqs] = useState<FAQ[]>(faqFallback);
   const [loading, setLoading] = useState(true);
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string | null>("faq_1");
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
 
@@ -29,17 +30,23 @@ const FAQPage: React.FC = () => {
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const faqData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as FAQ[];
-      setFaqs(faqData);
-      setLoading(false);
-
-      // Expand first question by default if available
-      if (faqData.length > 0 && !activeId) {
-        setActiveId(faqData[0].id);
+      if (!snapshot.empty) {
+        const faqData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as FAQ[];
+        setFaqs(faqData);
+        if (faqData.length > 0 && (!activeId || !faqData.some(f => f.id === activeId))) {
+          setActiveId(faqData[0].id);
+        }
+      } else {
+        setFaqs(faqFallback);
       }
+      setLoading(false);
+    }, (error) => {
+      console.warn("Using offline FAQ fallback dataset due to database subscription error:", error);
+      setFaqs(faqFallback);
+      setLoading(false);
     });
 
     return () => unsubscribe();

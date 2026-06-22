@@ -71,6 +71,8 @@ import {
 } from "firebase/auth";
 import Logo from "../components/layout/Logo";
 import SEO from "../components/SEO";
+import { extrasFallback } from "../data/fallback/extrasFallback";
+import { couponsFallback } from "../data/fallback/couponsFallback";
 
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_ID } from "../lib/google-maps";
 
@@ -317,8 +319,8 @@ export default function Booking() {
   const [paymentMethod, setPaymentMethod] = useState<"card" | "cash">("card");
   const [fleet, setFleet] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>(null);
-  const [coupons, setCoupons] = useState<any[]>([]);
-  const [extras, setExtras] = useState<any[]>([]);
+  const [coupons, setCoupons] = useState<any[]>(couponsFallback);
+  const [extras, setExtras] = useState<any[]>(extrasFallback);
   const [priceAddons, setPriceAddons] = useState<any[]>([]);
   const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
   const [couponError, setCouponError] = useState<string | null>(null);

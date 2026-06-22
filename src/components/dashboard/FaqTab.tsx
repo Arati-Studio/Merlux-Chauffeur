@@ -6,6 +6,7 @@ import {
 import { cn } from '../../lib/utils';
 import { db, handleFirestoreError, OperationType } from '../../lib/firebase';
 import { collection, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, query, onSnapshot, orderBy } from 'firebase/firestore';
+import { faqFallback } from '../../data/fallback/faqFallback';
 
 interface FaqTabProps {
   isAdmin: boolean;
@@ -18,12 +19,20 @@ const FaqTab: React.FC<FaqTabProps> = ({
   showDashboardNotice,
   setConfirmDelete
 }) => {
-  const [faqs, setFaqs] = useState<any[]>([]);
+  const [faqs, setFaqs] = useState<any[]>(faqFallback);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const unsubscribe = onSnapshot(query(collection(db, 'faqs'), orderBy('order', 'asc')), (snapshot) => {
-      setFaqs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      if (!snapshot.empty) {
+        setFaqs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      } else {
+        setFaqs(faqFallback);
+      }
+      setLoading(false);
+    }, (err) => {
+      console.warn("FAQ management subscription failed, utilizing static fallback database:", err);
+      setFaqs(faqFallback);
       setLoading(false);
     });
     return () => unsubscribe();

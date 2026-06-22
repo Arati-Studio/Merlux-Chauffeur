@@ -6,6 +6,7 @@ import { db } from '../lib/firebase';
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 import SEO from '../components/SEO';
 import { formatDate, getAssetPath, cn } from '../lib/utils';
+import { blogsFallback } from '../data/fallback/blogsFallback';
 
 const DEFAULT_CATEGORIES = ["All", "Travel Tips", "Business", "Weddings", "Tours", "Industry", "Safety"];
 
@@ -54,10 +55,15 @@ export default function Blog() {
     const q = query(collection(db, 'blogs'));
     const unsubscribe = onSnapshot(q, (snap) => {
       const blogData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setPosts(blogData);
+      if (blogData.length > 0) {
+        setPosts(blogData);
+      } else {
+        setPosts(blogsFallback);
+      }
       setLoading(false);
     }, (err) => {
-      console.error('Error fetching blogs:', err);
+      console.warn('Error fetching blogs, using fallback:', err);
+      setPosts(blogsFallback);
       setLoading(false);
     });
     return () => unsubscribe();

@@ -12,6 +12,8 @@ import { format } from 'date-fns';
 import { db, storage, handleFirestoreError, OperationType } from '../../lib/firebase';
 import { doc, updateDoc, serverTimestamp, collection, addDoc, deleteDoc, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { cmsFallback } from '../../data/fallback/cmsFallback';
+import { settingsFallback } from '../../data/fallback/settingsFallback';
 
 interface CmsTabProps {
   showDashboardNotice: (type: any, message: string, title?: string) => void;
@@ -20,7 +22,13 @@ interface CmsTabProps {
 const CmsTab: React.FC<CmsTabProps> = ({
   showDashboardNotice
 }) => {
-  const [systemSettings, setSystemSettings] = useState<any>(null);
+  const [systemSettings, setSystemSettings] = useState<any>({
+    ...settingsFallback,
+    menus: cmsFallback.menus,
+    seo: cmsFallback.seo,
+    categories: cmsFallback.categories,
+    tags: cmsFallback.tags
+  });
   const [blogs, setBlogs] = useState<any[]>([]);
   const [pages, setPages] = useState<any[]>([]);
   const [offers, setOffers] = useState<any[]>([]);
@@ -28,24 +36,53 @@ const CmsTab: React.FC<CmsTabProps> = ({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const defaultSettings = {
+      ...settingsFallback,
+      menus: cmsFallback.menus,
+      seo: cmsFallback.seo,
+      categories: cmsFallback.categories,
+      tags: cmsFallback.tags
+    };
+
     const unsubscribeSettings = onSnapshot(doc(db, 'settings', 'system'), (snap) => {
-      if (snap.exists()) setSystemSettings(snap.data());
+      if (snap.exists()) {
+        const dbData = snap.data();
+        setSystemSettings({
+          ...defaultSettings,
+          ...dbData,
+          menus: { ...defaultSettings.menus, ...(dbData.menus || {}) },
+          seo: { ...defaultSettings.seo, ...(dbData.seo || {}) }
+        });
+      } else {
+        setSystemSettings(defaultSettings);
+      }
+    }, (err) => {
+      console.warn("CMS settings subscription failed, utilizing static settings fallback:", err);
+      setSystemSettings(defaultSettings);
     });
 
     const unsubscribeBlogs = onSnapshot(query(collection(db, 'blogs'), orderBy('createdAt', 'desc')), (snapshot) => {
       setBlogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (err) => {
+      console.warn("CMS blogs loaded from state:", err);
     });
 
     const unsubscribePages = onSnapshot(query(collection(db, 'pages'), orderBy('createdAt', 'desc')), (snapshot) => {
       setPages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (err) => {
+      console.warn("CMS pages loaded from state:", err);
     });
 
     const unsubscribeOffers = onSnapshot(query(collection(db, 'offers'), orderBy('createdAt', 'desc')), (snapshot) => {
       setOffers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (err) => {
+      console.warn("CMS offers loaded from state:", err);
     });
 
     const unsubscribeTours = onSnapshot(query(collection(db, 'tours'), orderBy('createdAt', 'desc')), (snapshot) => {
       setTours(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (err) => {
+      console.warn("CMS tours loaded from state:", err);
     });
 
     setLoading(false);

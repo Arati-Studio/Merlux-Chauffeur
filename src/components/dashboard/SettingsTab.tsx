@@ -13,6 +13,9 @@ import ConfirmationModal from './ConfirmationModal';
 import { db, handleFirestoreError, storage, OperationType } from '../../lib/firebase';
 import { collection, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, setDoc, getDoc, getDocs, writeBatch, query, orderBy, onSnapshot, Timestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject, uploadBytesResumable } from 'firebase/storage';
+import { settingsFallback } from '../../data/fallback/settingsFallback';
+import { extrasFallback } from '../../data/fallback/extrasFallback';
+import { couponsFallback } from '../../data/fallback/couponsFallback';
 
 const GOOGLE_MAPS_API_KEY =
   import.meta.env.VITE_GOOGLE_MAPS_API_KEY ||
@@ -551,12 +554,20 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
   exportTotals: initialExportTotals
 }) => {
   const [fleet, setFleet] = useState<any[]>([]);
-  const [extras, setExtras] = useState<any[]>([]);
-  const [coupons, setCoupons] = useState<any[]>([]);
+  const [extras, setExtras] = useState<any[]>(extrasFallback);
+  const [coupons, setCoupons] = useState<any[]>(couponsFallback);
   const [priceAddons, setPriceAddons] = useState<any[]>([]);
-  const [systemSettings, setSystemSettings] = useState<any>(null);
-  const [smsSettings, setSmsSettings] = useState<any>(null);
-  const [emailSettings, setEmailSettings] = useState<any>(null);
+  const [systemSettings, setSystemSettings] = useState<any>(settingsFallback);
+  const [smsSettings, setSmsSettings] = useState<any>({
+    provider: "twilio",
+    twilio: { accountSid: "", authToken: "", fromNumber: "" },
+    enabled: false
+  });
+  const [emailSettings, setEmailSettings] = useState<any>({
+    provider: "smtp",
+    smtp: { host: "", port: 587, user: "", pass: "", secure: false },
+    enabled: false
+  });
   const [smsTemplates, setSmsTemplates] = useState<any[]>([]);
   const [emailTemplates, setEmailTemplates] = useState<any[]>([]);
   const [exportTotals, setExportTotals] = useState<Record<string, number>>(initialExportTotals || {});
@@ -585,15 +596,42 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
     });
 
     const unsubscribeSys = onSnapshot(doc(db, 'settings', 'system'), (snap) => {
-      if (snap.exists()) setSystemSettings(snap.data());
+      if (snap.exists()) {
+        setSystemSettings({ ...settingsFallback, ...snap.data() });
+      } else {
+        setSystemSettings(settingsFallback);
+      }
+    }, (err) => {
+      console.warn("Settings system onSnapshot failed, utilizing static settingsFallback:", err);
+      setSystemSettings(settingsFallback);
     });
 
     const unsubscribeSms = onSnapshot(doc(db, 'settings', 'sms'), (snap) => {
-      if (snap.exists()) setSmsSettings(snap.data());
+      if (snap.exists()) {
+        setSmsSettings(snap.data());
+      } else {
+        setSmsSettings({
+          provider: "twilio",
+          twilio: { accountSid: "", authToken: "", fromNumber: "" },
+          enabled: false
+        });
+      }
+    }, (err) => {
+      console.warn("Settings SMS subscription failed, utilizing offline system placeholder:", err);
     });
 
     const unsubscribeEmail = onSnapshot(doc(db, 'settings', 'email'), (snap) => {
-      if (snap.exists()) setEmailSettings(snap.data());
+      if (snap.exists()) {
+        setEmailSettings(snap.data());
+      } else {
+        setEmailSettings({
+          provider: "smtp",
+          smtp: { host: "", port: 587, user: "", pass: "", secure: false },
+          enabled: false
+        });
+      }
+    }, (err) => {
+      console.warn("Settings Email subscription failed, utilizing offline system placeholder:", err);
     });
 
     const smsTemplatesQ = query(collection(db, 'sms-templates'), orderBy('name', 'asc'));

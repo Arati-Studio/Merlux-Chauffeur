@@ -5,6 +5,7 @@ import { SEO_CONFIG, type SEOProps, generateCanonicalUrl } from '../lib/seo';
 import { collection, query, where, limit, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useSettings } from '../lib/SettingsContext';
+import { metadataFallback } from '../data/fallback/metadataFallback';
 
 const SEO: React.FC<SEOProps> = ({
   title,
@@ -35,9 +36,52 @@ const SEO: React.FC<SEOProps> = ({
       slug = pathParts.join('/');
     }
 
+    const loadFallback = (targetSlug: string) => {
+      const matched = metadataFallbackFinder(targetSlug);
+      if (matched) {
+        setPageDataFromMatched(matched);
+      } else {
+        setPageDataFromProps();
+      }
+    };
+
+    const getMatchedSlug = (s: string) => {
+      // Normalizing slug lookups
+      if (!s) return 'home';
+      return s;
+    };
+
+    const matchedSlug = getMatchedSlug(slug);
+
+    const metadataFallbackFinder = (targetSlug: string) => {
+      return metadataFallback.find(
+        (m) =>
+          m.slug === targetSlug ||
+          m.id === targetSlug ||
+          m.slug === `offers/${targetSlug}` ||
+          m.slug === `blog/${targetSlug}` ||
+          m.slug === `tours/${targetSlug}` ||
+          (targetSlug === 'home' && m.slug === 'home')
+      );
+    };
+
+    const setPageDataFromMatched = (matched: any) => {
+      setDbSeo({
+        metaTitle: matched.metaTitle || '',
+        metaDescription: matched.metaDescription || '',
+        keywords: Array.isArray(matched.keywords) ? matched.keywords : [],
+        noindex: matched.noindex || false,
+        structuredData: matched.structuredData || null,
+      });
+    };
+
+    const setPageDataFromProps = () => {
+      setDbSeo(null);
+    };
+
     const q = query(
       collection(db, 'metadata'),
-      where('slug', '==', slug),
+      where('slug', '==', matchedSlug),
       limit(1)
     );
 
@@ -52,10 +96,11 @@ const SEO: React.FC<SEOProps> = ({
           structuredData: docData.structuredData || null
         });
       } else {
-        setDbSeo(null);
+        loadFallback(matchedSlug);
       }
     }, (error) => {
-      console.warn('SEO dynamic loading suspended:', error);
+      console.warn('SEO dynamic loading suspended, using fallback:', error);
+      loadFallback(matchedSlug);
     });
 
     return () => unsubscribe();

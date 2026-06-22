@@ -9,6 +9,7 @@ import {
 import { cn } from '../../lib/utils';
 import { db, handleFirestoreError, OperationType } from '../../lib/firebase';
 import { doc, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { floatingFallback } from '../../data/fallback/floatingFallback';
 
 interface FloatingTabProps {
   showDashboardNotice: (type: 'success' | 'error' | 'info' | 'warning', message: string, title?: string) => void;
@@ -17,16 +18,17 @@ interface FloatingTabProps {
 const FloatingTab: React.FC<FloatingTabProps> = ({
   showDashboardNotice
 }) => {
-  const [floatingSettings, setFloatingSettings] = useState<any>(null);
+  const [floatingSettings, setFloatingSettings] = useState<any>(floatingFallback);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const unsubscribe = onSnapshot(doc(db, 'settings', 'floating'), (snap) => {
       const defaultSettings = {
-        social: { active: true, icons: [], position: 'right-bottom' },
-        scrollTop: { active: true, shape: 'circle', position: 'right-bottom' },
-        bars: [],
-        popups: []
+        ...floatingFallback,
+        social: { ...floatingFallback.social },
+        scrollTop: { ...floatingFallback.scrollTop },
+        bars: [...floatingFallback.bars],
+        popups: [...floatingFallback.popups]
       };
 
       if (snap.exists()) {
@@ -40,12 +42,16 @@ const FloatingTab: React.FC<FloatingTabProps> = ({
           ...data,
           social: { ...defaultSettings.social, ...(data.social || {}) },
           scrollTop: { ...defaultSettings.scrollTop, ...(data.scrollTop || {}) },
-          bars: Array.isArray(data.bars) ? data.bars : legacyBars,
-          popups: Array.isArray(data.popups) ? data.popups : legacyPopups
+          bars: Array.isArray(data.bars) ? data.bars : (legacyBars.length ? legacyBars : defaultSettings.bars),
+          popups: Array.isArray(data.popups) ? data.popups : (legacyPopups.length ? legacyPopups : defaultSettings.popups)
         });
       } else {
         setFloatingSettings(defaultSettings);
       }
+      setLoading(false);
+    }, (err) => {
+      console.warn("Floating settings subscription failed, utilizing static fallback elements:", err);
+      setFloatingSettings(floatingFallback);
       setLoading(false);
     });
     return () => unsubscribe();

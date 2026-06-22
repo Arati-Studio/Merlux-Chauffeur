@@ -14,3 +14,16 @@ createRoot(document.getElementById('root')!).render(
     </HelmetProvider>
   </StrictMode>,
 );
+
+// Register Service Worker for robust caching & offline fallback support
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then((registration) => {
+        console.log('[Service Worker] Activated and registered successfully:', registration.scope);
+      })
+      .catch((error) => {
+        console.warn('[Service Worker] Registration failed:', error);
+      });
+  });
+}

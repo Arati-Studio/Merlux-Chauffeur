@@ -5,6 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { ArrowRight } from 'lucide-react';
 import SEO from '../components/SEO';
+import { pagesFallback } from '../data/fallback/pagesFallback';
 
 export default function Services() {
   const navigate = useNavigate();
@@ -31,9 +32,17 @@ export default function Services() {
             return timeB - timeA;
           });
           
-        setDynamicServices(filtered);
+        if (filtered.length > 0) {
+          setDynamicServices(filtered);
+        } else {
+          // Fallback to static data
+          const fallbackList = pagesFallback.filter(p => p.category === 'Services' && p.active !== false);
+          setDynamicServices(fallbackList);
+        }
       } catch (err) {
-        console.error('Error fetching dynamic services:', err);
+        console.error('Error fetching dynamic services, loading fallback:', err);
+        const fallbackList = pagesFallback.filter(p => p.category === 'Services' && p.active !== false);
+        setDynamicServices(fallbackList);
       } finally {
         setLoading(false);
       }

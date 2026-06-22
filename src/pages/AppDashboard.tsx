@@ -69,7 +69,24 @@ export default function AppDashboard() {
             console.warn('Could not sync emailVerified status into firestore:', e);
           }
         }
+      } else {
+        // Fallback user state in case the profile setup is temporary off
+        setUserProfile({
+          id: user.uid,
+          email: user.email || '',
+          name: user.displayName || user.email?.split('@')[0] || 'User',
+          role: 'customer'
+        });
       }
+      setLoading(false);
+    }, (error) => {
+      console.warn('Utilizing static fallback customer profile state due to subscription error:', error);
+      setUserProfile({
+        id: user.uid,
+        email: user.email || '',
+        name: user.displayName || user.email?.split('@')[0] || 'User',
+        role: 'customer'
+      });
       setLoading(false);
     });
     return () => unsubscribe();
@@ -86,6 +103,9 @@ export default function AppDashboard() {
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setNotifications(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.warn('Silent fallback for notifications subscription:', error);
+      setNotifications([]);
     });
     return () => unsubscribe();
   }, [user]);

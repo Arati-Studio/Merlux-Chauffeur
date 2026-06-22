@@ -316,6 +316,28 @@ async function startServer() {
     }
   });
 
+  // Support real database feedback mirroring in development
+  app.post('/api/dev/sync-back', async (req, res) => {
+    try {
+      const { type, content } = req.body;
+      if (!type || !content) {
+        return res.status(400).json({ error: 'Missing type or content' });
+      }
+      const allowedTypes = ['settingsFallback', 'cmsFallback', 'floatingFallback', 'faqFallback'];
+      if (!allowedTypes.includes(type)) {
+        return res.status(400).json({ error: 'Invalid type' });
+      }
+
+      const filePath = path.join(process.cwd(), 'src', 'data', 'fallback', `${type}.ts`);
+      fs.writeFileSync(filePath, content, 'utf-8');
+      console.log(`[Sync-Back] Successfully synced dynamic fallback: ${type}.ts`);
+      res.json({ success: true, message: `Synced ${type} fallback successfully.` });
+    } catch (err: any) {
+      console.error('Sync-back error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // Favicon Redirect
   app.get('/favicon.ico', async (req, res, next) => {
     try {

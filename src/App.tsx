@@ -1,6 +1,6 @@
 import React, { lazy, Suspense } from "react";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
 import Navbar from "./components/layout/Navbar";
 import Footer from "./components/layout/Footer";
 import Breadcrumbs from "./components/layout/Breadcrumbs";
@@ -10,6 +10,8 @@ import { useSettings, SettingsProvider } from "./lib/SettingsContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { OfflineDetector } from "./components/OfflineDetector";
 import SearchDialog from "./components/SearchDialog";
+import AnimatedPage from "./components/layout/AnimatedPage";
+import { AnimatePresence } from "motion/react";
 
 const Home = lazy(() => import("./pages/Home"));
 const Booking = lazy(() => import("./pages/Booking"));
@@ -33,6 +35,7 @@ function AppLayout() {
   const barPosition = floatingSettings?.bar?.position || "top";
 
   const [isSearchOpen, setIsSearchOpen] = React.useState(false);
+  const location = useLocation();
 
   // Keyboard shortcut Ctrl+K / Cmd+K and global open-search event
   React.useEffect(() => {
@@ -78,33 +81,37 @@ function AppLayout() {
             </div>
           </div>
         </div>}>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/booking" element={<Booking />} />
-            <Route path="/fleet" element={<Fleet />} />
-            <Route path="/services" element={<Services />} />
-            <Route path="/about" element={<About />} />
-            <Route path="/contact" element={<Contact />} />
-            <Route path="/blog" element={<Blog />} />
-            <Route path="/blog/:slug" element={<BlogPost />} />
-            <Route path="/faq" element={<FAQ />} />
-            <Route path="/offers" element={<Offers />} />
-            <Route path="/offers/:slug" element={<Offers />} />
-            <Route path="/tours" element={<Tours />} />
-            <Route path="/tours/:slug" element={<Tours />} />
-            <Route
-              path="/app"
-              element={
-                <ProtectedRoute>
-                  <AppDashboard />
-                </ProtectedRoute>
-              }
-            />
-            <Route path="/login" element={<Login />} />
-            <Route path="/payment/success" element={<PaymentSuccess />} />
-            <Route path="/terms" element={<Terms />} />
-            <Route path="/:slug" element={<DynamicPage />} />
-          </Routes>
+          <AnimatePresence mode="wait">
+            <Routes location={location} key={location.pathname}>
+              <Route path="/" element={<AnimatedPage><Home /></AnimatedPage>} />
+              <Route path="/booking" element={<AnimatedPage><Booking /></AnimatedPage>} />
+              <Route path="/fleet" element={<AnimatedPage><Fleet /></AnimatedPage>} />
+              <Route path="/services" element={<AnimatedPage><Services /></AnimatedPage>} />
+              <Route path="/about" element={<AnimatedPage><About /></AnimatedPage>} />
+              <Route path="/contact" element={<AnimatedPage><Contact /></AnimatedPage>} />
+              <Route path="/blog" element={<AnimatedPage><Blog /></AnimatedPage>} />
+              <Route path="/blog/:slug" element={<AnimatedPage><BlogPost /></AnimatedPage>} />
+              <Route path="/faq" element={<AnimatedPage><FAQ /></AnimatedPage>} />
+              <Route path="/offers" element={<AnimatedPage><Offers /></AnimatedPage>} />
+              <Route path="/offers/:slug" element={<AnimatedPage><Offers /></AnimatedPage>} />
+              <Route path="/tours" element={<AnimatedPage><Tours /></AnimatedPage>} />
+              <Route path="/tours/:slug" element={<AnimatedPage><Tours /></AnimatedPage>} />
+              <Route
+                path="/app"
+                element={
+                  <ProtectedRoute>
+                    <AnimatedPage>
+                      <AppDashboard />
+                    </AnimatedPage>
+                  </ProtectedRoute>
+                }
+              />
+              <Route path="/login" element={<AnimatedPage><Login /></AnimatedPage>} />
+              <Route path="/payment/success" element={<AnimatedPage><PaymentSuccess /></AnimatedPage>} />
+              <Route path="/terms" element={<AnimatedPage><Terms /></AnimatedPage>} />
+              <Route path="/:slug" element={<AnimatedPage><DynamicPage /></AnimatedPage>} />
+            </Routes>
+          </AnimatePresence>
         </Suspense>
       </main>
       <Footer />

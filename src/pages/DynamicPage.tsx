@@ -9,6 +9,7 @@ import { generateDescriptionFromContent } from '../lib/seo';
 import Comments from '../components/Comments';
 import { FormNotice, NoticeType } from '../components/FormNotice';
 import SEO from '../components/SEO';
+import { pagesFallback } from '../data/fallback/pagesFallback';
 
 export default function DynamicPage() {
   const { slug } = useParams();
@@ -28,26 +29,18 @@ export default function DynamicPage() {
   useEffect(() => {
     const fetchPage = async () => {
       setLoading(true);
+      let targetDoc: any = null;
+      let idVal = '';
+      let relatedList: any[] = [];
+
       try {
         const q = query(collection(db, 'pages'), where('slug', '==', slug), limit(1));
         const snap = await getDocs(q);
 
         if (!snap.empty) {
           const docSnap = snap.docs[0];
-          const data = docSnap.data();
-
-          // Check if page is active and released
-          const isNotActive = data.active === false;
-          const isFuture = data.publishAt && new Date(data.publishAt) > new Date();
-          if (isNotActive || isFuture) {
-            setError(true);
-            setLoading(false);
-            return;
-          }
-
-          setPageData(data);
-          setPageId(docSnap.id);
-          setError(false);
+          targetDoc = docSnap.data();
+          idVal = docSnap.id;
 
           // Fetch Related Pages
           const relatedQ = query(
@@ -56,54 +49,79 @@ export default function DynamicPage() {
             limit(10)
           );
           const relatedSnap = await getDocs(relatedQ);
-          const filteredRelated = relatedSnap.docs
+          relatedList = relatedSnap.docs
             .map(d => ({ id: d.id, ...d.data() }))
             .filter((p: any) => p.active !== false && (!p.publishAt || new Date(p.publishAt) <= new Date()))
             .slice(0, 3);
-          setRelatedPages(filteredRelated);
-
-          window.scrollTo(0, 0);
-
-          // Global CMS CSS Injection
-          const globalStyleId = 'global-cms-css';
-          let globalStyleTag = document.getElementById(globalStyleId);
-          if (settings?.seo?.globalCmsCss && settings?.seo?.isGlobalCssActive !== false) {
-            if (!globalStyleTag) {
-              globalStyleTag = document.createElement('style');
-              globalStyleTag.id = globalStyleId;
-              document.head.appendChild(globalStyleTag);
-            }
-            // Scope CSS to content area using modern CSS nesting
-            const scopedGlobal = `.cms-rendered-content { ${settings.seo.globalCmsCss} }`;
-            globalStyleTag.innerHTML = scopedGlobal;
-          } else if (globalStyleTag) {
-            globalStyleTag.remove();
-          }
-
-          // Individual CSS Injection
-          const styleId = `page-css-${slug}`;
-          let styleTag = document.getElementById(styleId);
-          if (data.customCss && data.isCustomCssActive !== false) {
-            if (!styleTag) {
-              styleTag = document.createElement('style');
-              styleTag.id = styleId;
-              document.head.appendChild(styleTag);
-            }
-            // Scope CSS to content area using modern CSS nesting
-            const scopedIndividual = `.cms-rendered-content { ${data.customCss} }`;
-            styleTag.innerHTML = scopedIndividual;
-          } else if (styleTag) {
-            styleTag.remove();
-          }
-        } else {
-          setError(true);
         }
-      } catch (err) {
-        console.error('Error fetching dynamic page:', err);
-        setError(true);
-      } finally {
-        setLoading(false);
+      } catch (dbErr) {
+        console.warn("Firestore pages query failed, checking fallback:", dbErr);
       }
+
+      // If page was not found in Firestore or query errored, check fallback database
+      if (!targetDoc) {
+        const matched = pagesFallback.find(p => p.slug === slug);
+        if (matched) {
+          targetDoc = matched;
+          idVal = matched.id;
+          relatedList = pagesFallback
+            .filter(p => p.slug !== slug && p.active !== false && (!p.publishAt || new Date(p.publishAt) <= new Date()))
+            .slice(0, 3);
+        }
+      }
+
+      if (targetDoc) {
+        // Check if page is active and released
+        const isNotActive = targetDoc.active === false;
+        const isFuture = targetDoc.publishAt && new Date(targetDoc.publishAt) > new Date();
+        if (isNotActive || isFuture) {
+          setError(true);
+          setLoading(false);
+          return;
+        }
+
+        setPageData(targetDoc);
+        setPageId(idVal);
+        setError(false);
+        setRelatedPages(relatedList);
+
+        window.scrollTo(0, 0);
+
+        // Global CMS CSS Injection
+        const globalStyleId = 'global-cms-css';
+        let globalStyleTag = document.getElementById(globalStyleId);
+        if (settings?.seo?.globalCmsCss && settings?.seo?.isGlobalCssActive !== false) {
+          if (!globalStyleTag) {
+            globalStyleTag = document.createElement('style');
+            globalStyleTag.id = globalStyleId;
+            document.head.appendChild(globalStyleTag);
+          }
+          // Scope CSS to content area using modern CSS nesting
+          const scopedGlobal = `.cms-rendered-content { ${settings.seo.globalCmsCss} }`;
+          globalStyleTag.innerHTML = scopedGlobal;
+        } else if (globalStyleTag) {
+          globalStyleTag.remove();
+        }
+
+        // Individual CSS Injection
+        const styleId = `page-css-${slug}`;
+        let styleTag = document.getElementById(styleId);
+        if (targetDoc.customCss && targetDoc.isCustomCssActive !== false) {
+          if (!styleTag) {
+            styleTag = document.createElement('style');
+            styleTag.id = styleId;
+            document.head.appendChild(styleTag);
+          }
+          // Scope CSS to content area using modern CSS nesting
+          const scopedIndividual = `.cms-rendered-content { ${targetDoc.customCss} }`;
+          styleTag.innerHTML = scopedIndividual;
+        } else if (styleTag) {
+          styleTag.remove();
+        }
+      } else {
+        setError(true);
+      }
+      setLoading(false);
     };
 
     if (slug) fetchPage();
@@ -123,8 +141,116 @@ export default function DynamicPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <Loader2 className="text-gold animate-spin" size={40} />
+      <div className="bg-black min-h-screen pb-24">
+        {/* Skeleton Hero Section */}
+        <div className="relative h-[70vh] w-full overflow-hidden bg-white/5 animate-pulse">
+          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
+          
+          <div className="absolute bottom-16 left-0 right-0 z-10 font-sans">
+            <div className="max-w-7xl mx-auto px-6">
+              <div className="max-w-4xl space-y-4">
+                {/* Back Button Skeleton */}
+                <div className="w-40 h-6 bg-white/10 rounded-full" />
+                {/* Title Skeletons */}
+                <div className="w-3/4 h-12 md:h-16 bg-white/10 rounded-lg animate-pulse" />
+                <div className="w-1/2 h-8 bg-white/10 rounded-lg animate-pulse" />
+                {/* Category tag skeleton */}
+                <div className="w-24 h-6 bg-white/10 rounded-full mt-4" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Skeleton Article Section */}
+        <div className="max-w-7xl mx-auto px-6 pt-20">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-16">
+            {/* Main Content Area */}
+            <div className="lg:col-span-8 space-y-8">
+              {/* Content Paragraph Skeletons */}
+              <div className="space-y-4 animate-pulse">
+                <div className="h-4 bg-white/10 rounded-md w-full" />
+                <div className="h-4 bg-white/10 rounded-md w-11/12" />
+                <div className="h-4 bg-white/10 rounded-md w-10/12" />
+                <div className="h-4 bg-white/10 rounded-md w-9/12" />
+              </div>
+              <div className="space-y-4 pt-6 animate-pulse">
+                <div className="h-6 bg-white/10 rounded-md w-1/3 mb-4" />
+                <div className="h-4 bg-white/10 rounded-md w-full" />
+                <div className="h-4 bg-white/10 rounded-md w-full" />
+                <div className="h-4 bg-white/10 rounded-md w-5/6" />
+              </div>
+              <div className="space-y-4 pt-6 animate-pulse">
+                <div className="h-4 bg-white/10 rounded-md w-full" />
+                <div className="h-4 bg-white/10 rounded-md w-11/12" />
+                <div className="h-4 bg-white/10 rounded-md w-4/5" />
+              </div>
+
+              {/* End of experience separator skeleton */}
+              <div className="mt-16 pt-8 border-t border-white/10 flex items-center justify-between animate-pulse">
+                <div className="w-28 h-3 bg-white/10 rounded-md" />
+                <div className="flex items-center gap-4">
+                  <div className="w-24 h-3 bg-white/10 rounded-md" />
+                  <div className="w-10 h-10 bg-white/10 rounded-full" />
+                </div>
+              </div>
+
+              {/* Related experiences skeleton */}
+              <div className="mt-24 pt-24 border-t border-white/5 space-y-8">
+                <div className="flex justify-between items-end animate-pulse">
+                  <div className="space-y-3">
+                    <div className="w-28 h-3 bg-white/10 rounded-md" />
+                    <div className="w-48 h-8 bg-white/10 rounded-md" />
+                  </div>
+                  <div className="w-20 h-4 bg-white/10 rounded-md" />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                  {[1, 2, 3].map((n) => (
+                    <div key={n} className="space-y-4 animate-pulse">
+                      <div className="aspect-[4/5] rounded-3xl bg-white/10" />
+                      <div className="space-y-3">
+                        <div className="w-16 h-3 bg-white/10 rounded-md" />
+                        <div className="w-full h-5 bg-white/10 rounded-md" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Sidebar Sticky Area */}
+            <div className="lg:col-span-4 space-y-12">
+              {/* Glass Booking block */}
+              <div className="glass p-8 rounded-[2rem] border border-white/5 space-y-6 animate-pulse">
+                <div className="w-24 h-3 bg-white/10 rounded-md" />
+                <div className="space-y-3">
+                  <div className="w-3/4 h-8 bg-white/10 rounded-md" />
+                  <div className="w-1/2 h-8 bg-white/10 rounded-md" />
+                </div>
+                <div className="space-y-3">
+                  <div className="w-full h-4 bg-white/10 rounded-md" />
+                  <div className="w-5/6 h-4 bg-white/10 rounded-md" />
+                </div>
+                <div className="w-full h-12 bg-white/10 rounded-full mt-4" />
+              </div>
+
+              {/* Sidebar list items */}
+              <div className="space-y-4">
+                {[1, 2].map((n) => (
+                  <div key={n} className="glass p-6 rounded-2xl border border-white/5 flex items-center justify-between animate-pulse">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-full bg-white/10" />
+                      <div className="space-y-3">
+                        <div className="w-28 h-4 bg-white/10 rounded-md" />
+                        <div className="w-36 h-3 bg-white/10 rounded-md" />
+                      </div>
+                    </div>
+                    <div className="w-4 h-4 bg-white/10 rounded-full" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
