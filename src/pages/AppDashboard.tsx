@@ -2,7 +2,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Home, MapPin, Clock, User, Car, UserCog,
   Settings, Bell, LogOut, Truck, Shield, CalendarRange,
-  BarChart3, Users, LayoutGrid, Globe, HelpCircle, FileText
+  BarChart3, Users, LayoutGrid, Globe, HelpCircle, FileText,
+  Database, Zap, WifiOff
 } from 'lucide-react';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { cn } from '../lib/utils';
@@ -35,6 +36,7 @@ export default function AppDashboard() {
     title?: string;
     message?: string;
   } | null>(null);
+  const [dbStatus, setDbStatus] = useState<'realtime' | 'fallback'>('realtime');
   const mainScrollRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
@@ -110,6 +112,27 @@ export default function AppDashboard() {
     return () => unsubscribe();
   }, [user]);
 
+  // Database Source Detection
+  useEffect(() => {
+    if (!isAdmin) return;
+
+    // We consider as "Realtime" if we find any document in key operational collections
+    // Otherwise we assume it's fresh environment using memory fallbacks
+    const q = query(collection(db, 'metadata'), limit(1));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (snapshot.empty) {
+        setDbStatus('fallback');
+      } else {
+        setDbStatus('realtime');
+      }
+    }, (error) => {
+      console.warn('Realtime DB access restricted or error, defaulting to fallback label:', error);
+      setDbStatus('fallback');
+    });
+
+    return () => unsubscribe();
+  }, [isAdmin]);
+
   const handleLogout = async () => {
     await signOut(auth);
     navigate('/login');
@@ -149,7 +172,7 @@ export default function AppDashboard() {
     { id: 'management', label: 'Management', icon: Settings, roles: ['admin'] },
   ];
 
-  const filteredNavItems = navItems.filter(item => 
+  const filteredNavItems = navItems.filter(item =>
     item.roles.includes(userProfile?.role || 'customer')
   );
 
@@ -182,9 +205,9 @@ export default function AppDashboard() {
   const renderNotice = () => {
     if (!dashboardNotice) return null;
     return (
-      <FormNotice 
-        type={dashboardNotice.type} 
-        message={dashboardNotice.message} 
+      <FormNotice
+        type={dashboardNotice.type}
+        message={dashboardNotice.message}
         title={dashboardNotice.title}
         onClose={() => setDashboardNotice(null)}
       />
@@ -201,7 +224,7 @@ export default function AppDashboard() {
       } else {
         // Fallback for types explicitly requested by children
         const batch = writeBatch(db);
-        
+
         switch (type) {
           case 'booking':
             if (id) await deleteDoc(doc(db, 'bookings', id));
@@ -260,7 +283,7 @@ export default function AppDashboard() {
 
   return (
     <div className="flex flex-col min-h-screen bg-black text-white overflow-hidden">
-      <SEO 
+      <SEO
         title="Dashboard - Merlux"
         robots="noindex, nofollow"
       />
@@ -268,9 +291,43 @@ export default function AppDashboard() {
       <header className="bg-black/50 backdrop-blur-md border-b border-white/5">
         <div className="max-w-7xl mx-auto w-full p-4 lg:px-10 lg:py-4 flex flex-col gap-4">
           <div className="flex items-center justify-between">
-            <h1 className="text-xs sm:text-sm lg:text-base font-bold tracking-[0.15em] text-white/90">
-              {isAdmin ? 'Admin Dashboard' : isDriver ? 'Driver Dashboard' : 'Customer Dashboard'}
-            </h1>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+              <h1 className="text-xs sm:text-sm lg:text-base font-bold tracking-[0.15em] text-white/90">
+                {isAdmin ? 'Admin Dashboard' : isDriver ? 'Driver Dashboard' : 'Customer Dashboard'}
+              </h1>
+
+              {isAdmin && (
+                <motion.div
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1 rounded-full border text-[8px] font-black uppercase tracking-[0.2em] w-fit",
+                    dbStatus === 'realtime'
+                      ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                      : "bg-amber-500/10 border-amber-500/20 text-amber-500 animate-pulse"
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "w-1.5 h-1.5 rounded-full",
+                      dbStatus === 'realtime' ? "bg-emerald-400" : "bg-amber-500"
+                    )}
+                  />
+                  {dbStatus === 'realtime' ? (
+                    <span className="flex items-center gap-1.5">
+                      <Zap size={10} className="fill-current" />
+                      <span className="hidden md:inline">Realtime DB</span>
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1.5">
+                      <WifiOff size={10} />
+                      <span className="hidden md:inline">Fallback DB</span>
+                    </span>
+                  )}
+                </motion.div>
+              )}
+
+            </div>
 
             <div className="flex items-center gap-4">
               <div className="relative">

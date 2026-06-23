@@ -1,12 +1,14 @@
 import { useState, FormEvent, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { MapPin, Clock, Users, ArrowRight, Star, Calendar, User, Mail, Phone, CreditCard, Minus, Plus, ChevronRight, ChevronLeft, CheckCircle, Info, LayoutGrid, DollarSign, Tag, X, Image as ImageIcon, Banknote as BanknoteIcon, UserCheck, FileText, Luggage, LocateFixed, BadgePercent, Shield } from 'lucide-react';
+import { MapPin, Clock, Users, ArrowRight, Star, Calendar, User, Mail, Phone, CreditCard, Minus, Plus, ChevronRight, ChevronLeft, CheckCircle, Info, LayoutGrid, DollarSign, Tag, X, Image as ImageIcon, Banknote as BanknoteIcon, UserCheck, FileText, Luggage, LocateFixed, BadgePercent, Shield, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { useNavigate, Link, useParams } from 'react-router-dom';
 import { collection, onSnapshot, query, where, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
+import { getCachedDocs } from '../lib/firestore-cache';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useJsApiLoader, Autocomplete } from '@react-google-maps/api';
 import { FormNotice, type NoticeType } from '../components/FormNotice';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
+import { toursFallback } from '../data/fallback/toursFallback';
 import { cn, getAssetPath } from '../lib/utils';
 import Logo from '../components/layout/Logo';
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_ID } from '../lib/google-maps';
@@ -302,11 +304,12 @@ export default function Tours() {
   const [durationFilter, setDurationFilter] = useState("all");
   const [priceSort, setPriceSort] = useState<"none" | "asc" | "desc">("none");
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number | 'All'>(12);
 
   // Reset pagination when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, categoryFilter, durationFilter, priceSort]);
+  }, [searchQuery, categoryFilter, durationFilter, priceSort, pageSize]);
 
   const categories = useMemo(() => {
     const cats = new Set(tours.map(t => t.category).filter(Boolean));
@@ -376,32 +379,50 @@ export default function Tours() {
     return result;
   }, [tours, searchQuery, categoryFilter, durationFilter, priceSort]);
 
-  const ITEMS_PER_PAGE = 12;
-  const totalPages = Math.max(1, Math.ceil(filteredTours.length / ITEMS_PER_PAGE));
+  const totalPages = pageSize === 'All' ? 1 : Math.max(1, Math.ceil(filteredTours.length / (pageSize as number)));
 
   const paginatedTours = useMemo(() => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredTours.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [filteredTours, currentPage]);
+    if (pageSize === 'All') return filteredTours;
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredTours.slice(startIndex, startIndex + pageSize);
+  }, [filteredTours, currentPage, pageSize]);
 
   useEffect(() => {
-    const q = query(collection(db, 'tours'), where('active', '==', true));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const parsedTours = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setTours(parsedTours);
-      setIsLoading(false);
-    });
+    let active = true;
+    const fetchToursAndAddons = async () => {
+      try {
+        const q = query(collection(db, 'tours'), where('active', '==', true));
+        const fetchedTours = await getCachedDocs(q, 'tours_active');
+        if (active) {
+          if (fetchedTours.length > 0) {
+            setTours(fetchedTours);
+          } else {
+            setTours(toursFallback);
+          }
+          setIsLoading(false);
+        }
+      } catch (err) {
+        console.warn("Tours dynamic loading suspended, using fallback:", err);
+        if (active) {
+          setTours(toursFallback);
+          setIsLoading(false);
+        }
+      }
 
-    const addonsQ = query(collection(db, 'price-addons'), where('active', '==', true));
-    const unsubscribeAddons = onSnapshot(addonsQ, (snapshot) => {
-      setPriceAddons(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (err) => {
-      console.warn("Price addons loading suspended:", err);
-    });
+      try {
+        const addonsQ = query(collection(db, 'price-addons'), where('active', '==', true));
+        const fetchedAddons = await getCachedDocs(addonsQ, 'price_addons_active');
+        if (active) {
+          setPriceAddons(fetchedAddons);
+        }
+      } catch (err) {
+        console.warn("Price addons loading suspended:", err);
+      }
+    };
 
+    fetchToursAndAddons();
     return () => {
-      unsubscribe();
-      unsubscribeAddons();
+      active = false;
     };
   }, []);
 
@@ -626,14 +647,24 @@ export default function Tours() {
 
       // 3. Date restriction
       if (addon.limitDates) {
-        const checkDate = (d: string) => {
-          if (!d) return false;
-          if (addon.startDate && d < addon.startDate) return false;
-          if (addon.endDate && d > addon.endDate) return false;
+        const checkDateInRange = (dateStr: string) => {
+          if (!dateStr) return false;
+          if (addon.dateRanges && addon.dateRanges.length > 0) {
+            return addon.dateRanges.some((range: any) => {
+              const s = range.startDate || "";
+              const e = range.endDate || "";
+              if (!s && !e) return false;
+              if (s && dateStr < s) return false;
+              if (e && dateStr > e) return false;
+              return true;
+            });
+          }
+          if (addon.startDate && dateStr < addon.startDate) return false;
+          if (addon.endDate && dateStr > addon.endDate) return false;
           return true;
         };
-        const matchP = checkDate(details.date);
-        const matchR = details.returnRide ? checkDate(details.returnDate) : false;
+        const matchP = checkDateInRange(details.date);
+        const matchR = details.returnRide ? checkDateInRange(details.returnDate) : false;
 
         const checkedDates: string[] = [];
         if (matchP) checkedDates.push(details.date);
@@ -641,33 +672,30 @@ export default function Tours() {
 
         ruleResults.push({
           matched: matchP || matchR,
-          details: (matchP || matchR) ? [`${checkedDates.join(", ")} (Validity: ${addon.startDate} to ${addon.endDate})`] : []
+          details: (matchP || matchR) ? [`${checkedDates.join(", ")} matched validity constraints`] : []
         });
       }
 
       // 4. Time restriction
       if (addon.limitTime) {
-        const checkTime = (timeStr: string) => {
+        const checkTimeInRange = (timeStr: string) => {
           if (!timeStr) return false;
-          const start = addon.startTime || "";
-          const end = addon.endTime || "";
-          if (start && end) {
-            if (start > end) {
-              // Overnight window (e.g., 22:00 - 05:00)
-              return timeStr >= start || timeStr <= end;
-            } else {
-              // Standard single-day window (e.g., 08:00 - 17:00)
+          const checkSingleRange = (start: string, end: string) => {
+            if (start && end) {
+              if (start > end) return timeStr >= start || timeStr <= end;
               return timeStr >= start && timeStr <= end;
-            }
-          } else if (start) {
-            return timeStr >= start;
-          } else if (end) {
-            return timeStr <= end;
+            } else if (start) return timeStr >= start;
+            else if (end) return timeStr <= end;
+            return true;
+          };
+
+          if (addon.timeRanges && addon.timeRanges.length > 0) {
+            return addon.timeRanges.some((range: any) => checkSingleRange(range.startTime, range.endTime));
           }
-          return true;
+          return checkSingleRange(addon.startTime, addon.endTime);
         };
-        const matchP = checkTime(details.time);
-        const matchR = details.returnRide ? checkTime(details.returnTime) : false;
+        const matchP = checkTimeInRange(details.time);
+        const matchR = details.returnRide ? checkTimeInRange(details.returnTime) : false;
         
         let timeMatch = false;
         const target = addon.timeTarget || "any";
@@ -678,7 +706,6 @@ export default function Tours() {
         } else if (target === "both") {
           timeMatch = details.returnRide ? (matchP && matchR) : matchP;
         } else {
-          // "any"
           timeMatch = details.returnRide ? (matchP || matchR) : matchP;
         }
 
@@ -692,7 +719,7 @@ export default function Tours() {
 
         ruleResults.push({
           matched: timeMatch,
-          details: timeMatch ? [`${checkedTimes.join(", ")} (Range: ${addon.startTime} - ${addon.endTime})`] : []
+          details: timeMatch ? [`${checkedTimes.join(", ")} within window constraints`] : []
         });
       }
 
@@ -1308,6 +1335,7 @@ export default function Tours() {
                             <AnimatePresence>
                               {expandedItinerary === idx && (
                                 <motion.div
+                                  key={`itinerary-detail-${idx}`}
                                   initial={{ height: 0, opacity: 0 }}
                                   animate={{ height: "auto", opacity: 1 }}
                                   exit={{ height: 0, opacity: 0 }}
@@ -1508,37 +1536,129 @@ export default function Tours() {
               </motion.div>
             )}
 
-            {/* Next/Previous Pagination Controls */}
-            {step === 1 && !showFullDetails && totalPages > 1 && (
-              <div className="flex items-center justify-center gap-4 mt-12 pb-4">
-                <button
-                  disabled={currentPage === 1}
-                  onClick={() => {
-                    setCurrentPage(p => Math.max(1, p - 1));
-                    window.scrollTo({ top: 400, behavior: 'smooth' });
-                  }}
-                  className="flex items-center justify-center w-10 h-10 rounded-full border border-white/10 text-white hover:border-gold hover:text-gold transition-all duration-300 disabled:opacity-20 disabled:hover:text-white disabled:hover:border-white/10 cursor-pointer"
-                >
-                  <ChevronLeft size={16} />
-                </button>
-                <span className="text-[9px] uppercase tracking-[0.2em] font-bold text-white/40">
-                  Page <span className="text-gold font-black">{currentPage}</span> of {totalPages}
-                </span>
-                <button
-                  disabled={currentPage === totalPages}
-                  onClick={() => {
-                    setCurrentPage(p => Math.min(totalPages, p + 1));
-                    window.scrollTo({ top: 400, behavior: 'smooth' });
-                  }}
-                  className="flex items-center justify-center w-10 h-10 rounded-full border border-white/10 text-white hover:border-gold hover:text-gold transition-all duration-300 disabled:opacity-20 disabled:hover:text-white disabled:hover:border-white/10 cursor-pointer"
-                >
-                  <ChevronRight size={16} />
-                </button>
-              </div>
+            {/* BlogTab.tsx Style Pagination Controls */}
+            {step === 1 && !showFullDetails && filteredTours.length > 0 && (
+              <motion.div
+                key="pagination"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex flex-col sm:flex-row items-center justify-between gap-6 bg-white/[0.03] p-5 rounded-2xl border border-white/5 mt-12 mb-16 max-w-7xl mx-auto w-full"
+              >
+                {/* Status info */}
+                <div className="text-[11px] font-mono text-white/50">
+                  Showing <span className="text-gold font-bold">
+                    {filteredTours.length === 0 ? 0 : (pageSize === 'All' ? 1 : (currentPage - 1) * (pageSize as number) + 1)}
+                  </span> to <span className="text-gold font-bold">
+                    {pageSize === 'All' ? filteredTours.length : Math.min(currentPage * (pageSize as number), filteredTours.length)}
+                  </span> of <span className="text-white font-bold">{filteredTours.length}</span> entries
+                </div>
+
+                {/* Pagination buttons */}
+                {pageSize !== 'All' && totalPages > 1 && (
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => {
+                        setCurrentPage(1);
+                        window.scrollTo({ top: 400, behavior: 'smooth' });
+                      }}
+                      disabled={currentPage === 1}
+                      className="p-2 border border-white/10 rounded-xl bg-white/5 text-white/60 hover:text-gold hover:border-gold/30 disabled:opacity-20 disabled:pointer-events-none transition-all cursor-pointer"
+                      title="First Page"
+                    >
+                      <ChevronsLeft size={14} />
+                    </button>
+                    <button
+                      onClick={() => {
+                        setCurrentPage(prev => Math.max(1, prev - 1));
+                        window.scrollTo({ top: 400, behavior: 'smooth' });
+                      }}
+                      disabled={currentPage === 1}
+                      className="p-2 border border-white/10 rounded-xl bg-white/5 text-white/60 hover:text-gold hover:border-gold/30 disabled:opacity-20 disabled:pointer-events-none transition-all cursor-pointer"
+                      title="Previous Page"
+                    >
+                      <ChevronLeft size={14} />
+                    </button>
+                    
+                    {(() => {
+                      const pageNumbers = [];
+                      const maxButtons = 5;
+                      let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+                      let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+                      if (endPage - startPage + 1 < maxButtons) {
+                        startPage = Math.max(1, endPage - maxButtons + 1);
+                      }
+                      for (let i = Math.max(1, startPage); i <= endPage; i++) {
+                        pageNumbers.push(i);
+                      }
+                      return pageNumbers.map(num => (
+                        <button
+                          key={`page-btn-${num}`}
+                          onClick={() => {
+                            setCurrentPage(num);
+                            window.scrollTo({ top: 400, behavior: 'smooth' });
+                          }}
+                          className={cn(
+                            "w-8 h-8 flex items-center justify-center text-[10px] rounded-xl font-mono transition-all border font-bold cursor-pointer",
+                            currentPage === num
+                              ? "bg-gold text-black border-gold shadow-[0_0_10px_rgba(212,175,55,0.2)]"
+                              : "bg-white/5 text-white/70 border-white/10 hover:border-gold/30 hover:text-gold"
+                          )}
+                        >
+                          {num}
+                        </button>
+                      ));
+                    })()}
+
+                    <button
+                      onClick={() => {
+                        setCurrentPage(prev => Math.min(totalPages, prev + 1));
+                        window.scrollTo({ top: 400, behavior: 'smooth' });
+                      }}
+                      disabled={currentPage === totalPages}
+                      className="p-2 border border-white/10 rounded-xl bg-white/5 text-white/60 hover:text-gold hover:border-gold/30 disabled:opacity-20 disabled:pointer-events-none transition-all cursor-pointer"
+                      title="Next Page"
+                    >
+                      <ChevronRight size={14} />
+                    </button>
+                    <button
+                      onClick={() => {
+                        setCurrentPage(totalPages);
+                        window.scrollTo({ top: 400, behavior: 'smooth' });
+                      }}
+                      disabled={currentPage === totalPages}
+                      className="p-2 border border-white/10 rounded-xl bg-white/5 text-white/60 hover:text-gold hover:border-gold/30 disabled:opacity-20 disabled:pointer-events-none transition-all cursor-pointer"
+                      title="Last Page"
+                    >
+                      <ChevronsRight size={14} />
+                    </button>
+                  </div>
+                )}
+
+                {/* Page size dropdown */}
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] uppercase tracking-wider text-white/40 font-bold font-mono">Page Size:</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setPageSize(val === 'All' ? 'All' : Number(val));
+                      setCurrentPage(1);
+                    }}
+                    className="custom-select bg-black text-gold text-[10px] font-mono border border-white/10 rounded-xl px-3 py-1.5 focus:outline-none focus:border-gold font-bold uppercase cursor-pointer"
+                  >
+                    <option value={12}>12 Entries</option>
+                    <option value={24}>24 Entries</option>
+                    <option value={48}>48 Entries</option>
+                    <option value="All">Show All</option>
+                  </select>
+                </div>
+              </motion.div>
             )}
 
             {!showFullDetails && step === 1 && (
               <motion.div
+                key="luxury-ride-cta"
                 initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}

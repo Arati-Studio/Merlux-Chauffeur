@@ -11,6 +11,9 @@ import { cn, formatDate, getAssetPath } from '../lib/utils';
 import { useSettings } from '../lib/SettingsContext';
 import { collection, getDocs, query, limit, orderBy, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { toursFallback } from '../data/fallback/toursFallback';
+import { fleetFallback } from '../data/fallback/fleetFallback';
+import { getCachedDocs } from '../lib/firestore-cache';
 import * as Icons from 'lucide-react';
 import SEO from '../components/SEO';
 
@@ -56,12 +59,11 @@ export default function Home() {
     let active = true;
     const fetchData = async () => {
       try {
-        // Fetch blogs - we'll fetch a bit more then filter/sort client-side for "latest published" accuracy
-        const blogsSnap = await getDocs(query(collection(db, 'blogs'), limit(20)));
+        // Fetch blogs
+        let blogs = await getCachedDocs(query(collection(db, 'blogs'), limit(20)), 'home_blogs');
+        
         if (active) {
-          let blogs = blogsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
-          
-          // Use fallback if Firestore is empty
+          // Use fallback if Firestore is empty or failed
           if (blogs.length === 0) {
             try {
               const { blogsFallback } = await import('../data/fallback/blogsFallback');
@@ -82,13 +84,29 @@ export default function Home() {
           setBlogsList(filteredBlogs);
         }
 
-        const fleetSnap = await getDocs(collection(db, 'fleet'));
-        if (active) setFleetList(fleetSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const fetchedFleet = await getCachedDocs(collection(db, 'fleet'), 'home_fleet');
+        if (active) {
+          setFleetList(fetchedFleet.length > 0 ? fetchedFleet : fleetFallback);
+        }
 
-        const toursSnap = await getDocs(query(collection(db, 'tours'), orderBy('createdAt', 'desc'), limit(3)));
-        if (active) setToursList(toursSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const fetchedTours = await getCachedDocs(query(collection(db, 'tours'), orderBy('createdAt', 'desc'), limit(3)), 'home_tours');
+        if (active) {
+          setToursList(fetchedTours.length > 0 ? fetchedTours : toursFallback.slice(0, 3));
+        }
       } catch (err) {
-        console.error('Error fetching home data:', err);
+        console.warn('Error fetching home data, using fallback systems:', err);
+        if (active) {
+          // If top level fails, ensure state has fallback
+          if (fleetList.length === 0) setFleetList(fleetFallback);
+          if (toursList.length === 0) setToursList(toursFallback.slice(0, 3));
+          
+          if (blogsList.length === 0) {
+             try {
+               const { blogsFallback } = await import('../data/fallback/blogsFallback');
+               setBlogsList(blogsFallback.slice(0, 3));
+             } catch (e) {}
+          }
+        }
       }
     };
     fetchData();
@@ -719,7 +737,7 @@ export default function Home() {
                       <div className="bg-black/65 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 flex items-center gap-2">
                         <Calendar size={11} className="text-gold" />
                         <p className="text-gold text-[9px] uppercase tracking-widest font-bold">
-                          {formatDate(blog.publishAt || blog.createdAt || blog.date)}
+                          {formatDate(blog.publishAt || (blog.createdAt?.seconds ? blog.createdAt.seconds * 1000 : blog.createdAt) || blog.date)}
                         </p>
                       </div>
                       <div className="bg-black/65 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 flex items-center gap-2">

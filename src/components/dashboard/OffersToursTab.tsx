@@ -1,11 +1,12 @@
 import { useState, useMemo, useEffect } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { 
+import {
   Plus, Search, CircleX, Check, CheckCheck, XCircle, Car, ChevronDown,
-  CheckCircle, Ban, Copy, Trash2, LayoutGrid, List, SquareCheck, 
+  CheckCircle, Ban, Copy, Trash2, LayoutGrid, List, SquareCheck,
   Square, Edit2, Clock, X, DollarSign, Info, MapPin, Tag, Save,
   Plus as PlusIcon, Trash2 as TrashIcon, Info as InfoIcon,
-  LayoutGrid as LayoutGridIcon, Download
+  LayoutGrid as LayoutGridIcon, Download,
+  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight
 } from 'lucide-react';
 import { cn, getAssetPath } from '../../lib/utils';
 import { db, handleFirestoreError, OperationType } from '../../lib/firebase';
@@ -46,33 +47,76 @@ const OffersToursTab: React.FC<OffersToursTabProps> = ({
     };
   }, []);
 
+  // Auto-deactivate expired items
+  useEffect(() => {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    const checkAndDeactivate = async () => {
+      // Create a batch or iterate
+      const toursToDeactivate = tours.filter(t => {
+        if (!t.active) return false;
+        const avail = t.availability || {};
+        const ranges = avail.dateRanges || (avail.startDate || avail.endDate ? [{ startDate: avail.startDate, endDate: avail.endDate }] : []);
+        if (ranges.length === 0) return false;
+        return !ranges.some((r: any) => !r.endDate || new Date(r.endDate) >= now);
+      });
+
+      const offersToDeactivate = offers.filter(o => {
+        if (!o.active) return false;
+        const avail = o.availability || {};
+        const ranges = avail.dateRanges || (avail.startDate || avail.endDate ? [{ startDate: avail.startDate, endDate: avail.endDate }] : []);
+        if (ranges.length === 0) return false;
+        return !ranges.some((r: any) => !r.endDate || new Date(r.endDate) >= now);
+      });
+
+      for (const t of toursToDeactivate) {
+        updateDoc(doc(db, 'tours', t.id), { active: false, updatedAt: serverTimestamp() }).catch(e => console.error("Auto-deactivate tour failed", e));
+      }
+      for (const o of offersToDeactivate) {
+        updateDoc(doc(db, 'offers', o.id), { active: false, updatedAt: serverTimestamp() }).catch(e => console.error("Auto-deactivate offer failed", e));
+      }
+    };
+
+    if (tours.length > 0 || offers.length > 0) {
+      const timer = setTimeout(checkAndDeactivate, 2000); // Debounce
+      return () => clearTimeout(timer);
+    }
+  }, [tours, offers]);
+
   const [editingOffer, setEditingOffer] = useState<any>(null);
   const [showOfferModal, setShowOfferModal] = useState(false);
   const [editingTour, setEditingTour] = useState<any>(null);
   const [showTourModal, setShowTourModal] = useState(false);
   const [tourActiveTab, setTourActiveTab] = useState<'general' | 'content' | 'pricing' | 'itinerary' | 'marketing'>('general');
-  
+
   const [selectedOffers, setSelectedOffers] = useState<string[]>([]);
   const [isOffersSelectionMode, setIsOffersSelectionMode] = useState(false);
   const [offersSearchQuery, setOffersSearchQuery] = useState('');
   const [offerViewMode, setOfferViewMode] = useState<'grid' | 'list'>('grid');
-  
+
   const [selectedTours, setSelectedTours] = useState<string[]>([]);
   const [isToursSelectionMode, setIsToursSelectionMode] = useState(false);
   const [toursSearchQuery, setToursSearchQuery] = useState('');
   const [toursLayout, setToursLayout] = useState<'grid' | 'list'>('grid');
 
-  const [toursLimit, setToursLimit] = useState(6);
-  const [offersLimit, setOffersLimit] = useState(6);
+  const [currentPageTours, setCurrentPageTours] = useState(1);
+  const [pageSizeTours, setPageSizeTours] = useState<number | 'All'>(12);
+  const [currentPageOffers, setCurrentPageOffers] = useState(1);
+  const [pageSizeOffers, setPageSizeOffers] = useState<number | 'All'>(12);
+
+  const [isBulkDateModalOpen, setIsBulkDateModalOpen] = useState(false);
+  const [bulkDateRange, setBulkDateRange] = useState({ startDate: '', endDate: '' });
+  const [bulkTargetType, setBulkTargetType] = useState<'offers' | 'tours' | null>(null);
 
   // Reset pagination when search queries change
   useEffect(() => {
-    setToursLimit(6);
-  }, [toursSearchQuery]);
+    setCurrentPageTours(1);
+  }, [toursSearchQuery, pageSizeTours]);
 
   useEffect(() => {
-    setOffersLimit(6);
-  }, [offersSearchQuery]);
+    setCurrentPageOffers(1);
+  }, [offersSearchQuery, pageSizeOffers]);
 
   // Filtered lists
   const filteredOffers = useMemo(() => (offers || []).filter((o: any) => {
@@ -97,12 +141,26 @@ const OffersToursTab: React.FC<OffersToursTabProps> = ({
   }), [tours, toursSearchQuery]);
 
   const paginatedTours = useMemo(() => {
-    return (filteredTours || []).slice(0, toursLimit);
-  }, [filteredTours, toursLimit]);
+    if (pageSizeTours === 'All') return filteredTours;
+    const startIndex = (currentPageTours - 1) * pageSizeTours;
+    return (filteredTours || []).slice(startIndex, startIndex + pageSizeTours);
+  }, [filteredTours, currentPageTours, pageSizeTours]);
+
+  const totalToursPages = useMemo(() => {
+    if (pageSizeTours === 'All') return 1;
+    return Math.ceil(filteredTours.length / (pageSizeTours as number)) || 1;
+  }, [filteredTours, pageSizeTours]);
 
   const paginatedOffers = useMemo(() => {
-    return (filteredOffers || []).slice(0, offersLimit);
-  }, [filteredOffers, offersLimit]);
+    if (pageSizeOffers === 'All') return filteredOffers;
+    const startIndex = (currentPageOffers - 1) * pageSizeOffers;
+    return (filteredOffers || []).slice(startIndex, startIndex + pageSizeOffers);
+  }, [filteredOffers, currentPageOffers, pageSizeOffers]);
+
+  const totalOffersPages = useMemo(() => {
+    if (pageSizeOffers === 'All') return 1;
+    return Math.ceil(filteredOffers.length / (pageSizeOffers as number)) || 1;
+  }, [filteredOffers, pageSizeOffers]);
 
   // Handlers
   const handleUpdateOffer = async (id: string | null, data: any) => {
@@ -303,886 +361,1129 @@ const OffersToursTab: React.FC<OffersToursTabProps> = ({
     }
     setSelectedTours([]);
   };
+
+  const handleBulkSetDateRange = async () => {
+    const ids = bulkTargetType === 'offers' ? selectedOffers : selectedTours;
+    const collectionName = bulkTargetType === 'offers' ? 'offers' : 'tours';
+
+    try {
+      for (const id of ids) {
+        const item = (bulkTargetType === 'offers' ? offers : tours).find(i => i.id === id);
+        if (!item) continue;
+
+        let availability = { ...item.availability };
+        const newRange = { startDate: bulkDateRange.startDate, endDate: bulkDateRange.endDate };
+
+        // Use multiple ranges pattern
+        const currentRanges = availability.dateRanges || [];
+        // If we're setting it via bulk, maybe we replace or add?
+        // Let's replace for bulk set to keep it simple and expected for "Bulk Management used set Date Range"
+        availability.dateRanges = [newRange];
+        availability.startDate = '';
+        availability.endDate = '';
+
+        await updateDoc(doc(db, collectionName, id), { availability, updatedAt: serverTimestamp() });
+      }
+
+      showDashboardNotice('success', `Updated date range for ${ids.length} ${bulkTargetType}`);
+      setIsBulkDateModalOpen(false);
+      setBulkTargetType(null);
+      if (bulkTargetType === 'offers') setSelectedOffers([]);
+      else setSelectedTours([]);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, collectionName);
+    }
+  };
   return (
     <>
       <div className="space-y-12">
-      {/* Tours Section */}
-      <div className="space-y-6 pt-12 border-t border-white/5">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h3 className="text-xl sm:text-2xl font-display text-gold flex items-center gap-3">
-              Products: Tours
-            </h3>
-            <p className="text-white/40 text-[10px] uppercase tracking-widest">Manage luxury bespoke experiences</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => {
-                setEditingTour({ title: '', description: '', price: 0, image: '', active: true, slug: '', duration: '', capacity: 0, locations: [] });
-                setShowTourModal(true);
-              }}
-              className="bg-gold text-black hover:bg-gold/80 px-6 py-2 rounded-xl flex items-center gap-2 transition-all"
-            >
-              <Plus size={18} />
-              <span className="text-xs font-bold uppercase tracking-widest leading-none">Add Tour</span>
-            </button>
-          </div>
-        </div>
-
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex flex-1 items-center gap-4">
-            <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/10 shrink-0">
+        {/* Tours Section */}
+        <div className="space-y-6 pt-12 border-t border-white/5">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-xl sm:text-2xl font-display text-gold flex items-center gap-3">
+                Products: Tours
+              </h3>
+              <p className="text-white/40 text-[10px] uppercase tracking-widest">Manage luxury bespoke experiences</p>
+            </div>
+            <div className="flex items-center gap-3">
               <button
-                type="button"
                 onClick={() => {
-                  setIsToursSelectionMode(false);
-                  setSelectedTours([]);
+                  setEditingTour({ title: '', description: '', price: 0, image: '', active: true, slug: '', duration: '', capacity: 0, locations: [] });
+                  setShowTourModal(true);
                 }}
-                className={cn(
-                  "px-3 py-1.5 rounded-lg transition-all flex items-center gap-2",
-                  !isToursSelectionMode ? "bg-white/10 text-white" : "text-white/40 hover:text-white"
-                )}
-                title="None (Selection Mode OFF)"
+                className="bg-gold text-black hover:bg-gold/80 px-6 py-2 rounded-xl flex items-center gap-2 transition-all"
               >
-                <CircleX size={14} />
-                <span className="hidden md:inline text-[10px] uppercase font-black tracking-widest">None</span>
+                <Plus size={18} />
+                <span className="text-xs font-bold uppercase tracking-widest leading-none">Add Tour</span>
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsToursSelectionMode(true);
-                  if ((selectedTours || []).length === (filteredTours || []).length) {
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex flex-1 items-center gap-4">
+              <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/10 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsToursSelectionMode(false);
                     setSelectedTours([]);
-                  }
-                }}
-                className={cn(
-                  "px-3 py-1.5 rounded-lg transition-all flex items-center gap-2",
-                  isToursSelectionMode && (selectedTours || []).length < (filteredTours || []).length ? "bg-gold text-black" : "text-white/40 hover:text-white"
-                )}
-                title="Selection Mode ON"
-              >
-                <Check size={14} />
-                <span className="hidden md:inline text-[10px] uppercase font-black tracking-widest">Select</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsToursSelectionMode(true);
-                  setSelectedTours((filteredTours || []).map((t: any) => t.id));
-                }}
-                className={cn(
-                  "px-3 py-1.5 rounded-lg transition-all flex items-center gap-2",
-                  isToursSelectionMode && (selectedTours || []).length === (filteredTours || []).length && (filteredTours || []).length > 0 ? "bg-gold text-black" : "text-white/40 hover:text-white"
-                )}
-                title="Select All"
-              >
-                <CheckCheck size={14} />
-                <span className="hidden md:inline text-[10px] uppercase font-black tracking-widest">All</span>
-              </button>
-            </div>
-
-            <div className="relative flex-1 w-full sm:max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" size={16} />
-              <input
-                type="text"
-                placeholder="Search luxury tours..."
-                value={toursSearchQuery}
-                onChange={(e) => setToursSearchQuery(e.target.value)}
-                className="w-full bg-black/40 border border-white/15 rounded-xl py-2 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-gold/50 transition-all"
-              />
-              {toursSearchQuery && (
-                <button
-                  onClick={() => setToursSearchQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/20 hover:text-white transition-colors"
-                >
-                  <XCircle size={14} />
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0 flex-wrap">
-            {(selectedTours || []).length > 0 && (
-              <div className="flex items-center gap-2 mr-2 animate-in fade-in zoom-in duration-200">
-                <span className="text-[10px] uppercase tracking-widest font-bold text-gold px-2">
-                  {(selectedTours || []).length} Selected
-                </span>
-                <button
-                  onClick={() => executeBulkUpdateToursStatus(selectedTours, true)}
-                  className="p-2 bg-green-500/10 text-green-500 rounded-lg hover:bg-green-500 hover:text-white transition-all"
-                  title="Activate Selected"
-                >
-                  <CheckCircle size={16} />
-                </button>
-                <button
-                  onClick={() => executeBulkUpdateToursStatus(selectedTours, false)}
-                  className="p-2 bg-red-500/10 text-red-500 hover:bg-red-500/50 hover:text-white transition-all"
-                  title="Deactivate Selected"
-                >
-                  <Ban size={16} />
-                </button>
-                <button
-                  onClick={handleBulkDuplicateTours}
-                  className="p-2 bg-white/5 text-gold rounded-lg hover:bg-gold hover:text-black transition-all"
-                  title="Duplicate Selected"
-                >
-                  <Copy size={16} />
-                </button>
-                <button
-                  onClick={() => setConfirmDelete({ type: 'bulk-tours', ids: selectedTours })}
-                  className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all"
-                  title="Delete Selected"
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            )}
-
-            <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/10">
-              <button
-                onClick={() => setToursLayout('grid')}
-                className={cn(
-                  "p-1.5 rounded-lg transition-all flex items-center justify-center min-w-[40px]",
-                  toursLayout === 'grid'
-                    ? "bg-gold text-black shadow-lg"
-                    : "text-white/40 hover:text-white hover:bg-white/5"
-                )}
-                title="Grid View"
-              >
-                <LayoutGrid size={14} />
-              </button>
-              <button
-                onClick={() => setToursLayout('list')}
-                className={cn(
-                  "p-1.5 rounded-lg transition-all flex items-center justify-center min-w-[40px]",
-                  toursLayout === 'list'
-                    ? "bg-gold text-black shadow-lg"
-                    : "text-white/40 hover:text-white hover:bg-white/5"
-                )}
-                title="List View"
-              >
-                <List size={16} />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {toursLayout === 'grid' ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {(filteredTours || []).length > 0 ? (
-              (paginatedTours || []).map((tour, idx) => {
-                let isActive = tour.active;
-                if (tour.availability?.endDate) {
-                  const endDate = new Date(tour.availability.endDate);
-                  if (endDate < new Date(new Date().setHours(0, 0, 0, 0))) {
-                    isActive = false;
-                  }
-                }
-
-                const prices = tour.fleets?.map((f: any) => Number(f.salePrice || f.standardPrice || f.price || 0)).filter((p: number) => p > 0) || [];
-                const minPrice = prices.length > 0 ? Math.min(...prices) : tour.price || 0;
-                const maxPrice = prices.length > 0 ? Math.max(...prices) : tour.price || 0;
-                const priceDisplay = prices.length > 0 && minPrice !== maxPrice ? `$${minPrice} - $${maxPrice}` : `$${minPrice}`;
-
-                return (
-                  <div key={tour.id || `tour-${idx}`} className={cn("glass rounded-2xl overflow-hidden border transition-all flex flex-col group relative", (selectedTours || []).includes(tour.id) ? "border-gold shadow-[0_0_15px_rgba(212,175,55,0.2)]" : "border-white/5 hover:border-gold/30")}>
-                    <div className="relative h-40 group rounded overflow-hidden shadow-lg">
-                      <img
-                        src={getAssetPath(tour.image) || "https://picsum.photos/seed/tour/600/300"}
-                        alt={tour.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                        referrerPolicy="no-referrer"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black to-transparent backdrop-blur-[1px]" />
-
-                      <div className="absolute top-2 left-3 z-10 flex items-center gap-2 flex-wrap">
-                        {tour.promoTag && (
-                          <span className="px-2 py-1 rounded bg-gold text-black text-[8px] font-black uppercase shadow-sm">
-                            {tour.promoTag}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="absolute top-0 right-0 z-20 flex items-center gap-2">
-                        <span
-                          className={cn(
-                            "px-3 py-1 rounded-bl-2xl text-[9px] font-black uppercase tracking-widest shadow-lg",
-                            isActive ? "bg-green-700 text-white" : "bg-red-700 text-white"
-                          )}
-                        >
-                          {isActive ? "Active" : !tour.active ? "Inactive" : "Expired"}
-                        </span>
-                      </div>
-
-                      <div className="absolute bottom-4 left-4 right-4">
-                        <p className="text-xl font-display drop-shadow-md leading-tight">{tour.title}</p>
-                        <div className="flex items-center justify-between mt-1">
-                          <div className="flex items-center gap-3 text-[10px] text-white/70 uppercase tracking-widest font-bold">
-                            {tour.duration && (
-                              <span className="flex items-center gap-1">
-                                <Clock size={10} /> {tour.duration}
-                              </span>
-                            )}
-                            {priceDisplay && (
-                              <span className="flex items-center gap-1 font-display text-gold font-normal">
-                                {priceDisplay}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex -space-x-2">
-                             {(tour.fleets || []).slice(0, 3).map((f: any, i: number) => (
-                               <div key={i} className="w-5 h-5 rounded-full border border-black bg-gold/20 flex items-center justify-center text-[7px] font-bold text-gold" title={f.name || f.type}>
-                                 <Car size={8} />
-                               </div>
-                             ))}
-                             {(tour.fleets || []).length > 3 && (
-                               <div className="w-5 h-5 rounded-full border border-black bg-white/10 flex items-center justify-center text-[7px] text-white/40">
-                                 +{(tour.fleets || []).length - 3}
-                               </div>
-                             )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="p-4 flex-1 flex flex-col bg-white/[0.02]">
-                      <p className="text-white/60 text-[10px] line-clamp-2 mb-4 italic">"{tour.shortDescription || tour.description || 'No description available.'}"</p>
-                      <div className="mt-auto flex items-center gap-2">
-                        {isToursSelectionMode && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (selectedTours.includes(tour.id))
-                                setSelectedTours((prev) => prev.filter((id) => id !== tour.id));
-                              else
-                                setSelectedTours((prev) => [...prev, tour.id]);
-                            }}
-                            className={cn(
-                              "flex-1 py-2 px-2 font-bold rounded-lg transition-all flex items-center justify-center gap-1",
-                              selectedTours.includes(tour.id) ? "bg-gold text-black" : "bg-white/5 text-white/40 hover:bg-white/10"
-                            )}
-                            title={selectedTours.includes(tour.id) ? "Deselect" : "Select"}
-                          >
-                            {selectedTours.includes(tour.id) ? <SquareCheck size={16} /> : <Square size={16} />}
-                          </button>
-                        )}
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleToggleTourStatus(tour.id, tour.active); }}
-                          className={cn("flex-1 py-2 px-2 font-bold rounded-lg transition-all flex items-center justify-center gap-1", tour.active ? "bg-red-500/10 text-red-500 hover:bg-red-500/50 hover:text-white" : "bg-green-500/10 text-green-500 hover:bg-green-500/50 hover:text-white")}
-                          title={tour.active ? "Deactivate" : "Activate"}
-                        >
-                          {tour.active ? <Ban size={16} /> : <CheckCircle size={16} />}
-                        </button>
-                        <button
-                          onClick={() => handleDuplicateTour(tour)}
-                          className="flex-1 py-2 px-2 bg-gold/10 text-gold hover:bg-gold/50 hover:text-white font-bold rounded-lg transition-all flex items-center justify-center gap-1"
-                          title="Duplicate"
-                        >
-                          <Copy size={16} />
-                        </button>
-
-                        <button
-                          onClick={() => {
-                            setEditingTour(tour);
-                            setShowTourModal(true);
-                          }}
-                          className="flex-1 py-2 px-2 bg-blue-600/10 text-blue-500 font-bold hover:bg-blue-500/50 hover:text-white rounded-lg transition-all flex items-center justify-center gap-1"
-                          title="Edit"
-                        >
-                          <Edit2 size={16} />
-                        </button>
-
-                        <button
-                          onClick={() => handleDeleteTour(tour.id)}
-                          className="flex-1 py-2 px-2 bg-red-500/10 text-red-500 hover:bg-red-500/50 hover:text-white font-bold rounded-lg transition-all flex items-center justify-center gap-1"
-                          title="Delete"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })
-            ) : (
-              <div className="col-span-full py-12 text-center bg-white/5 rounded-2xl border border-dashed border-white/10">
-                <p className="text-white/40 italic uppercase tracking-widest text-[10px] font-bold">No tours found.</p>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="glass rounded-[0.5rem] border border-white/5 overflow-hidden">
-            <div className="overflow-x-auto custom-scrollbar">
-              <table className="w-full text-left border-collapse min-w-[800px]">
-                <thead>
-                  <tr className="bg-white/5 border-b border-white/5">
-                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gold w-16">Status</th>
-                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gold min-w-[250px]">Tour Details</th>
-                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gold">Locations</th>
-                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gold text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {(filteredTours || []).length > 0 ? (
-                    (paginatedTours || []).map((tour, idx) => {
-                      let isActive = tour.active;
-                      if (tour.availability?.endDate) {
-                        const endDate = new Date(tour.availability.endDate);
-                        if (endDate < new Date(new Date().setHours(0, 0, 0, 0))) {
-                          isActive = false;
-                        }
-                      }
-                      const prices = tour.fleets?.map((f: any) => Number(f.salePrice || f.standardPrice || f.price || 0)).filter((p: number) => p > 0) || [];
-                      const minPrice = prices.length > 0 ? Math.min(...prices) : tour.price || 0;
-                      const maxPrice = prices.length > 0 ? Math.max(...prices) : tour.price || 0;
-                      const priceDisplay = prices.length > 0 && minPrice !== maxPrice ? `$${minPrice} - $${maxPrice}` : `$${minPrice}`;
-
-                      return (
-                        <tr key={tour.id || `list-tour-${idx}`} className={cn("transition-colors group bg-white/[0.01]", (selectedTours || []).includes(tour.id) ? "bg-gold/5" : "hover:bg-white/5")}>
-                          <td className="px-6 py-4">
-                            <span className={cn(
-                              "px-2 py-1 rounded text-[8px] font-bold uppercase tracking-widest",
-                              isActive ? "bg-green-700 text-white" : "bg-red-700 text-white"
-                            )}>
-                              {isActive ? 'Active' : (!tour.active ? 'Inactive' : 'Expired')}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-3">
-                              <img src={getAssetPath(tour.image || tour.featuredImage) || 'https://picsum.photos/seed/tour/60/60'} alt={tour.title} className="w-12 h-12 rounded-lg object-cover" />
-                              <div>
-                                <p className="text-sm font-bold text-white mb-0.5 flex items-center gap-2">
-                                  {tour.title}
-                                  {tour.promoTag && (
-                                    <span className="bg-gold text-black px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest shadow-lg inline-block">
-                                      {tour.promoTag}
-                                    </span>
-                                  )}
-                                </p>
-                                <p className="text-[10px] text-white/50 line-clamp-1">"{tour.shortDescription || tour.description || 'No description available.'}"</p>
-                                <div className="flex gap-3 mt-1 text-[9px] text-white/40 uppercase tracking-widest">
-                                  <span className="flex items-center gap-1"><Clock size={10} /> {tour.duration}</span>
-                                  <span className="flex items-center gap-1 font-display text-gold font-normal">From {priceDisplay}</span>
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-sm font-mono text-white/80">
-                            {tour.locations?.length || 0} stops
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            <div className="flex items-center gap-2 justify-end">
-                              {isToursSelectionMode && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (selectedTours.includes(tour.id)) setSelectedTours(prev => prev.filter(id => id !== tour.id));
-                                    else setSelectedTours(prev => [...prev, tour.id]);
-                                  }}
-                                  className={cn(
-                                    "p-2 rounded-lg transition-all border",
-                                    selectedTours.includes(tour.id) ? "bg-gold text-black border-gold" : "bg-white/5 text-white/40 hover:text-white border-white/10"
-                                  )}
-                                  title={selectedTours.includes(tour.id) ? "Deselect" : "Select"}
-                                >
-                                  {selectedTours.includes(tour.id) ? <SquareCheck size={14} /> : <Square size={14} />}
-                                </button>
-                              )}
-                              <button
-                                onClick={(e) => { e.stopPropagation(); handleToggleTourStatus(tour.id, tour.active); }}
-                                className={cn("p-2 rounded-lg transition-all border", tour.active ? "bg-red-500/10 text-red-500 hover:bg-red-500/50 hover:text-white border-red-500/20" : "bg-green-500/10 text-green-500 hover:bg-green-500 hover:text-white border-green-500/20")}
-                                title={tour.active ? "Deactivate" : "Activate"}
-                              >
-                                {tour.active ? <Ban size={14} /> : <CheckCircle size={14} />}
-                              </button>
-                              <button
-                                onClick={() => handleDuplicateTour(tour)}
-                                className="p-2 bg-gold/10 text-gold border border-gold/20 hover:bg-gold hover:text-black rounded-lg transition-all"
-                                title="Duplicate"
-                              >
-                                <Copy size={14} />
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setEditingTour(tour);
-                                  setShowTourModal(true);
-                                }}
-                                className="p-2 bg-blue-600/10 text-blue-500 border border-blue-500/20 hover:bg-blue-600 hover:text-white rounded-lg transition-all"
-                                title="Edit"
-                              >
-                                <Edit2 size={14} />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteTour(tour.id)}
-                                className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all border border-red-500/20"
-                                title="Delete"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  ) : (
-                    <tr>
-                      <td colSpan={4} className="py-12 text-center text-white/40 italic uppercase tracking-widest text-[10px] font-bold">
-                        No tours found.
-                      </td>
-                    </tr>
+                  }}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg transition-all flex items-center gap-2",
+                    !isToursSelectionMode ? "bg-white/10 text-white" : "text-white/40 hover:text-white"
                   )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {filteredTours.length > toursLimit && (
-          <div className="flex justify-center mt-8">
-            <button
-              onClick={() => setToursLimit(prev => prev + 6)}
-              className="bg-white/5 hover:bg-gold hover:text-black border border-gold/30 hover:border-gold text-gold font-bold uppercase tracking-widest text-[10px] px-8 py-3.5 rounded-xl transition-all duration-300 shadow-md cursor-pointer"
-            >
-              Show More Tours
-            </button>
-          </div>
-        )}
-      </div>
-
-            {/* Products Section */}
-      <div className="space-y-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h3 className="text-xl sm:text-2xl font-display text-gold flex items-center gap-3">
-              Products: Offers
-            </h3>
-            <p className="text-white/40 text-[10px] uppercase tracking-widest">Premium fixed-rate seasonal packages</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => {
-                setEditingOffer({
-                  title: '',
-                  description: '',
-                  discountType: 'percentage',
-                  discountValue: 15,
-                  image: '',
-                  active: true,
-                  slug: '',
-                  tags: [],
-                  fleets: []
-                });
-                setShowOfferModal(true);
-              }}
-              className="bg-gold text-black hover:bg-gold/80 px-6 py-2 rounded-xl flex items-center gap-2 transition-all"
-            >
-              <Plus size={18} />
-              <span className="text-xs font-bold uppercase tracking-widest leading-none">Add Offer</span>
-            </button>
-          </div>
-        </div>
-
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex flex-1 items-center gap-4">
-            <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/10 shrink-0">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsOffersSelectionMode(false);
-                  setSelectedOffers([]);
-                }}
-                className={cn(
-                  "px-3 py-1.5 rounded-lg transition-all flex items-center gap-2",
-                  !isOffersSelectionMode ? "bg-white/10 text-white" : "text-white/40 hover:text-white"
-                )}
-                title="None (Selection Mode OFF)"
-              >
-                <CircleX size={14} />
-                <span className="hidden md:inline text-[10px] uppercase font-black tracking-widest">None</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsOffersSelectionMode(true);
-                  if ((selectedOffers || []).length === (filteredOffers || []).length) {
-                    setSelectedOffers([]);
-                  }
-                }}
-                className={cn(
-                  "px-3 py-1.5 rounded-lg transition-all flex items-center gap-2",
-                  isOffersSelectionMode && (selectedOffers || []).length < (filteredOffers || []).length ? "bg-gold text-black" : "text-white/40 hover:text-white"
-                )}
-                title="Selection Mode ON"
-              >
-                <Check size={14} />
-                <span className="hidden md:inline text-[10px] uppercase font-black tracking-widest">Select</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsOffersSelectionMode(true);
-                  setSelectedOffers((filteredOffers || []).map((o: any) => o.id));
-                }}
-                className={cn(
-                  "px-3 py-1.5 rounded-lg transition-all flex items-center gap-2",
-                  isOffersSelectionMode && (selectedOffers || []).length === (filteredOffers || []).length && (filteredOffers || []).length > 0 ? "bg-gold text-black" : "text-white/40 hover:text-white"
-                )}
-                title="Select All"
-              >
-                <CheckCheck size={14} />
-                <span className="hidden md:inline text-[10px] uppercase font-black tracking-widest">All</span>
-              </button>
-            </div>
-
-            <div className="relative flex-1 w-full sm:max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" size={16} />
-              <input
-                type="text"
-                placeholder="Search standard and special offers..."
-                value={offersSearchQuery}
-                onChange={(e) => setOffersSearchQuery(e.target.value)}
-                className="w-full bg-black/40 border border-white/15 rounded-xl py-2 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-gold/50 transition-all"
-              />
-              {offersSearchQuery && (
-                <button
-                  onClick={() => setOffersSearchQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/20 hover:text-white transition-colors"
+                  title="None (Selection Mode OFF)"
                 >
-                  <XCircle size={14} />
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0 flex-wrap">
-            {(selectedOffers || []).length > 0 && (
-              <div className="flex items-center gap-2 mr-2 animate-in fade-in zoom-in duration-200">
-                <span className="text-[10px] uppercase tracking-widest font-bold text-gold px-2">
-                  {(selectedOffers || []).length} Selected
-                </span>
-                <button
-                  onClick={() => executeBulkUpdateOffersStatus(selectedOffers, true)}
-                  className="p-2 bg-green-500/10 text-green-500 rounded-lg hover:bg-green-500 hover:text-white transition-all"
-                  title="Activate Selected"
-                >
-                  <CheckCircle size={16} />
+                  <CircleX size={14} />
+                  <span className="hidden md:inline text-[10px] uppercase font-black tracking-widest">None</span>
                 </button>
                 <button
-                  onClick={() => executeBulkUpdateOffersStatus(selectedOffers, false)}
-                  className="p-2 bg-red-500/10 text-red-500 hover:bg-red-500/50 hover:text-white transition-all"
-                  title="Deactivate Selected"
+                  type="button"
+                  onClick={() => {
+                    setIsToursSelectionMode(true);
+                    if ((selectedTours || []).length === (filteredTours || []).length) {
+                      setSelectedTours([]);
+                    }
+                  }}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg transition-all flex items-center gap-2",
+                    isToursSelectionMode && (selectedTours || []).length < (filteredTours || []).length ? "bg-gold text-black" : "text-white/40 hover:text-white"
+                  )}
+                  title="Selection Mode ON"
                 >
-                  <Ban size={16} />
+                  <Check size={14} />
+                  <span className="hidden md:inline text-[10px] uppercase font-black tracking-widest">Select</span>
                 </button>
                 <button
-                  onClick={handleBulkDuplicateOffers}
-                  className="p-2 bg-white/5 text-gold rounded-lg hover:bg-gold hover:text-black transition-all"
-                  title="Duplicate Selected"
+                  type="button"
+                  onClick={() => {
+                    setIsToursSelectionMode(true);
+                    setSelectedTours((filteredTours || []).map((t: any) => t.id));
+                  }}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg transition-all flex items-center gap-2",
+                    isToursSelectionMode && (selectedTours || []).length === (filteredTours || []).length && (filteredTours || []).length > 0 ? "bg-gold text-black" : "text-white/40 hover:text-white"
+                  )}
+                  title="Select All"
                 >
-                  <Copy size={16} />
-                </button>
-                <button
-                  onClick={() => setConfirmDelete({ type: 'bulk-offers', ids: selectedOffers })}
-                  className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all"
-                  title="Delete Selected"
-                >
-                  <Trash2 size={16} />
+                  <CheckCheck size={14} />
+                  <span className="hidden md:inline text-[10px] uppercase font-black tracking-widest">All</span>
                 </button>
               </div>
-            )}
 
-            <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/10">
-              <button
-                onClick={() => setOfferViewMode('grid')}
-                className={cn(
-                  "p-1.5 rounded-lg transition-all flex items-center justify-center min-w-[40px]",
-                  offerViewMode === 'grid'
-                    ? "bg-gold text-black shadow-lg"
-                    : "text-white/40 hover:text-white hover:bg-white/5"
+              <div className="relative flex-1 w-full sm:max-w-sm">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" size={16} />
+                <input
+                  type="text"
+                  placeholder="Search luxury tours..."
+                  value={toursSearchQuery}
+                  onChange={(e) => setToursSearchQuery(e.target.value)}
+                  className="w-full bg-black/40 border border-white/15 rounded-xl py-2 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-gold/50 transition-all"
+                />
+                {toursSearchQuery && (
+                  <button
+                    onClick={() => setToursSearchQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/20 hover:text-white transition-colors"
+                  >
+                    <XCircle size={14} />
+                  </button>
                 )}
-                title="Grid View"
-              >
-                <LayoutGrid size={14} />
-              </button>
-              <button
-                onClick={() => setOfferViewMode('list')}
-                className={cn(
-                  "p-1.5 rounded-lg transition-all flex items-center justify-center min-w-[40px]",
-                  offerViewMode === 'list'
-                    ? "bg-gold text-black shadow-lg"
-                    : "text-white/40 hover:text-white hover:bg-white/5"
-                )}
-                title="List View"
-              >
-                <List size={16} />
-              </button>
+              </div>
             </div>
-          </div>
-        </div>
 
-        {offerViewMode === 'grid' ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {(filteredOffers || []).length > 0 ? (
-              (paginatedOffers || []).map((offer, idx) => (
-                <div key={offer.id || `offer-${idx}`} className={cn("glass rounded-2xl overflow-hidden border transition-all flex flex-col group relative", (selectedOffers || []).includes(offer.id) ? "border-gold shadow-[0_0_15px_rgba(212,175,55,0.2)]" : "border-white/5 hover:border-gold/30")}>
-
-                  <div className="h-40 relative">
-                    <img
-                      src={getAssetPath(offer.image) || 'https://picsum.photos/seed/offer/600/300'}
-                      alt={offer.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black to-transparent" />
-
-                    <div className="absolute top-0 left-0 right-0 z-10 flex items-start justify-between px-3 pt-2">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <div className="flex flex-wrap gap-1">
-                          {offer.tags?.map((tag: string, tIdx: number) => (
-                            <span
-                              key={`${offer.id}-tag-${tag}-${tIdx}`}
-                              className="px-2 py-1 rounded bg-gold text-black text-[8px] font-black uppercase shadow-sm"
-                            >
-                              {tag}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={cn(
-                            "px-3 py-1 rounded-bl-2xl text-[9px] font-black uppercase tracking-widest shadow-lg -mr-3 -mt-2",
-                            offer.active ? "bg-green-700 text-white" : "bg-red-700 text-white"
-                          )}
-                        >
-                          {offer.active ? 'Active' : 'Inactive'}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="absolute bottom-4 left-4 right-4">
-                      <p className="text-xl font-display leading-tight">{offer.title}</p>
-                      <div className="flex items-center justify-between mt-1">
-                        {(() => {
-                          const prices = (offer.fleets || [])
-                            .map((f: any) => Number(f.salePrice || f.basePrice || f.price || 0))
-                            .filter((p: number) => p > 0);
-                          const min = prices.length ? Math.min(...prices) : 0;
-                          const max = prices.length ? Math.max(...prices) : 0;
-                          return (
-                            <p className="text-gold font-bold text-sm">
-                              {min === max ? `$${min}` : `$${min} - $${max}`}
-                            </p>
-                          );
-                        })()}
-                        <div className="flex -space-x-2">
-                          {(offer.fleets || []).slice(0, 3).map((f: any, i: number) => (
-                            <div key={i} className="w-6 h-6 rounded-full border border-black bg-gold/20 flex items-center justify-center text-[8px] font-bold text-gold" title={f.type}>
-                              <Car size={10} />
-                            </div>
-                          ))}
-                          {(offer.fleets || []).length > 3 && (
-                            <div className="w-6 h-6 rounded-full border border-black bg-white/10 flex items-center justify-center text-[8px] text-white/40">
-                              +{(offer.fleets || []).length - 3}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="p-4 flex-1 flex flex-col bg-white/[0.02]">
-                    <p className="text-white/60 text-[10px] line-clamp-2 mb-4 italic">"{offer.description}"</p>
-                    <div className="mt-auto flex items-center gap-2">
-                      {isOffersSelectionMode && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (selectedOffers.includes(offer.id))
-                              setSelectedOffers((prev) => prev.filter((id) => id !== offer.id));
-                            else
-                              setSelectedOffers((prev) => [...prev, offer.id]);
-                          }}
-                          className={cn(
-                            "flex-1 py-2 px-2 font-bold rounded-lg transition-all flex items-center justify-center gap-1",
-                            selectedOffers.includes(offer.id) ? "bg-gold text-black" : "bg-white/5 text-white/40 hover:bg-white/10"
-                          )}
-                          title={selectedOffers.includes(offer.id) ? "Deselect" : "Select"}
-                        >
-                          {selectedOffers.includes(offer.id) ? <SquareCheck size={16} /> : <Square size={16} />}
-                        </button>
-                      )}
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleToggleOfferStatus(offer.id, offer.active); }}
-                        className={cn("flex-1 py-2 px-2 font-bold rounded-lg transition-all flex items-center justify-center gap-1", offer.active ? "bg-red-500/10 text-red-500 hover:bg-red-500/50 hover:text-white" : "bg-green-500/10 text-green-500 hover:bg-green-500/50 hover:text-white")}
-                        title={offer.active ? "Deactivate" : "Activate"}
-                      >
-                        {offer.active ? <Ban size={16} /> : <CheckCircle size={16} />}
-                      </button>
-                      <button
-                        onClick={() => handleDuplicateOffer(offer)}
-                        className="flex-1 py-2 px-2 bg-gold/10 text-gold hover:bg-gold/50 hover:text-white rounded-lg font-bold transition-all flex items-center justify-center gap-1"
-                        title="Duplicate"
-                      >
-                        <Copy size={16} />
-                      </button>
-                      <button
-                        onClick={() => {
-                          setEditingOffer(offer);
-                          setShowOfferModal(true);
-                        }}
-                        className="flex-1 py-2 px-2 bg-blue-500/10 text-blue-500 hover:bg-blue-500/50 hover:text-white font-bold rounded-lg transition-all flex items-center justify-center gap-1"
-                        title="Edit"
-                      >
-                        <Edit2 size={16} />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteOffer(offer.id)}
-                        className="flex-1 py-2 px-2 bg-red-500/10 text-red-500 hover:bg-red-500/50 hover:text-white font-bold rounded-lg transition-all flex items-center justify-center gap-1"
-                        title="Delete"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </div>
+            <div className="flex items-center gap-2 shrink-0 flex-wrap">
+              {(selectedTours || []).length > 0 && (
+                <div className="flex items-center gap-2 mr-2 animate-in fade-in zoom-in duration-200">
+                  <span className="text-[10px] uppercase tracking-widest font-bold text-gold px-2">
+                    {(selectedTours || []).length} Selected
+                  </span>
+                  <button
+                    onClick={() => executeBulkUpdateToursStatus(selectedTours, true)}
+                    className="p-2 bg-green-500/10 text-green-500 rounded-lg hover:bg-green-500 hover:text-white transition-all"
+                    title="Activate Selected"
+                  >
+                    <CheckCircle size={16} />
+                  </button>
+                  <button
+                    onClick={() => executeBulkUpdateToursStatus(selectedTours, false)}
+                    className="p-2 bg-red-500/10 text-red-500 hover:bg-red-500/50 hover:text-white transition-all"
+                    title="Deactivate Selected"
+                  >
+                    <Ban size={16} />
+                  </button>
+                  <button
+                    onClick={handleBulkDuplicateTours}
+                    className="p-2 bg-white/5 text-gold rounded-lg hover:bg-gold hover:text-black transition-all"
+                    title="Duplicate Selected"
+                  >
+                    <Copy size={16} />
+                  </button>
+                  <button
+                    onClick={() => {
+                      setBulkTargetType('tours');
+                      setIsBulkDateModalOpen(true);
+                    }}
+                    className="p-2 bg-white/5 text-gold rounded-lg hover:bg-gold hover:text-black transition-all"
+                    title="Set Date Range"
+                  >
+                    <Clock size={16} />
+                  </button>
+                  <button
+                    onClick={() => setConfirmDelete({ type: 'bulk-tours', ids: selectedTours })}
+                    className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all"
+                    title="Delete Selected"
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </div>
-              ))
-            ) : (
-              <div className="col-span-full py-12 text-center bg-white/5 rounded-2xl border border-dashed border-white/10">
-                <p className="text-white/40 italic uppercase tracking-widest text-xs font-bold">No offers found.</p>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="glass rounded-[0.5rem] border border-white/5 overflow-hidden">
-            <div className="overflow-x-auto custom-scrollbar">
-              <table className="w-full text-left border-collapse min-w-[800px]">
-                <thead>
-                  <tr className="bg-white/5 border-b border-white/5">
-                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gold w-16">Status</th>
-                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gold min-w-[250px]">Offer Details</th>
-                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gold">Discount</th>
-                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gold">Price Range</th>
-                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gold text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {(filteredOffers || []).length > 0 ? (
-                    (paginatedOffers || []).map((offer, idx) => {
-                      const prices = (offer.fleets || []).map((f: any) => Number(f.salePrice || f.basePrice || f.price || 0)).filter((p: number) => p > 0);
-                      const min = prices.length ? Math.min(...prices) : 0;
-                      const max = prices.length ? Math.max(...prices) : 0;
-                      return (
-                        <tr key={offer.id || `list-offer-${idx}`} className={cn("transition-colors group bg-white/[0.01]", (selectedOffers || []).includes(offer.id) ? "bg-gold/5" : "hover:bg-white/5")}>
-                          <td className="px-6 py-4">
-                            <span className={cn(
-                              "px-2 py-1 rounded text-[8px] font-bold uppercase tracking-widest",
-                              offer.active ? "bg-green-700 text-white" : "bg-red-700 text-white"
-                            )}>
-                              {offer.active ? 'Active' : 'Inactive'}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-3">
-                              <img src={getAssetPath(offer.image) || 'https://picsum.photos/seed/offer/60/60'} alt={offer.title} className="w-12 h-12 rounded-lg object-cover" />
-                              <div>
-                                <p className="text-sm font-bold text-white mb-0.5">{offer.title}</p>
-                                <p className="text-[10px] text-white/50 line-clamp-1">"{offer.description}"</p>
-                                <div className="flex gap-1 mt-1">
-                                  {offer.tags?.slice(0, 3).map((tag: string, tIdx: number) => (
-                                    <span key={`${offer.id}-list-tag-${tag}-${tIdx}`} className="text-[8px] bg-gold/10 text-gold px-1 rounded uppercase tracking-widest">
-                                      {tag}
-                                    </span>
-                                  ))}
-                                  {(offer.tags?.length || 0) > 3 && <span className="text-[8px] text-white/40">...</span>}
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            {offer.discountType === 'percentage'
-                              ? <span className="px-2 py-1 bg-blue-500/10 text-blue-400 rounded text-xs font-bold">{offer.discountValue}% OFF</span>
-                              : <span className="px-2 py-1 bg-green-500/10 text-green-400 rounded text-xs font-bold">${offer.discountValue} OFF</span>}
-                          </td>
-                          <td className="px-6 py-4 font-mono text-sm">
-                            {min === max ? `$${min}` : `$${min} - $${max}`}
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            <div className="flex items-center gap-2 justify-end">
-                              {isOffersSelectionMode && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (selectedOffers.includes(offer.id)) setSelectedOffers(prev => prev.filter(id => id !== offer.id));
-                                    else setSelectedOffers(prev => [...prev, offer.id]);
-                                  }}
-                                  className={cn(
-                                    "p-2 rounded-lg transition-all border",
-                                    selectedOffers.includes(offer.id) ? "bg-gold text-black border-gold" : "bg-white/5 text-white/40 hover:text-white border-white/10"
-                                  )}
-                                  title={selectedOffers.includes(offer.id) ? "Deselect" : "Select"}
-                                >
-                                  {selectedOffers.includes(offer.id) ? <SquareCheck size={14} /> : <Square size={14} />}
-                                </button>
-                              )}
-                              <button
-                                onClick={(e) => { e.stopPropagation(); handleToggleOfferStatus(offer.id, offer.active); }}
-                                className={cn("p-2 rounded-lg transition-all border", offer.active ? "bg-red-500/10 text-red-500 hover:bg-red-500/50 hover:text-white border-red-500/20" : "bg-green-500/10 text-green-500 hover:bg-green-500 hover:text-white border-green-500/20")}
-                                title={offer.active ? "Deactivate" : "Activate"}
-                              >
-                                {offer.active ? <Ban size={14} /> : <CheckCircle size={14} />}
-                              </button>
-                              <button
-                                onClick={() => handleDuplicateOffer(offer)}
-                                className="p-2 bg-gold/10 text-gold border border-gold/20 hover:bg-gold hover:text-black rounded-lg transition-all"
-                                title="Duplicate"
-                              >
-                                <Copy size={14} />
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setEditingOffer(offer);
-                                  setShowOfferModal(true);
-                                }}
-                                className="p-2 bg-blue-600/10 text-blue-500 border border-blue-500/20 hover:bg-blue-600 hover:text-white rounded-lg transition-all"
-                                title="Edit"
-                              >
-                                <Edit2 size={14} />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteOffer(offer.id)}
-                                className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all border border-red-500/20"
-                                title="Delete"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  ) : (
-                    <tr>
-                      <td colSpan={5} className="py-12 text-center text-white/40 italic uppercase tracking-widest text-[10px] font-bold">
-                        No offers found.
-                      </td>
-                    </tr>
+              )}
+
+              <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/10">
+                <button
+                  onClick={() => setToursLayout('grid')}
+                  className={cn(
+                    "p-1.5 rounded-lg transition-all flex items-center justify-center min-w-[40px]",
+                    toursLayout === 'grid'
+                      ? "bg-gold text-black shadow-lg"
+                      : "text-white/40 hover:text-white hover:bg-white/5"
                   )}
-                </tbody>
-              </table>
+                  title="Grid View"
+                >
+                  <LayoutGrid size={14} />
+                </button>
+                <button
+                  onClick={() => setToursLayout('list')}
+                  className={cn(
+                    "p-1.5 rounded-lg transition-all flex items-center justify-center min-w-[40px]",
+                    toursLayout === 'list'
+                      ? "bg-gold text-black shadow-lg"
+                      : "text-white/40 hover:text-white hover:bg-white/5"
+                  )}
+                  title="List View"
+                >
+                  <List size={16} />
+                </button>
+              </div>
             </div>
           </div>
-        )}
 
-        {filteredOffers.length > offersLimit && (
-          <div className="flex justify-center mt-8">
-            <button
-              onClick={() => setOffersLimit(prev => prev + 6)}
-              className="bg-white/5 hover:bg-gold hover:text-black border border-gold/30 hover:border-gold text-gold font-bold uppercase tracking-widest text-[10px] px-8 py-3.5 rounded-xl transition-all duration-300 shadow-md cursor-pointer"
-            >
-              Show More Offers
-            </button>
+          {toursLayout === 'grid' ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {(filteredTours || []).length > 0 ? (
+                (paginatedTours || []).map((tour, idx) => {
+                  const prices = tour.fleets?.map((f: any) => Number(f.salePrice || f.standardPrice || f.price || 0)).filter((p: number) => p > 0) || [];
+                  const minPrice = prices.length > 0 ? Math.min(...prices) : tour.price || 0;
+                  const maxPrice = prices.length > 0 ? Math.max(...prices) : tour.price || 0;
+                  const priceDisplay = prices.length > 0 && minPrice !== maxPrice ? `$${minPrice} - $${maxPrice}` : `$${minPrice}`;
+
+                  const now = new Date();
+                  now.setHours(0, 0, 0, 0);
+                  const tourAvail = tour.availability || {};
+                  const tourRanges = tourAvail.dateRanges || (tourAvail.startDate || tourAvail.endDate ? [{ startDate: tourAvail.startDate, endDate: tourAvail.endDate }] : []);
+                  const isTourExpired = tourRanges.length > 0 && !tourRanges.some((r: any) => !r.endDate || new Date(r.endDate) >= now);
+                  const isActive = tour.active && !isTourExpired;
+
+                  return (
+                    <div key={tour.id || `tour-${idx}`} className={cn("glass rounded-2xl overflow-hidden border transition-all flex flex-col group relative", (selectedTours || []).includes(tour.id) ? "border-gold shadow-[0_0_15px_rgba(212,175,55,0.2)]" : "border-white/5 hover:border-gold/30")}>
+                      <div className="relative h-40 group rounded overflow-hidden shadow-lg">
+                        <img
+                          src={getAssetPath(tour.image) || "https://picsum.photos/seed/tour/600/300"}
+                          alt={tour.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                          referrerPolicy="no-referrer"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black to-transparent backdrop-blur-[1px]" />
+
+                        <div className="absolute top-2 left-3 z-10 flex items-center gap-2 flex-wrap">
+                          {tour.promoTag && (
+                            <span className="px-2 py-1 rounded bg-gold text-black text-[8px] font-black uppercase shadow-sm">
+                              {tour.promoTag}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="absolute top-0 right-0 z-20 flex items-center gap-2">
+                          <span
+                            className={cn(
+                              "px-3 py-1 rounded-bl-2xl text-[9px] font-black uppercase tracking-widest shadow-lg",
+                              isActive ? "bg-green-700 text-white" : "bg-red-700 text-white"
+                            )}
+                          >
+                            {isActive ? "Active" : !tour.active ? "Inactive" : "Expired"}
+                          </span>
+                        </div>
+
+                        <div className="absolute bottom-4 left-4 right-4">
+                          <p className="text-xl font-display drop-shadow-md leading-tight">{tour.title}</p>
+                          <div className="flex items-center justify-between mt-1">
+                            <div className="flex items-center gap-3 text-[10px] text-white/70 uppercase tracking-widest font-bold">
+                              {tour.duration && (
+                                <span className="flex items-center gap-1">
+                                  <Clock size={10} /> {tour.duration}
+                                </span>
+                              )}
+                              {priceDisplay && (
+                                <span className="flex items-center gap-1 font-display text-gold font-normal">
+                                  {priceDisplay}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex -space-x-2">
+                              {(tour.fleets || []).slice(0, 3).map((f: any, i: number) => (
+                                <div key={i} className="w-5 h-5 rounded-full border border-black bg-gold/20 flex items-center justify-center text-[7px] font-bold text-gold" title={f.name || f.type}>
+                                  <Car size={8} />
+                                </div>
+                              ))}
+                              {(tour.fleets || []).length > 3 && (
+                                <div className="w-5 h-5 rounded-full border border-black bg-white/10 flex items-center justify-center text-[7px] text-white/40">
+                                  +{(tour.fleets || []).length - 3}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="p-4 flex-1 flex flex-col bg-white/[0.02]">
+                        <p className="text-white/60 text-[10px] line-clamp-2 mb-4 italic">"{tour.shortDescription || tour.description || 'No description available.'}"</p>
+                        <div className="mt-auto flex items-center gap-2">
+                          {isToursSelectionMode && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (selectedTours.includes(tour.id))
+                                  setSelectedTours((prev) => prev.filter((id) => id !== tour.id));
+                                else
+                                  setSelectedTours((prev) => [...prev, tour.id]);
+                              }}
+                              className={cn(
+                                "flex-1 py-2 px-2 font-bold rounded-lg transition-all flex items-center justify-center gap-1",
+                                selectedTours.includes(tour.id) ? "bg-gold text-black" : "bg-white/5 text-white/40 hover:bg-white/10"
+                              )}
+                              title={selectedTours.includes(tour.id) ? "Deselect" : "Select"}
+                            >
+                              {selectedTours.includes(tour.id) ? <SquareCheck size={16} /> : <Square size={16} />}
+                            </button>
+                          )}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleToggleTourStatus(tour.id, tour.active); }}
+                            className={cn("flex-1 py-2 px-2 font-bold rounded-lg transition-all flex items-center justify-center gap-1", tour.active ? "bg-red-500/10 text-red-500 hover:bg-red-500/50 hover:text-white" : "bg-green-500/10 text-green-500 hover:bg-green-500/50 hover:text-white")}
+                            title={tour.active ? "Deactivate" : "Activate"}
+                          >
+                            {tour.active ? <Ban size={16} /> : <CheckCircle size={16} />}
+                          </button>
+                          <button
+                            onClick={() => handleDuplicateTour(tour)}
+                            className="flex-1 py-2 px-2 bg-gold/10 text-gold hover:bg-gold/50 hover:text-white font-bold rounded-lg transition-all flex items-center justify-center gap-1"
+                            title="Duplicate"
+                          >
+                            <Copy size={16} />
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              setEditingTour(tour);
+                              setShowTourModal(true);
+                            }}
+                            className="flex-1 py-2 px-2 bg-blue-600/10 text-blue-500 font-bold hover:bg-blue-500/50 hover:text-white rounded-lg transition-all flex items-center justify-center gap-1"
+                            title="Edit"
+                          >
+                            <Edit2 size={16} />
+                          </button>
+
+                          <button
+                            onClick={() => handleDeleteTour(tour.id)}
+                            className="flex-1 py-2 px-2 bg-red-500/10 text-red-500 hover:bg-red-500/50 hover:text-white font-bold rounded-lg transition-all flex items-center justify-center gap-1"
+                            title="Delete"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })
+              ) : (
+                <div className="col-span-full py-12 text-center bg-white/5 rounded-2xl border border-dashed border-white/10">
+                  <p className="text-white/40 italic uppercase tracking-widest text-[10px] font-bold">No tours found.</p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="glass rounded-[0.5rem] border border-white/5 overflow-hidden">
+              <div className="overflow-x-auto custom-scrollbar">
+                <table className="w-full text-left border-collapse min-w-[800px]">
+                  <thead>
+                    <tr className="bg-white/5 border-b border-white/5">
+                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gold w-16">Status</th>
+                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gold min-w-[250px]">Tour Details</th>
+                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gold">Locations</th>
+                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gold text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {(filteredTours || []).length > 0 ? (
+                      (paginatedTours || []).map((tour, idx) => {
+                        let visualActive = tour.active;
+                        const availability = tour.availability || {};
+                        const dateRanges = availability.dateRanges || (availability.startDate || availability.endDate ? [{ startDate: availability.startDate, endDate: availability.endDate }] : []);
+
+                        if (dateRanges.length > 0) {
+                          const now = new Date();
+                          now.setHours(0, 0, 0, 0);
+                          const hasValidRange = dateRanges.some((r: any) => !r.endDate || new Date(r.endDate) >= now);
+                          if (!hasValidRange) visualActive = false;
+                        }
+                        const prices = tour.fleets?.map((f: any) => Number(f.salePrice || f.standardPrice || f.price || 0)).filter((p: number) => p > 0) || [];
+                        const minPrice = prices.length > 0 ? Math.min(...prices) : tour.price || 0;
+                        const maxPrice = prices.length > 0 ? Math.max(...prices) : tour.price || 0;
+                        const priceDisplay = prices.length > 0 && minPrice !== maxPrice ? `$${minPrice} - $${maxPrice}` : `$${minPrice}`;
+
+                        return (
+                          <tr key={tour.id || `list-tour-${idx}`} className={cn("transition-colors group bg-white/[0.01]", (selectedTours || []).includes(tour.id) ? "bg-gold/5" : "hover:bg-white/5")}>
+                            <td className="px-6 py-4">
+                              <span className={cn(
+                                "px-2 py-1 rounded text-[8px] font-bold uppercase tracking-widest",
+                                visualActive ? "bg-green-700 text-white" : "bg-red-700 text-white"
+                              )}>
+                                {visualActive ? 'Active' : (!tour.active ? 'Inactive' : 'Expired')}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-3">
+                                <img src={getAssetPath(tour.image || tour.featuredImage) || 'https://picsum.photos/seed/tour/60/60'} alt={tour.title} className="w-12 h-12 rounded-lg object-cover" />
+                                <div>
+                                  <p className="text-sm font-bold text-white mb-0.5 flex items-center gap-2">
+                                    {tour.title}
+                                    {tour.promoTag && (
+                                      <span className="bg-gold text-black px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest shadow-lg inline-block">
+                                        {tour.promoTag}
+                                      </span>
+                                    )}
+                                  </p>
+                                  <p className="text-[10px] text-white/50 line-clamp-1">"{tour.shortDescription || tour.description || 'No description available.'}"</p>
+                                  <div className="flex gap-3 mt-1 text-[9px] text-white/40 uppercase tracking-widest">
+                                    <span className="flex items-center gap-1"><Clock size={10} /> {tour.duration}</span>
+                                    <span className="flex items-center gap-1 font-display text-gold font-normal">From {priceDisplay}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-sm font-mono text-white/80">
+                              {tour.locations?.length || 0} stops
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              <div className="flex items-center gap-2 justify-end">
+                                {isToursSelectionMode && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (selectedTours.includes(tour.id)) setSelectedTours(prev => prev.filter(id => id !== tour.id));
+                                      else setSelectedTours(prev => [...prev, tour.id]);
+                                    }}
+                                    className={cn(
+                                      "p-2 rounded-lg transition-all border",
+                                      selectedTours.includes(tour.id) ? "bg-gold text-black border-gold" : "bg-white/5 text-white/40 hover:text-white border-white/10"
+                                    )}
+                                    title={selectedTours.includes(tour.id) ? "Deselect" : "Select"}
+                                  >
+                                    {selectedTours.includes(tour.id) ? <SquareCheck size={14} /> : <Square size={14} />}
+                                  </button>
+                                )}
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleToggleTourStatus(tour.id, tour.active); }}
+                                  className={cn("p-2 rounded-lg transition-all border", tour.active ? "bg-red-500/10 text-red-500 hover:bg-red-500/50 hover:text-white border-red-500/20" : "bg-green-500/10 text-green-500 hover:bg-green-500 hover:text-white border-green-500/20")}
+                                  title={tour.active ? "Deactivate" : "Activate"}
+                                >
+                                  {tour.active ? <Ban size={14} /> : <CheckCircle size={14} />}
+                                </button>
+                                <button
+                                  onClick={() => handleDuplicateTour(tour)}
+                                  className="p-2 bg-gold/10 text-gold border border-gold/20 hover:bg-gold hover:text-black rounded-lg transition-all"
+                                  title="Duplicate"
+                                >
+                                  <Copy size={14} />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setEditingTour(tour);
+                                    setShowTourModal(true);
+                                  }}
+                                  className="p-2 bg-blue-600/10 text-blue-500 border border-blue-500/20 hover:bg-blue-600 hover:text-white rounded-lg transition-all"
+                                  title="Edit"
+                                >
+                                  <Edit2 size={14} />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteTour(tour.id)}
+                                  className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all border border-red-500/20"
+                                  title="Delete"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    ) : (
+                      <tr>
+                        <td colSpan={4} className="py-12 text-center text-white/40 italic uppercase tracking-widest text-[10px] font-bold">
+                          No tours found.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {filteredTours.length > 0 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-6 bg-black/40 p-5 rounded-2xl border border-white/5 mt-8 mb-6">
+              <div className="text-[11px] font-mono text-white/50">
+                Showing <span className="text-gold font-bold">
+                  {filteredTours.length === 0 ? 0 : (pageSizeTours === 'All' ? 1 : (currentPageTours - 1) * pageSizeTours + 1)}
+                </span> to <span className="text-gold font-bold">
+                  {pageSizeTours === 'All' ? filteredTours.length : Math.min(currentPageTours * pageSizeTours, filteredTours.length)}
+                </span> of <span className="text-white font-bold">{filteredTours.length}</span> entries
+              </div>
+
+              {pageSizeTours !== 'All' && totalToursPages > 1 && (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setCurrentPageTours(1)}
+                    disabled={currentPageTours === 1}
+                    className="p-2 border border-white/10 rounded-xl bg-white/5 text-white/60 hover:text-gold hover:border-gold/30 disabled:opacity-20 disabled:pointer-events-none transition-all cursor-pointer"
+                    title="First Page"
+                  >
+                    <ChevronsLeft size={14} />
+                  </button>
+                  <button
+                    onClick={() => setCurrentPageTours(prev => Math.max(1, prev - 1))}
+                    disabled={currentPageTours === 1}
+                    className="p-2 border border-white/10 rounded-xl bg-white/5 text-white/60 hover:text-gold hover:border-gold/30 disabled:opacity-20 disabled:pointer-events-none transition-all cursor-pointer"
+                    title="Previous Page"
+                  >
+                    <ChevronLeft size={14} />
+                  </button>
+
+                  {(() => {
+                    const pageNumbers = [];
+                    const maxButtons = 5;
+                    let startPage = Math.max(1, currentPageTours - Math.floor(maxButtons / 2));
+                    let endPage = Math.min(totalToursPages, startPage + maxButtons - 1);
+                    if (endPage - startPage + 1 < maxButtons) {
+                      startPage = Math.max(1, endPage - maxButtons + 1);
+                    }
+                    for (let i = Math.max(1, startPage); i <= endPage; i++) {
+                      pageNumbers.push(i);
+                    }
+                    return pageNumbers.map(num => (
+                      <button
+                        key={`tour-page-btn-${num}`}
+                        onClick={() => setCurrentPageTours(num)}
+                        className={cn(
+                          "w-8 h-8 flex items-center justify-center text-[10px] rounded-xl font-mono transition-all border font-bold cursor-pointer",
+                          currentPageTours === num
+                            ? "bg-gold text-black border-gold shadow-[0_0_10px_rgba(212,175,55,0.2)]"
+                            : "bg-white/5 text-white/70 border-white/10 hover:border-gold/30 hover:text-gold"
+                        )}
+                      >
+                        {num}
+                      </button>
+                    ));
+                  })()}
+
+                  <button
+                    onClick={() => setCurrentPageTours(prev => Math.min(totalToursPages, prev + 1))}
+                    disabled={currentPageTours === totalToursPages}
+                    className="p-2 border border-white/10 rounded-xl bg-white/5 text-white/60 hover:text-gold hover:border-gold/30 disabled:opacity-20 disabled:pointer-events-none transition-all cursor-pointer"
+                    title="Next Page"
+                  >
+                    <ChevronRight size={14} />
+                  </button>
+                  <button
+                    onClick={() => setCurrentPageTours(totalToursPages)}
+                    disabled={currentPageTours === totalToursPages}
+                    className="p-2 border border-white/10 rounded-xl bg-white/5 text-white/60 hover:text-gold hover:border-gold/30 disabled:opacity-20 disabled:pointer-events-none transition-all cursor-pointer"
+                    title="Last Page"
+                  >
+                    <ChevronsRight size={14} />
+                  </button>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] uppercase tracking-wider text-white/40 font-bold font-mono">Page Size:</span>
+                <select
+                  value={pageSizeTours}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setPageSizeTours(val === 'All' ? 'All' : Number(val));
+                    setCurrentPageTours(1);
+                  }}
+                  className="custom-select bg-black text-gold text-[10px] font-mono border border-white/10 rounded-xl px-3 py-1.5 focus:outline-none focus:border-gold font-bold uppercase cursor-pointer"
+                >
+                  <option value={12}>12 Tours</option>
+                  <option value={24}>24 Tours</option>
+                  <option value={48}>48 Tours</option>
+                  <option value="All">Show All</option>
+                </select>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Products Section */}
+        <div className="space-y-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-xl sm:text-2xl font-display text-gold flex items-center gap-3">
+                Products: Offers
+              </h3>
+              <p className="text-white/40 text-[10px] uppercase tracking-widest">Premium fixed-rate seasonal packages</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => {
+                  setEditingOffer({
+                    title: '',
+                    description: '',
+                    discountType: 'percentage',
+                    discountValue: 15,
+                    image: '',
+                    active: true,
+                    slug: '',
+                    tags: [],
+                    fleets: []
+                  });
+                  setShowOfferModal(true);
+                }}
+                className="bg-gold text-black hover:bg-gold/80 px-6 py-2 rounded-xl flex items-center gap-2 transition-all"
+              >
+                <Plus size={18} />
+                <span className="text-xs font-bold uppercase tracking-widest leading-none">Add Offer</span>
+              </button>
+            </div>
           </div>
-        )}
-      </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex flex-1 items-center gap-4">
+              <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/10 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsOffersSelectionMode(false);
+                    setSelectedOffers([]);
+                  }}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg transition-all flex items-center gap-2",
+                    !isOffersSelectionMode ? "bg-white/10 text-white" : "text-white/40 hover:text-white"
+                  )}
+                  title="None (Selection Mode OFF)"
+                >
+                  <CircleX size={14} />
+                  <span className="hidden md:inline text-[10px] uppercase font-black tracking-widest">None</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsOffersSelectionMode(true);
+                    if ((selectedOffers || []).length === (filteredOffers || []).length) {
+                      setSelectedOffers([]);
+                    }
+                  }}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg transition-all flex items-center gap-2",
+                    isOffersSelectionMode && (selectedOffers || []).length < (filteredOffers || []).length ? "bg-gold text-black" : "text-white/40 hover:text-white"
+                  )}
+                  title="Selection Mode ON"
+                >
+                  <Check size={14} />
+                  <span className="hidden md:inline text-[10px] uppercase font-black tracking-widest">Select</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsOffersSelectionMode(true);
+                    setSelectedOffers((filteredOffers || []).map((o: any) => o.id));
+                  }}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg transition-all flex items-center gap-2",
+                    isOffersSelectionMode && (selectedOffers || []).length === (filteredOffers || []).length && (filteredOffers || []).length > 0 ? "bg-gold text-black" : "text-white/40 hover:text-white"
+                  )}
+                  title="Select All"
+                >
+                  <CheckCheck size={14} />
+                  <span className="hidden md:inline text-[10px] uppercase font-black tracking-widest">All</span>
+                </button>
+              </div>
+
+              <div className="relative flex-1 w-full sm:max-w-sm">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" size={16} />
+                <input
+                  type="text"
+                  placeholder="Search standard and special offers..."
+                  value={offersSearchQuery}
+                  onChange={(e) => setOffersSearchQuery(e.target.value)}
+                  className="w-full bg-black/40 border border-white/15 rounded-xl py-2 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-gold/50 transition-all"
+                />
+                {offersSearchQuery && (
+                  <button
+                    onClick={() => setOffersSearchQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/20 hover:text-white transition-colors"
+                  >
+                    <XCircle size={14} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0 flex-wrap">
+              {(selectedOffers || []).length > 0 && (
+                <div className="flex items-center gap-2 mr-2 animate-in fade-in zoom-in duration-200">
+                  <span className="text-[10px] uppercase tracking-widest font-bold text-gold px-2">
+                    {(selectedOffers || []).length} Selected
+                  </span>
+                  <button
+                    onClick={() => executeBulkUpdateOffersStatus(selectedOffers, true)}
+                    className="p-2 bg-green-500/10 text-green-500 rounded-lg hover:bg-green-500 hover:text-white transition-all"
+                    title="Activate Selected"
+                  >
+                    <CheckCircle size={16} />
+                  </button>
+                  <button
+                    onClick={() => executeBulkUpdateOffersStatus(selectedOffers, false)}
+                    className="p-2 bg-red-500/10 text-red-500 hover:bg-red-500/50 hover:text-white transition-all"
+                    title="Deactivate Selected"
+                  >
+                    <Ban size={16} />
+                  </button>
+                  <button
+                    onClick={handleBulkDuplicateOffers}
+                    className="p-2 bg-white/5 text-gold rounded-lg hover:bg-gold hover:text-black transition-all"
+                    title="Duplicate Selected"
+                  >
+                    <Copy size={16} />
+                  </button>
+                  <button
+                    onClick={() => {
+                      setBulkTargetType('offers');
+                      setIsBulkDateModalOpen(true);
+                    }}
+                    className="p-2 bg-white/5 text-gold rounded-lg hover:bg-gold hover:text-black transition-all"
+                    title="Set Date Range"
+                  >
+                    <Clock size={16} />
+                  </button>
+                  <button
+                    onClick={() => setConfirmDelete({ type: 'bulk-offers', ids: selectedOffers })}
+                    className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all"
+                    title="Delete Selected"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              )}
+
+              <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/10">
+                <button
+                  onClick={() => setOfferViewMode('grid')}
+                  className={cn(
+                    "p-1.5 rounded-lg transition-all flex items-center justify-center min-w-[40px]",
+                    offerViewMode === 'grid'
+                      ? "bg-gold text-black shadow-lg"
+                      : "text-white/40 hover:text-white hover:bg-white/5"
+                  )}
+                  title="Grid View"
+                >
+                  <LayoutGrid size={14} />
+                </button>
+                <button
+                  onClick={() => setOfferViewMode('list')}
+                  className={cn(
+                    "p-1.5 rounded-lg transition-all flex items-center justify-center min-w-[40px]",
+                    offerViewMode === 'list'
+                      ? "bg-gold text-black shadow-lg"
+                      : "text-white/40 hover:text-white hover:bg-white/5"
+                  )}
+                  title="List View"
+                >
+                  <List size={16} />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {offerViewMode === 'grid' ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {(filteredOffers || []).length > 0 ? (
+                (paginatedOffers || []).map((offer, idx) => {
+                  const avail = offer.availability || {};
+                  const ranges = avail.dateRanges || (avail.startDate || avail.endDate ? [{ startDate: avail.startDate, endDate: avail.endDate }] : []);
+                  const now = new Date();
+                  now.setHours(0, 0, 0, 0);
+                  const isOfferExpired = ranges.length > 0 && !ranges.some((r: any) => !r.endDate || new Date(r.endDate) >= now);
+                  const isActive = offer.active && !isOfferExpired;
+
+                  return (
+                    <div key={offer.id || `offer-${idx}`} className={cn("glass rounded-2xl overflow-hidden border transition-all flex flex-col group relative", (selectedOffers || []).includes(offer.id) ? "border-gold shadow-[0_0_15px_rgba(212,175,55,0.2)]" : "border-white/5 hover:border-gold/30")}>
+
+                      <div className="h-40 relative">
+                        <img
+                          src={getAssetPath(offer.image) || 'https://picsum.photos/seed/offer/600/300'}
+                          alt={offer.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black to-transparent" />
+
+                        <div className="absolute top-0 left-0 right-0 z-10 flex items-start justify-between px-3 pt-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <div className="flex flex-wrap gap-1">
+                              {offer.tags?.map((tag: string, tIdx: number) => (
+                                <span
+                                  key={`${offer.id}-tag-${tag}-${tIdx}`}
+                                  className="px-2 py-1 rounded bg-gold text-black text-[8px] font-black uppercase shadow-sm"
+                                >
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={cn(
+                                "px-3 py-1 rounded-bl-2xl text-[9px] font-black uppercase tracking-widest shadow-lg -mr-3 -mt-2",
+                                isActive ? "bg-green-700 text-white" : "bg-red-700 text-white"
+                              )}
+                            >
+                              {isActive ? "Active" : !offer.active ? "Inactive" : "Expired"}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="absolute bottom-4 left-4 right-4">
+                          <p className="text-xl font-display leading-tight">{offer.title}</p>
+                          <div className="flex items-center justify-between mt-1">
+                            {(() => {
+                              const prices = (offer.fleets || [])
+                                .map((f: any) => Number(f.salePrice || f.basePrice || f.price || 0))
+                                .filter((p: number) => p > 0);
+                              const min = prices.length ? Math.min(...prices) : 0;
+                              const max = prices.length ? Math.max(...prices) : 0;
+                              return (
+                                <p className="text-gold font-bold text-sm">
+                                  {min === max ? `$${min}` : `$${min} - $${max}`}
+                                </p>
+                              );
+                            })()}
+                            <div className="flex -space-x-2">
+                              {(offer.fleets || []).slice(0, 3).map((f: any, i: number) => (
+                                <div key={i} className="w-6 h-6 rounded-full border border-black bg-gold/20 flex items-center justify-center text-[8px] font-bold text-gold" title={f.type}>
+                                  <Car size={10} />
+                                </div>
+                              ))}
+                              {(offer.fleets || []).length > 3 && (
+                                <div className="w-6 h-6 rounded-full border border-black bg-white/10 flex items-center justify-center text-[8px] text-white/40">
+                                  +{(offer.fleets || []).length - 3}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="p-4 flex-1 flex flex-col bg-white/[0.02]">
+                        <p className="text-white/60 text-[10px] line-clamp-2 mb-4 italic">"{offer.description}"</p>
+                        <div className="mt-auto flex items-center gap-2">
+                          {isOffersSelectionMode && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (selectedOffers.includes(offer.id))
+                                  setSelectedOffers((prev) => prev.filter((id) => id !== offer.id));
+                                else
+                                  setSelectedOffers((prev) => [...prev, offer.id]);
+                              }}
+                              className={cn(
+                                "flex-1 py-2 px-2 font-bold rounded-lg transition-all flex items-center justify-center gap-1",
+                                selectedOffers.includes(offer.id) ? "bg-gold text-black" : "bg-white/5 text-white/40 hover:bg-white/10"
+                              )}
+                              title={selectedOffers.includes(offer.id) ? "Deselect" : "Select"}
+                            >
+                              {selectedOffers.includes(offer.id) ? <SquareCheck size={16} /> : <Square size={16} />}
+                            </button>
+                          )}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleToggleOfferStatus(offer.id, offer.active); }}
+                            className={cn("flex-1 py-2 px-2 font-bold rounded-lg transition-all flex items-center justify-center gap-1", offer.active ? "bg-red-500/10 text-red-500 hover:bg-red-500/50 hover:text-white" : "bg-green-500/10 text-green-500 hover:bg-green-500/50 hover:text-white")}
+                            title={offer.active ? "Deactivate" : "Activate"}
+                          >
+                            {offer.active ? <Ban size={16} /> : <CheckCircle size={16} />}
+                          </button>
+                          <button
+                            onClick={() => handleDuplicateOffer(offer)}
+                            className="flex-1 py-2 px-2 bg-gold/10 text-gold hover:bg-gold/50 hover:text-white rounded-lg font-bold transition-all flex items-center justify-center gap-1"
+                            title="Duplicate"
+                          >
+                            <Copy size={16} />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setEditingOffer(offer);
+                              setShowOfferModal(true);
+                            }}
+                            className="flex-1 py-2 px-2 bg-blue-500/10 text-blue-500 hover:bg-blue-500/50 hover:text-white font-bold rounded-lg transition-all flex items-center justify-center gap-1"
+                            title="Edit"
+                          >
+                            <Edit2 size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteOffer(offer.id)}
+                            className="flex-1 py-2 px-2 bg-red-500/10 text-red-500 hover:bg-red-500/50 hover:text-white font-bold rounded-lg transition-all flex items-center justify-center gap-1"
+                            title="Delete"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })
+              ) : (
+                <div className="col-span-full py-12 text-center bg-white/5 rounded-2xl border border-dashed border-white/10">
+                  <p className="text-white/40 italic uppercase tracking-widest text-xs font-bold">No offers found.</p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="glass rounded-[0.5rem] border border-white/5 overflow-hidden">
+              <div className="overflow-x-auto custom-scrollbar">
+                <table className="w-full text-left border-collapse min-w-[800px]">
+                  <thead>
+                    <tr className="bg-white/5 border-b border-white/5">
+                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gold w-16">Status</th>
+                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gold min-w-[250px]">Offer Details</th>
+                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gold">Discount</th>
+                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gold">Price Range</th>
+                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gold text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {(filteredOffers || []).length > 0 ? (
+                      (paginatedOffers || []).map((offer, idx) => {
+                        const avail = offer.availability || {};
+                        const ranges = avail.dateRanges || (avail.startDate || avail.endDate ? [{ startDate: avail.startDate, endDate: avail.endDate }] : []);
+                        let visualActive = offer.active;
+                        if (ranges.length > 0) {
+                          const now = new Date();
+                          now.setHours(0, 0, 0, 0);
+                          const hasValidRange = ranges.some((r: any) => !r.endDate || new Date(r.endDate) >= now);
+                          if (!hasValidRange) visualActive = false;
+                        }
+
+                        const prices = (offer.fleets || []).map((f: any) => Number(f.salePrice || f.basePrice || f.price || 0)).filter((p: number) => p > 0);
+                        const min = prices.length ? Math.min(...prices) : 0;
+                        const max = prices.length ? Math.max(...prices) : 0;
+                        return (
+                          <tr key={offer.id || `list-offer-${idx}`} className={cn("transition-colors group bg-white/[0.01]", (selectedOffers || []).includes(offer.id) ? "bg-gold/5" : "hover:bg-white/5")}>
+                            <td className="px-6 py-4">
+                              <span className={cn(
+                                "px-2 py-1 rounded text-[8px] font-bold uppercase tracking-widest",
+                                visualActive ? "bg-green-700 text-white" : "bg-red-700 text-white"
+                              )}>
+                                {visualActive ? 'Active' : (!offer.active ? 'Inactive' : 'Expired')}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-3">
+                                <img src={getAssetPath(offer.image) || 'https://picsum.photos/seed/offer/60/60'} alt={offer.title} className="w-12 h-12 rounded-lg object-cover" />
+                                <div>
+                                  <p className="text-sm font-bold text-white mb-0.5">{offer.title}</p>
+                                  <p className="text-[10px] text-white/50 line-clamp-1">"{offer.description}"</p>
+                                  <div className="flex gap-1 mt-1">
+                                    {offer.tags?.slice(0, 3).map((tag: string, tIdx: number) => (
+                                      <span key={`${offer.id}-list-tag-${tag}-${tIdx}`} className="text-[8px] bg-gold/10 text-gold px-1 rounded uppercase tracking-widest">
+                                        {tag}
+                                      </span>
+                                    ))}
+                                    {(offer.tags?.length || 0) > 3 && <span className="text-[8px] text-white/40">...</span>}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              {offer.discountType === 'percentage'
+                                ? <span className="px-2 py-1 bg-blue-500/10 text-blue-400 rounded text-xs font-bold">{offer.discountValue}% OFF</span>
+                                : <span className="px-2 py-1 bg-green-500/10 text-green-400 rounded text-xs font-bold">${offer.discountValue} OFF</span>}
+                            </td>
+                            <td className="px-6 py-4 font-mono text-sm">
+                              {min === max ? `$${min}` : `$${min} - $${max}`}
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              <div className="flex items-center gap-2 justify-end">
+                                {isOffersSelectionMode && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (selectedOffers.includes(offer.id)) setSelectedOffers(prev => prev.filter(id => id !== offer.id));
+                                      else setSelectedOffers(prev => [...prev, offer.id]);
+                                    }}
+                                    className={cn(
+                                      "p-2 rounded-lg transition-all border",
+                                      selectedOffers.includes(offer.id) ? "bg-gold text-black border-gold" : "bg-white/5 text-white/40 hover:text-white border-white/10"
+                                    )}
+                                    title={selectedOffers.includes(offer.id) ? "Deselect" : "Select"}
+                                  >
+                                    {selectedOffers.includes(offer.id) ? <SquareCheck size={14} /> : <Square size={14} />}
+                                  </button>
+                                )}
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleToggleOfferStatus(offer.id, offer.active); }}
+                                  className={cn("p-2 rounded-lg transition-all border", offer.active ? "bg-red-500/10 text-red-500 hover:bg-red-500/50 hover:text-white border-red-500/20" : "bg-green-500/10 text-green-500 hover:bg-green-500 hover:text-white border-green-500/20")}
+                                  title={offer.active ? "Deactivate" : "Activate"}
+                                >
+                                  {offer.active ? <Ban size={14} /> : <CheckCircle size={14} />}
+                                </button>
+                                <button
+                                  onClick={() => handleDuplicateOffer(offer)}
+                                  className="p-2 bg-gold/10 text-gold border border-gold/20 hover:bg-gold hover:text-black rounded-lg transition-all"
+                                  title="Duplicate"
+                                >
+                                  <Copy size={14} />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setEditingOffer(offer);
+                                    setShowOfferModal(true);
+                                  }}
+                                  className="p-2 bg-blue-600/10 text-blue-500 border border-blue-500/20 hover:bg-blue-600 hover:text-white rounded-lg transition-all"
+                                  title="Edit"
+                                >
+                                  <Edit2 size={14} />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteOffer(offer.id)}
+                                  className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all border border-red-500/20"
+                                  title="Delete"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    ) : (
+                      <tr>
+                        <td colSpan={5} className="py-12 text-center text-white/40 italic uppercase tracking-widest text-[10px] font-bold">
+                          No offers found.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {filteredOffers.length > 0 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-6 bg-black/40 p-5 rounded-2xl border border-white/5 mt-8 mb-6">
+              <div className="text-[11px] font-mono text-white/50">
+                Showing <span className="text-gold font-bold">
+                  {filteredOffers.length === 0 ? 0 : (pageSizeOffers === 'All' ? 1 : (currentPageOffers - 1) * pageSizeOffers + 1)}
+                </span> to <span className="text-gold font-bold">
+                  {pageSizeOffers === 'All' ? filteredOffers.length : Math.min(currentPageOffers * pageSizeOffers, filteredOffers.length)}
+                </span> of <span className="text-white font-bold">{filteredOffers.length}</span> entries
+              </div>
+
+              {pageSizeOffers !== 'All' && totalOffersPages > 1 && (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setCurrentPageOffers(1)}
+                    disabled={currentPageOffers === 1}
+                    className="p-2 border border-white/10 rounded-xl bg-white/5 text-white/60 hover:text-gold hover:border-gold/30 disabled:opacity-20 disabled:pointer-events-none transition-all cursor-pointer"
+                    title="First Page"
+                  >
+                    <ChevronsLeft size={14} />
+                  </button>
+                  <button
+                    onClick={() => setCurrentPageOffers(prev => Math.max(1, prev - 1))}
+                    disabled={currentPageOffers === 1}
+                    className="p-2 border border-white/10 rounded-xl bg-white/5 text-white/60 hover:text-gold hover:border-gold/30 disabled:opacity-20 disabled:pointer-events-none transition-all cursor-pointer"
+                    title="Previous Page"
+                  >
+                    <ChevronLeft size={14} />
+                  </button>
+
+                  {(() => {
+                    const pageNumbers = [];
+                    const maxButtons = 5;
+                    let startPage = Math.max(1, currentPageOffers - Math.floor(maxButtons / 2));
+                    let endPage = Math.min(totalOffersPages, startPage + maxButtons - 1);
+                    if (endPage - startPage + 1 < maxButtons) {
+                      startPage = Math.max(1, endPage - maxButtons + 1);
+                    }
+                    for (let i = Math.max(1, startPage); i <= endPage; i++) {
+                      pageNumbers.push(i);
+                    }
+                    return pageNumbers.map(num => (
+                      <button
+                        key={`offer-page-btn-${num}`}
+                        onClick={() => setCurrentPageOffers(num)}
+                        className={cn(
+                          "w-8 h-8 flex items-center justify-center text-[10px] rounded-xl font-mono transition-all border font-bold cursor-pointer",
+                          currentPageOffers === num
+                            ? "bg-gold text-black border-gold shadow-[0_0_10px_rgba(212,175,55,0.2)]"
+                            : "bg-white/5 text-white/70 border-white/10 hover:border-gold/30 hover:text-gold"
+                        )}
+                      >
+                        {num}
+                      </button>
+                    ));
+                  })()}
+
+                  <button
+                    onClick={() => setCurrentPageOffers(prev => Math.min(totalOffersPages, prev + 1))}
+                    disabled={currentPageOffers === totalOffersPages}
+                    className="p-2 border border-white/10 rounded-xl bg-white/5 text-white/60 hover:text-gold hover:border-gold/30 disabled:opacity-20 disabled:pointer-events-none transition-all cursor-pointer"
+                    title="Next Page"
+                  >
+                    <ChevronRight size={14} />
+                  </button>
+                  <button
+                    onClick={() => setCurrentPageOffers(totalOffersPages)}
+                    disabled={currentPageOffers === totalOffersPages}
+                    className="p-2 border border-white/10 rounded-xl bg-white/5 text-white/60 hover:text-gold hover:border-gold/30 disabled:opacity-20 disabled:pointer-events-none transition-all cursor-pointer"
+                    title="Last Page"
+                  >
+                    <ChevronsRight size={14} />
+                  </button>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] uppercase tracking-wider text-white/40 font-bold font-mono">Page Size:</span>
+                <select
+                  value={pageSizeOffers}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setPageSizeOffers(val === 'All' ? 'All' : Number(val));
+                    setCurrentPageOffers(1);
+                  }}
+                  className="custom-select bg-black text-gold text-[10px] font-mono border border-white/10 rounded-xl px-3 py-1.5 focus:outline-none focus:border-gold font-bold uppercase cursor-pointer"
+                >
+                  <option value={12}>12 Offers</option>
+                  <option value={24}>24 Offers</option>
+                  <option value={48}>48 Offers</option>
+                  <option value="All">Show All</option>
+                </select>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       <AnimatePresence>
@@ -1247,6 +1548,83 @@ const OffersToursTab: React.FC<OffersToursTabProps> = ({
                       className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-gold transition-all"
                       placeholder="Featured, Most Picked, Family Favorite"
                     />
+                  </div>
+                </div>
+
+                {/* Offer Availability Pattern */}
+                <div className="space-y-4 pt-4 border-t border-white/5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-[10px] uppercase tracking-[0.2em] font-bold text-gold">Package Availability</h4>
+                      <p className="text-[9px] text-white/30 italic">Set specific date windows for this offer</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    {(editingOffer?.availability?.dateRanges?.length
+                      ? editingOffer.availability.dateRanges
+                      : [{ startDate: editingOffer?.availability?.startDate || '', endDate: editingOffer?.availability?.endDate || '' }]
+                    ).map((range: any, idx: number) => {
+                      const base = editingOffer?.availability?.dateRanges?.length
+                        ? editingOffer.availability.dateRanges
+                        : [{ startDate: editingOffer?.availability?.startDate || '', endDate: editingOffer?.availability?.endDate || '' }];
+                      return (
+                        <div key={idx} className="grid grid-cols-[1fr_1fr_auto] gap-3 items-center">
+                          <input
+                            type="date"
+                            value={range.startDate || ""}
+                            onChange={(e) => {
+                              const newRanges = [...base];
+                              newRanges[idx] = { ...range, startDate: e.target.value };
+                              setEditingOffer({ ...editingOffer, availability: { ...editingOffer.availability, dateRanges: newRanges, startDate: '', endDate: '' } });
+                            }}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs outline-none focus:border-gold text-white font-mono"
+                          />
+                          <input
+                            type="date"
+                            value={range.endDate || ""}
+                            onChange={(e) => {
+                              const newRanges = [...base];
+                              newRanges[idx] = { ...range, endDate: e.target.value };
+                              setEditingOffer({ ...editingOffer, availability: { ...editingOffer.availability, dateRanges: newRanges, startDate: '', endDate: '' } });
+                            }}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs outline-none focus:border-gold text-white font-mono"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newRanges = base.filter((_: any, i: number) => i !== idx);
+                              setEditingOffer({ ...editingOffer, availability: { ...editingOffer.availability, dateRanges: newRanges, startDate: '', endDate: '' } });
+                            }}
+                            className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20 transition-all"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      );
+                    })}
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const current = editingOffer?.availability?.dateRanges?.length
+                          ? editingOffer.availability.dateRanges
+                          : [{ startDate: editingOffer?.availability?.startDate || '', endDate: editingOffer?.availability?.endDate || '' }];
+                        setEditingOffer({
+                          ...editingOffer,
+                          availability: {
+                            ...editingOffer.availability,
+                            dateRanges: [...current, { startDate: '', endDate: '' }],
+                            startDate: '',
+                            endDate: ''
+                          }
+                        });
+                      }}
+                      className="w-full py-2 bg-gold/5 border border-dashed border-gold/30 text-gold text-[9px] font-bold uppercase rounded-xl hover:bg-gold/10 transition-all flex items-center justify-center gap-2 mt-1"
+                    >
+                      <PlusIcon size={14} />
+                      Add Date Window
+                    </button>
                   </div>
                 </div>
 
@@ -1655,14 +2033,79 @@ const OffersToursTab: React.FC<OffersToursTabProps> = ({
                         </button>
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div>
-                          <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-3 block">Availability (Start Date)</label>
-                          <input type="date" value={editingTour.availability?.startDate || ''} onChange={(e) => setEditingTour({ ...editingTour, availability: { ...editingTour.availability, startDate: e.target.value } })} className="w-full bg-white/5 border border-white/10 rounded-xl px-5 py-4 text-sm text-white/60 outline-none" />
+                      <div className="space-y-4 pt-4 border-t border-white/5">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h4 className="text-[10px] uppercase tracking-[0.2em] font-bold text-gold">Availability Windows</h4>
+                            <p className="text-[9px] text-white/30 italic">Define multiple seasonal or specific date ranges</p>
+                          </div>
                         </div>
-                        <div>
-                          <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-3 block">Availability (End Date)</label>
-                          <input type="date" value={editingTour.availability?.endDate || ''} onChange={(e) => setEditingTour({ ...editingTour, availability: { ...editingTour.availability, endDate: e.target.value } })} className="w-full bg-white/5 border border-white/10 rounded-xl px-5 py-4 text-sm text-white/60 outline-none" />
+
+                        <div className="space-y-3">
+                          {(editingTour?.availability?.dateRanges?.length
+                            ? editingTour.availability.dateRanges
+                            : [{ startDate: editingTour?.availability?.startDate || '', endDate: editingTour?.availability?.endDate || '' }]
+                          ).map((range: any, idx: number) => {
+                            const base = editingTour?.availability?.dateRanges?.length
+                              ? editingTour.availability.dateRanges
+                              : [{ startDate: editingTour?.availability?.startDate || '', endDate: editingTour?.availability?.endDate || '' }];
+                            return (
+                              <div key={idx} className="grid grid-cols-[1fr_1fr_auto] gap-3 items-center">
+                                <input
+                                  type="date"
+                                  value={range.startDate || ""}
+                                  onChange={(e) => {
+                                    const newRanges = [...base];
+                                    newRanges[idx] = { ...range, startDate: e.target.value };
+                                    setEditingTour({ ...editingTour, availability: { ...editingTour.availability, dateRanges: newRanges, startDate: '', endDate: '' } });
+                                  }}
+                                  className="w-full bg-white/5 border border-white/10 rounded-xl px-5 py-4 text-xs outline-none focus:border-gold text-white font-mono"
+                                />
+                                <input
+                                  type="date"
+                                  value={range.endDate || ""}
+                                  onChange={(e) => {
+                                    const newRanges = [...base];
+                                    newRanges[idx] = { ...range, endDate: e.target.value };
+                                    setEditingTour({ ...editingTour, availability: { ...editingTour.availability, dateRanges: newRanges, startDate: '', endDate: '' } });
+                                  }}
+                                  className="w-full bg-white/5 border border-white/10 rounded-xl px-5 py-4 text-xs outline-none focus:border-gold text-white font-mono"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const newRanges = base.filter((_: any, i: number) => i !== idx);
+                                    setEditingTour({ ...editingTour, availability: { ...editingTour.availability, dateRanges: newRanges, startDate: '', endDate: '' } });
+                                  }}
+                                  className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20 transition-all"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
+                            );
+                          })}
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const current = editingTour?.availability?.dateRanges?.length
+                                ? editingTour.availability.dateRanges
+                                : [{ startDate: editingTour?.availability?.startDate || '', endDate: editingTour?.availability?.endDate || '' }];
+                              setEditingTour({
+                                ...editingTour,
+                                availability: {
+                                  ...editingTour.availability,
+                                  dateRanges: [...current, { startDate: '', endDate: '' }],
+                                  startDate: '',
+                                  endDate: ''
+                                }
+                              });
+                            }}
+                            className="w-full py-4 bg-gold/5 border border-dashed border-gold/30 text-gold text-[10px] font-bold uppercase rounded-xl hover:bg-gold/10 transition-all flex items-center justify-center gap-2 mt-1"
+                          >
+                            <PlusIcon size={16} />
+                            Add Availability Window
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -2040,6 +2483,83 @@ const OffersToursTab: React.FC<OffersToursTabProps> = ({
                 >
                   {editingTour.id ? 'Authorize & Sync Changes' : 'Initialize Luxury Tour'}
                 </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Bulk Date Range Modal */}
+      <AnimatePresence>
+        {isBulkDateModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/95 backdrop-blur-md z-[110] flex items-center justify-center p-6"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              className="w-full max-w-md glass-heavy p-8 rounded-2xl border border-gold/20 shadow-2xl relative"
+            >
+              <button
+                onClick={() => setIsBulkDateModalOpen(false)}
+                className="absolute top-4 right-4 text-white/40 hover:text-white transition-colors bg-white/5 p-2 rounded-full"
+              >
+                <X size={20} />
+              </button>
+
+              <div className="mb-6">
+                <h3 className="text-xl font-display text-gold flex items-center gap-3">
+                  <Clock size={20} />
+                  Bulk Date Range
+                </h3>
+                <p className="text-[9px] uppercase tracking-widest text-white/40 mt-1">
+                  Applying window to <span className="text-white font-bold">{(bulkTargetType === 'offers' ? selectedOffers : selectedTours).length}</span> {bulkTargetType}
+                </p>
+              </div>
+
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-2 block">Effective From</label>
+                    <input
+                      type="date"
+                      value={bulkDateRange.startDate}
+                      onChange={(e) => setBulkDateRange({ ...bulkDateRange, startDate: e.target.value })}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-gold transition-all text-white font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 mb-2 block">Effective Until</label>
+                    <input
+                      type="date"
+                      value={bulkDateRange.endDate}
+                      onChange={(e) => setBulkDateRange({ ...bulkDateRange, endDate: e.target.value })}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-gold transition-all text-white font-mono"
+                    />
+                  </div>
+                </div>
+
+                <p className="text-[9px] text-white/30 italic text-center px-4">
+                  Note: This will replace any existing date windows for the selected {bulkTargetType}. Items will automatically show as "Expired" once the end date has passed.
+                </p>
+
+                <div className="grid grid-cols-2 gap-4 pt-4">
+                  <button
+                    onClick={() => setIsBulkDateModalOpen(false)}
+                    className="py-3 text-[10px] font-black uppercase tracking-widest border border-white/10 rounded-xl text-white/40 hover:text-white hover:border-white/20 transition-all font-bold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleBulkSetDateRange}
+                    className="bg-gold text-black py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white transition-all shadow-xl shadow-gold/10 font-bold"
+                  >
+                    Apply Window
+                  </button>
+                </div>
               </div>
             </motion.div>
           </motion.div>

@@ -906,14 +906,25 @@ export default function Booking() {
 
         // 3. Date restriction
         if (addon.limitDates) {
-          const checkDate = (d: string) => {
-            if (!d) return false;
-            if (addon.startDate && d < addon.startDate) return false;
-            if (addon.endDate && d > addon.endDate) return false;
+          const checkDateInRange = (dateStr: string) => {
+            if (!dateStr) return false;
+            if (addon.dateRanges && addon.dateRanges.length > 0) {
+              return addon.dateRanges.some((range: any) => {
+                const s = range.startDate || "";
+                const e = range.endDate || "";
+                if (!s && !e) return false;
+                if (s && dateStr < s) return false;
+                if (e && dateStr > e) return false;
+                return true;
+              });
+            }
+            if (addon.startDate && dateStr < addon.startDate) return false;
+            if (addon.endDate && dateStr > addon.endDate) return false;
             return true;
           };
-          const matchP = checkDate(formData.date);
-          const matchR = formData.isReturn ? checkDate(formData.returnDate) : false;
+
+          const matchP = checkDateInRange(formData.date);
+          const matchR = formData.isReturn ? checkDateInRange(formData.returnDate) : false;
 
           const checkedDates: string[] = [];
           if (matchP) checkedDates.push(formData.date);
@@ -921,33 +932,31 @@ export default function Booking() {
 
           ruleResults.push({
             matched: matchP || matchR,
-            details: (matchP || matchR) ? [`${checkedDates.join(", ")} (Validity: ${addon.startDate} to ${addon.endDate})`] : []
+            details: (matchP || matchR) ? [`${checkedDates.join(", ")} matched validity constraints`] : []
           });
         }
 
         // 4. Time restriction
         if (addon.limitTime) {
-          const checkTime = (timeStr: string) => {
+          const checkTimeInRange = (timeStr: string) => {
             if (!timeStr) return false;
-            const start = addon.startTime || "";
-            const end = addon.endTime || "";
-            if (start && end) {
-              if (start > end) {
-                // Overnight window (e.g., 22:00 - 05:00)
-                return timeStr >= start || timeStr <= end;
-              } else {
-                // Standard single-day window (e.g., 08:00 - 17:00)
+            const checkSingleRange = (start: string, end: string) => {
+              if (start && end) {
+                if (start > end) return timeStr >= start || timeStr <= end;
                 return timeStr >= start && timeStr <= end;
-              }
-            } else if (start) {
-              return timeStr >= start;
-            } else if (end) {
-              return timeStr <= end;
+              } else if (start) return timeStr >= start;
+              else if (end) return timeStr <= end;
+              return true;
+            };
+
+            if (addon.timeRanges && addon.timeRanges.length > 0) {
+              return addon.timeRanges.some((range: any) => checkSingleRange(range.startTime, range.endTime));
             }
-            return true;
+            return checkSingleRange(addon.startTime, addon.endTime);
           };
-          const matchP = checkTime(formData.time);
-          const matchR = formData.isReturn ? checkTime(formData.returnTime) : false;
+
+          const matchP = checkTimeInRange(formData.time);
+          const matchR = formData.isReturn ? checkTimeInRange(formData.returnTime) : false;
           
           let timeMatch = false;
           const target = addon.timeTarget || "any";
@@ -958,7 +967,6 @@ export default function Booking() {
           } else if (target === "both") {
             timeMatch = formData.isReturn ? (matchP && matchR) : matchP;
           } else {
-            // "any" state
             timeMatch = formData.isReturn ? (matchP || matchR) : matchP;
           }
 
@@ -972,7 +980,7 @@ export default function Booking() {
 
           ruleResults.push({
             matched: timeMatch,
-            details: timeMatch ? [`${checkedTimes.join(", ")} (Range: ${addon.startTime} - ${addon.endTime})`] : []
+            details: timeMatch ? [`${checkedTimes.join(", ")} within window constraints`] : []
           });
         }
 

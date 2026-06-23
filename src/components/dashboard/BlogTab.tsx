@@ -8,6 +8,7 @@ import {
 import { cn, getLocalDatetimeString } from '../../lib/utils';
 import { db, handleFirestoreError, OperationType } from '../../lib/firebase';
 import { collection, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, setDoc, query, onSnapshot, orderBy, writeBatch } from 'firebase/firestore';
+import { getCachedDocs, clearFsCache } from '../../lib/firestore-cache';
 
 interface BlogTabProps {
   isAdmin: boolean;
@@ -31,6 +32,12 @@ const BlogTab: React.FC<BlogTabProps> = ({
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [systemSettings, setSystemSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  const updateCacheAndTrigger = () => {
+    clearFsCache();
+    setRefreshTrigger(prev => prev + 1);
+  };
 
   const uniqueCategories = Array.from(new Set(blogs.map(b => b.category).filter(Boolean)));
   const allFilterCategories = ["All", ...Array.from(new Set([...BLOG_CATEGORIES, ...uniqueCategories]))];
@@ -63,8 +70,8 @@ const BlogTab: React.FC<BlogTabProps> = ({
 
     // Sort by date
     return result.sort((a, b) => {
-      const dateA = new Date(a.publishAt || a.createdAt?.toDate?.() || a.createdAt || 0).getTime();
-      const dateB = new Date(b.publishAt || b.createdAt?.toDate?.() || b.createdAt || 0).getTime();
+      const dateA = new Date(a.publishAt || (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : (a.createdAt?.toDate ? a.createdAt.toDate() : a.createdAt)) || 0).getTime();
+      const dateB = new Date(b.publishAt || (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : (b.createdAt?.toDate ? b.createdAt.toDate() : b.createdAt)) || 0).getTime();
       return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
     });
   }, [blogs, categoryFilter, statusFilter, searchQuery, sortOrder]);
@@ -87,26 +94,46 @@ const BlogTab: React.FC<BlogTabProps> = ({
   }, [filteredBlogs, pageSize]);
 
   useEffect(() => {
-    const q = query(
-      collection(db, 'blogs')
-    ); // We sort client-side now because we want to sort by publishAt which isn't always indexed easily with createdAt
-    const unsubscribeBlogs = onSnapshot(q, (snapshot) => {
-      setBlogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      setLoading(false);
-    }, (error) => {
-      console.error("Error loading dashboard blogs:", error);
-      handleFirestoreError(error, OperationType.GET, 'blogs');
-    });
+    let active = true;
+    const fetchBlogsAndSettings = async () => {
+      try {
+        const q = query(collection(db, 'blogs'));
+        const fetchedBlogs = await getCachedDocs(q, 'dashboard_blogs');
+        if (active) {
+          setBlogs(fetchedBlogs);
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error("Error loading dashboard blogs:", error);
+        handleFirestoreError(error, OperationType.GET, 'blogs');
+        if (active) {
+          setLoading(false);
+        }
+      }
 
-    const unsubscribeSettings = onSnapshot(doc(db, 'settings', 'system'), (snap) => {
-      if (snap.exists()) setSystemSettings(snap.data());
-    });
-
-    return () => {
-      unsubscribeBlogs();
-      unsubscribeSettings();
+      try {
+        const settingsRef = doc(db, 'settings', 'system');
+        const cachedSetting = sessionStorage.getItem('fs_cache_doc_settings/system');
+        if (cachedSetting) {
+          const entry = JSON.parse(cachedSetting);
+          setSystemSettings(entry.data);
+        } else {
+          const { getCachedDoc } = await import('../../lib/firestore-cache');
+          const data = await getCachedDoc(settingsRef);
+          if (active && data) {
+            setSystemSettings(data);
+          }
+        }
+      } catch (err) {
+        console.warn("Unable to fetch settings for blog dashboard:", err);
+      }
     };
-  }, []);
+
+    fetchBlogsAndSettings();
+    return () => {
+      active = false;
+    };
+  }, [refreshTrigger]);
   useEffect(() => {
     if (!blogs.length) return;
     
@@ -144,7 +171,9 @@ const BlogTab: React.FC<BlogTabProps> = ({
           updatedAt: serverTimestamp()
         });
       });
-      batch.commit().catch(err => console.error("Auto-status update failed:", err));
+      batch.commit().then(() => {
+        updateCacheAndTrigger();
+      }).catch(err => console.error("Auto-status update failed:", err));
     }
   }, [blogs]);
 
@@ -198,6 +227,7 @@ const BlogTab: React.FC<BlogTabProps> = ({
           });
           await batch.commit();
           setSelectedBlogs([]);
+          updateCacheAndTrigger();
           showDashboardNotice('success', `Successfully deleted ${ids.length} blog posts.`, 'Bulk Success');
         } catch (err: any) {
           console.error("Bulk delete blogs failed:", err);
@@ -215,6 +245,7 @@ const BlogTab: React.FC<BlogTabProps> = ({
       });
       await batch.commit();
       setSelectedBlogs([]);
+      updateCacheAndTrigger();
       showDashboardNotice('success', `Updated active status of ${ids.length} blog posts to ${active ? 'Active' : 'Inactive'}.`, 'Bulk Success');
     } catch (err: any) {
       console.error("Bulk status update failed:", err);
@@ -230,6 +261,7 @@ const BlogTab: React.FC<BlogTabProps> = ({
       });
       await batch.commit();
       setSelectedBlogs([]);
+      updateCacheAndTrigger();
       showDashboardNotice('success', `Updated search indexing of ${ids.length} blog posts to ${noindex ? 'No Index' : 'Index'}.`, 'Bulk Success');
     } catch (err: any) {
       console.error("Bulk indexing update failed:", err);
@@ -246,6 +278,7 @@ const BlogTab: React.FC<BlogTabProps> = ({
       await batch.commit();
       setSelectedBlogs([]);
       setBulkCategoryOpen(false);
+      updateCacheAndTrigger();
       showDashboardNotice('success', `Updated category of ${ids.length} blog posts to "${category}".`, 'Bulk Success');
     } catch (err: any) {
       console.error("Bulk category update failed:", err);
@@ -262,6 +295,7 @@ const BlogTab: React.FC<BlogTabProps> = ({
       await batch.commit();
       setSelectedBlogs([]);
       setBulkScheduleOpen(false);
+      updateCacheAndTrigger();
       showDashboardNotice('success', `Scheduled publication of ${ids.length} blog posts.`, 'Bulk Success');
     } catch (err: any) {
       console.error("Bulk scheduling update failed:", err);
@@ -312,6 +346,7 @@ const BlogTab: React.FC<BlogTabProps> = ({
         });
         setBlogs(blogs.map(b => b.id === cssConfig.id ? { ...b, customCss: cssConfig.content, isCustomCssActive: cssConfig.isActive } : b));
       }
+      updateCacheAndTrigger();
       setShowCssModal(false);
       showDashboardNotice('success', 'CSS updated successfully');
     } catch (err) {
@@ -351,6 +386,7 @@ const BlogTab: React.FC<BlogTabProps> = ({
           ...processedData,
           updatedAt: serverTimestamp()
         });
+        updateCacheAndTrigger();
         if (!isAutoSave) showDashboardNotice('success', 'Blog post updated');
       } else {
         // For new posts, we only auto-save if they have a title at least
@@ -367,6 +403,7 @@ const BlogTab: React.FC<BlogTabProps> = ({
         
         // Update editingBlog with the new ID so subsequent auto-saves use updateDoc
         setEditingBlog((prev: any) => ({ ...prev, id: newDocRef.id }));
+        updateCacheAndTrigger();
         
         if (!isAutoSave) showDashboardNotice('success', 'Blog post published');
       }
@@ -419,6 +456,7 @@ const BlogTab: React.FC<BlogTabProps> = ({
       onConfirm: async () => {
         try {
           await deleteDoc(doc(db, 'blogs', id));
+          updateCacheAndTrigger();
           showDashboardNotice('success', 'Blog post deleted');
         } catch (err) {
           console.error('Error deleting blog:', err);
@@ -434,6 +472,7 @@ const BlogTab: React.FC<BlogTabProps> = ({
         active: !blog.active,
         updatedAt: serverTimestamp()
       });
+      updateCacheAndTrigger();
     } catch (err) {
       console.error('Error toggling blog status:', err);
       handleFirestoreError(err, OperationType.UPDATE, `blogs/${blog.id}`);
@@ -451,6 +490,7 @@ const BlogTab: React.FC<BlogTabProps> = ({
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
+      updateCacheAndTrigger();
     } catch (err) {
       console.error('Error duplicating blog:', err);
       handleFirestoreError(err, OperationType.CREATE, 'blogs');

@@ -8,6 +8,7 @@ import {
 import { cn, getLocalDatetimeString } from '../../lib/utils';
 import { db, handleFirestoreError, OperationType } from '../../lib/firebase';
 import { collection, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, setDoc, query, onSnapshot, orderBy, writeBatch } from 'firebase/firestore';
+import { getCachedDocs, clearFsCache } from '../../lib/firestore-cache';
 
 interface DynamicPageTabProps {
   isAdmin: boolean;
@@ -29,28 +30,52 @@ const DynamicPageTab: React.FC<DynamicPageTabProps> = ({
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [systemSettings, setSystemSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   useEffect(() => {
-    const q = query(
-      collection(db, 'pages')
-    );
-    const unsubscribePages = onSnapshot(q, (snapshot) => {
-      setPages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      setLoading(false);
-    }, (error) => {
-      console.error("Error loading dashboard pages:", error);
-      handleFirestoreError(error, OperationType.GET, 'pages');
-    });
+    let active = true;
+    const fetchPagesAndSettings = async () => {
+      try {
+        const q = query(collection(db, 'pages'));
+        const fetchedPages = await getCachedDocs(q, 'dashboard_pages');
+        if (active) {
+          setPages(fetchedPages);
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error("Error loading dashboard pages:", error);
+        handleFirestoreError(error, OperationType.GET, 'pages');
+        if (active) {
+          setLoading(false);
+        }
+      }
 
-    const unsubscribeSettings = onSnapshot(doc(db, 'settings', 'system'), (snap) => {
-      if (snap.exists()) setSystemSettings(snap.data());
-    });
-
-    return () => {
-      unsubscribePages();
-      unsubscribeSettings();
+      try {
+        // Since settings are cached as doc under settings/system in SettingsContext, let's get that cached doc
+        const settingsRef = doc(db, 'settings', 'system');
+        const snap = await doc(db, 'settings', 'system');
+        // Let's do a fast fetch
+        const cachedSetting = sessionStorage.getItem('fs_cache_doc_settings/system');
+        if (cachedSetting) {
+          const entry = JSON.parse(cachedSetting);
+          setSystemSettings(entry.data);
+        } else {
+          const { getCachedDoc } = await import('../../lib/firestore-cache');
+          const data = await getCachedDoc(settingsRef);
+          if (active && data) {
+            setSystemSettings(data);
+          }
+        }
+      } catch (err) {
+        console.warn("Unable to fetch settings for dashboard:", err);
+      }
     };
-  }, []);
+
+    fetchPagesAndSettings();
+    return () => {
+      active = false;
+    };
+  }, [refreshTrigger]);
   useEffect(() => {
     if (!pages.length) return;
     
@@ -110,6 +135,11 @@ const DynamicPageTab: React.FC<DynamicPageTabProps> = ({
     featuredImage?: string;
   }>({ type: 'global', content: '', isActive: true });
 
+  const updateCacheAndTrigger = () => {
+    clearFsCache();
+    setRefreshTrigger(prev => prev + 1);
+  };
+
   const handleSaveCss = async () => {
     setCssEditingLoading(true);
     try {
@@ -139,6 +169,7 @@ const DynamicPageTab: React.FC<DynamicPageTabProps> = ({
         });
         setPages(pages.map(p => p.id === cssConfig.id ? { ...p, customCss: cssConfig.content, isCustomCssActive: cssConfig.isActive } : p));
       }
+      updateCacheAndTrigger();
       setShowCssModal(false);
       showDashboardNotice('success', 'CSS updated successfully');
     } catch (err) {
@@ -169,6 +200,7 @@ const DynamicPageTab: React.FC<DynamicPageTabProps> = ({
           ...processedData,
           updatedAt: serverTimestamp()
         });
+        updateCacheAndTrigger();
         if (!isAutoSave) showDashboardNotice('success', 'Page updated');
       } else {
         // For new posts, we only auto-save if they have a title at least
@@ -185,6 +217,7 @@ const DynamicPageTab: React.FC<DynamicPageTabProps> = ({
 
         // Update editingPage with the new ID so subsequent auto-saves use updateDoc
         setEditingPage((prev: any) => ({ ...prev, id: newDocRef.id }));
+        updateCacheAndTrigger();
 
         if (!isAutoSave) showDashboardNotice('success', 'Page created');
       }
@@ -237,6 +270,7 @@ const DynamicPageTab: React.FC<DynamicPageTabProps> = ({
       onConfirm: async () => {
         try {
           await deleteDoc(doc(db, 'pages', id));
+          updateCacheAndTrigger();
           showDashboardNotice('success', 'Page deleted');
         } catch (err) {
           console.error('Error deleting page:', err);
@@ -252,6 +286,7 @@ const DynamicPageTab: React.FC<DynamicPageTabProps> = ({
         active: !page.active,
         updatedAt: serverTimestamp()
       });
+      updateCacheAndTrigger();
     } catch (err) {
       console.error('Error toggling page status:', err);
       handleFirestoreError(err, OperationType.UPDATE, `pages/${page.id}`);
@@ -269,6 +304,7 @@ const DynamicPageTab: React.FC<DynamicPageTabProps> = ({
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
+      updateCacheAndTrigger();
     } catch (err) {
       console.error('Error duplicating page:', err);
       handleFirestoreError(err, OperationType.CREATE, 'pages');
@@ -376,6 +412,7 @@ const DynamicPageTab: React.FC<DynamicPageTabProps> = ({
           });
           await batch.commit();
           setSelectedPages([]);
+          updateCacheAndTrigger();
           showDashboardNotice('success', `Successfully deleted ${ids.length} pages.`, 'Bulk Success');
         } catch (err: any) {
           console.error("Bulk delete pages failed:", err);
@@ -393,6 +430,7 @@ const DynamicPageTab: React.FC<DynamicPageTabProps> = ({
       });
       await batch.commit();
       setSelectedPages([]);
+      updateCacheAndTrigger();
       showDashboardNotice('success', `Updated active status of ${ids.length} pages to ${active ? 'Active' : 'Inactive'}.`, 'Bulk Success');
     } catch (err: any) {
       console.error("Bulk status update failed:", err);
@@ -408,6 +446,7 @@ const DynamicPageTab: React.FC<DynamicPageTabProps> = ({
       });
       await batch.commit();
       setSelectedPages([]);
+      updateCacheAndTrigger();
       showDashboardNotice('success', `Updated sitemap inclusion of ${ids.length} pages to ${includeInSitemap ? 'Included' : 'Sitemaped'}.`, 'Bulk Success');
     } catch (err: any) {
       console.error("Bulk sitemap update failed:", err);
@@ -423,6 +462,7 @@ const DynamicPageTab: React.FC<DynamicPageTabProps> = ({
       });
       await batch.commit();
       setSelectedPages([]);
+      updateCacheAndTrigger();
       showDashboardNotice('success', `Updated search indexing of ${ids.length} pages to ${noindex ? 'No Index' : 'Index'}.`, 'Bulk Success');
     } catch (err: any) {
       console.error("Bulk indexing update failed:", err);
@@ -439,6 +479,7 @@ const DynamicPageTab: React.FC<DynamicPageTabProps> = ({
       await batch.commit();
       setSelectedPages([]);
       setBulkCategoryOpen(false);
+      updateCacheAndTrigger();
       showDashboardNotice('success', `Updated category of ${ids.length} pages to "${category}".`, 'Bulk Success');
     } catch (err: any) {
       console.error("Bulk category update failed:", err);
@@ -455,6 +496,7 @@ const DynamicPageTab: React.FC<DynamicPageTabProps> = ({
       await batch.commit();
       setSelectedPages([]);
       setBulkScheduleOpen(false);
+      updateCacheAndTrigger();
       showDashboardNotice('success', `Scheduled publication of ${ids.length} pages.`, 'Bulk Success');
     } catch (err: any) {
       console.error("Bulk scheduling update failed:", err);

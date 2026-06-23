@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useLocation } from 'react-router-dom';
 import { SEO_CONFIG, type SEOProps, generateCanonicalUrl } from '../lib/seo';
-import { collection, query, where, limit, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, limit, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useSettings } from '../lib/SettingsContext';
 import { metadataFallback } from '../data/fallback/metadataFallback';
+import { getCachedDocs } from '../lib/firestore-cache';
 
 const SEO: React.FC<SEOProps> = ({
   title,
@@ -79,31 +80,35 @@ const SEO: React.FC<SEOProps> = ({
       setDbSeo(null);
     };
 
-    const q = query(
-      collection(db, 'metadata'),
-      where('slug', '==', matchedSlug),
-      limit(1)
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      if (!snapshot.empty) {
-        const docData = snapshot.docs[0].data();
-        setDbSeo({
-          metaTitle: docData.metaTitle || '',
-          metaDescription: docData.metaDescription || '',
-          keywords: docData.keywords || [],
-          noindex: docData.noindex || false,
-          structuredData: docData.structuredData || null
-        });
-      } else {
+    const fetchMetadata = async () => {
+      try {
+        const q = query(
+          collection(db, 'metadata'),
+          where('slug', '==', matchedSlug),
+          limit(1)
+        );
+        
+        const docs = await getCachedDocs(q, `seo_${matchedSlug}`);
+        
+        if (docs.length > 0) {
+          const docData = docs[0];
+          setDbSeo({
+            metaTitle: docData.metaTitle || '',
+            metaDescription: docData.metaDescription || '',
+            keywords: docData.keywords || [],
+            noindex: docData.noindex || false,
+            structuredData: docData.structuredData || null
+          });
+        } else {
+          loadFallback(matchedSlug);
+        }
+      } catch (error) {
+        console.warn('SEO dynamic loading suspended, using fallback:', error);
         loadFallback(matchedSlug);
       }
-    }, (error) => {
-      console.warn('SEO dynamic loading suspended, using fallback:', error);
-      loadFallback(matchedSlug);
-    });
+    };
 
-    return () => unsubscribe();
+    fetchMetadata();
   }, [pathname]);
 
   const finalTitle = dbSeo?.metaTitle || title;
@@ -188,7 +193,7 @@ const SEO: React.FC<SEOProps> = ({
             "image": seoImage,
             "@id": SEO_CONFIG.siteUrl,
             "url": SEO_CONFIG.siteUrl,
-            "telephone": "+61400000000",
+            "telephone": "+61426444449",
             "address": {
               "@type": "PostalAddress",
               "streetAddress": "Collins St",

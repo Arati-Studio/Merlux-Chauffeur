@@ -8,6 +8,7 @@ import {
   ListChecks, Filter
 } from 'lucide-react';
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, serverTimestamp, addDoc, setDoc } from 'firebase/firestore';
+import { getCachedDocs, clearFsCache } from '../../lib/firestore-cache';
 import { db, handleFirestoreError, OperationType } from '../../lib/firebase';
 import { cn } from '../../lib/utils';
 import { metadataFallback } from '../../data/fallback/metadataFallback';
@@ -139,6 +140,12 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
   const [metadataDocs, setMetadataDocs] = useState<any[]>([]);
   const [systemSettings, setSystemSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  const updateCacheAndTrigger = () => {
+    clearFsCache();
+    setRefreshTrigger(prev => prev + 1);
+  };
   const [isSaving, setIsSaving] = useState(false);
   const [activeSubSection, setActiveSubSection] = useState<'console' | 'sitemap' | 'robots' | 'schema'>('console');
   const [sitemapStats, setSitemapStats] = useState<any>(null);
@@ -361,6 +368,7 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
       }
 
       showDashboardNotice('success', `Metadata updated for ${editingItem.title}`);
+      updateCacheAndTrigger();
       setEditingItem(null);
     } catch (err: any) {
       console.error('Error saving metadata:', err);
@@ -389,74 +397,113 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
   };
 
   useEffect(() => {
-    const unsubPages = onSnapshot(collection(db, 'pages'), (snap) => {
-      const parsed = snap.docs.map(d => ({ id: d.id, type: 'Page', ...d.data() }));
-      parsed.sort((a: any, b: any) => {
-        const tA = a.createdAt?.seconds || a.createdAt || 0;
-        const tB = b.createdAt?.seconds || b.createdAt || 0;
-        return tB - tA;
-      });
-      setPages(parsed);
-    });
-    const unsubBlogs = onSnapshot(collection(db, 'blogs'), (snap) => {
-      const parsed = snap.docs.map(d => ({ id: d.id, type: 'Blog', ...d.data() }));
-      parsed.sort((a: any, b: any) => {
-        const tA = a.createdAt?.seconds || a.createdAt || 0;
-        const tB = b.createdAt?.seconds || b.createdAt || 0;
-        return tB - tA;
-      });
-      setBlogs(parsed);
-    });
-    const unsubOffers = onSnapshot(collection(db, 'offers'), (snap) => {
-      const parsed = snap.docs.map(d => ({ id: d.id, type: 'Offer', ...d.data() }));
-      parsed.sort((a: any, b: any) => {
-        const tA = a.createdAt?.seconds || a.createdAt || 0;
-        const tB = b.createdAt?.seconds || b.createdAt || 0;
-        return tB - tA;
-      });
-      setOffers(parsed);
-    });
-    const unsubTours = onSnapshot(collection(db, 'tours'), (snap) => {
-      const parsed = snap.docs.map(d => ({ id: d.id, type: 'Tour', ...d.data() }));
-      parsed.sort((a: any, b: any) => {
-        const tA = a.createdAt?.seconds || a.createdAt || 0;
-        const tB = b.createdAt?.seconds || b.createdAt || 0;
-        return tB - tA;
-      });
-      setTours(parsed);
-    });
-    const unsubDocs = onSnapshot(collection(db, 'metadata'), (snap) => {
-      const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      if (data.length > 0) {
-        setMetadataDocs(data);
-      } else {
-        setMetadataDocs(metadataFallback);
-      }
-    }, (err) => {
-      console.warn("Failed to listen to metadata collection, loading fallback", err);
-      setMetadataDocs(metadataFallback);
-    });
-    const unsubSettings = onSnapshot(doc(db, 'settings', 'system'), (snap) => {
-      if (snap.exists()) {
-        const data = snap.data();
-        setSystemSettings(data);
-        if (data.schema) {
-          setOrgSchemaEdit(typeof data.schema.organization === 'string' ? data.schema.organization : JSON.stringify(data.schema.organization || '', null, 2));
-          setLocalSchemaEdit(typeof data.schema.localBusiness === 'string' ? data.schema.localBusiness : JSON.stringify(data.schema.localBusiness || '', null, 2));
+    let active = true;
+    const fetchAllData = async () => {
+      try {
+        const pagesData = await getCachedDocs(query(collection(db, 'pages')), 'meta_pages');
+        if (active) {
+          const parsed = pagesData.map(d => ({ id: d.id, type: 'Page', ...d }));
+          parsed.sort((a: any, b: any) => {
+            const tA = a.createdAt?.seconds || a.createdAt || 0;
+            const tB = b.createdAt?.seconds || b.createdAt || 0;
+            return tB - tA;
+          });
+          setPages(parsed);
         }
+      } catch (err) {
+        console.warn("MetaTab pages load error:", err);
       }
-      setLoading(false);
-    });
 
-    return () => {
-      unsubPages();
-      unsubBlogs();
-      unsubOffers();
-      unsubTours();
-      unsubDocs();
-      unsubSettings();
+      try {
+        const blogsData = await getCachedDocs(query(collection(db, 'blogs')), 'meta_blogs');
+        if (active) {
+          const parsed = blogsData.map(d => ({ id: d.id, type: 'Blog', ...d }));
+          parsed.sort((a: any, b: any) => {
+            const tA = a.createdAt?.seconds || a.createdAt || 0;
+            const tB = b.createdAt?.seconds || b.createdAt || 0;
+            return tB - tA;
+          });
+          setBlogs(parsed);
+        }
+      } catch (err) {
+        console.warn("MetaTab blogs load error:", err);
+      }
+
+      try {
+        const offersData = await getCachedDocs(query(collection(db, 'offers')), 'meta_offers');
+        if (active) {
+          const parsed = offersData.map(d => ({ id: d.id, type: 'Offer', ...d }));
+          parsed.sort((a: any, b: any) => {
+            const tA = a.createdAt?.seconds || a.createdAt || 0;
+            const tB = b.createdAt?.seconds || b.createdAt || 0;
+            return tB - tA;
+          });
+          setOffers(parsed);
+        }
+      } catch (err) {
+        console.warn("MetaTab offers load error:", err);
+      }
+
+      try {
+        const toursData = await getCachedDocs(query(collection(db, 'tours')), 'meta_tours');
+        if (active) {
+          const parsed = toursData.map(d => ({ id: d.id, type: 'Tour', ...d }));
+          parsed.sort((a: any, b: any) => {
+            const tA = a.createdAt?.seconds || a.createdAt || 0;
+            const tB = b.createdAt?.seconds || b.createdAt || 0;
+            return tB - tA;
+          });
+          setTours(parsed);
+        }
+      } catch (err) {
+        console.warn("MetaTab tours load error:", err);
+      }
+
+      try {
+        const metaData = await getCachedDocs(query(collection(db, 'metadata')), 'meta_docs');
+        if (active) {
+          if (metaData.length > 0) {
+            setMetadataDocs(metaData);
+          } else {
+            setMetadataDocs(metadataFallback);
+          }
+        }
+      } catch (err) {
+        console.warn("MetaTab metadata docs load error:", err);
+        if (active) setMetadataDocs(metadataFallback);
+      }
+
+      try {
+        const settingsRef = doc(db, 'settings', 'system');
+        const cachedSetting = sessionStorage.getItem('fs_cache_doc_settings/system');
+        let systemData = null;
+        if (cachedSetting) {
+          systemData = JSON.parse(cachedSetting).data;
+        } else {
+          const { getCachedDoc } = await import('../../lib/firestore-cache');
+          systemData = await getCachedDoc(settingsRef);
+        }
+        if (active && systemData) {
+          setSystemSettings(systemData);
+          if (systemData.schema) {
+            setOrgSchemaEdit(typeof systemData.schema.organization === 'string' ? systemData.schema.organization : JSON.stringify(systemData.schema.organization || '', null, 2));
+            setLocalSchemaEdit(typeof systemData.schema.localBusiness === 'string' ? systemData.schema.localBusiness : JSON.stringify(systemData.schema.localBusiness || '', null, 2));
+          }
+        }
+      } catch (err) {
+        console.warn("MetaTab system load error:", err);
+      }
+
+      if (active) {
+        setLoading(false);
+      }
     };
-  }, []);
+
+    fetchAllData();
+    return () => {
+      active = false;
+    };
+  }, [refreshTrigger]);
 
   const fetchSitemapStats = async () => {
     try {
@@ -717,6 +764,7 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
         updatedAt: serverTimestamp()
       });
       showDashboardNotice('success', 'Robots.txt updated successfully.');
+      updateCacheAndTrigger();
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, 'settings/system');
     } finally {
@@ -750,6 +798,7 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
         updatedAt: serverTimestamp()
       });
       showDashboardNotice('success', 'Global SEO schemas updated and synchronized.');
+      updateCacheAndTrigger();
     } catch (err: any) {
       showDashboardNotice('error', `Schema Update Failed: ${err.message || 'Check JSON formatting'}`);
       handleFirestoreError(err, OperationType.UPDATE, 'settings/system');
@@ -802,6 +851,7 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
         });
       }
       showDashboardNotice('success', `Indexing status updated for ${item.title}`);
+      updateCacheAndTrigger();
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `${collectionName}/${item.id}`);
     }
@@ -959,6 +1009,7 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
       }
 
       showDashboardNotice('success', `Bulk Actions executed successfully on ${successCount} content pages!`);
+      updateCacheAndTrigger();
       setSelectedIds([]);
       setShowBulkPanel(false);
     } catch (err: any) {

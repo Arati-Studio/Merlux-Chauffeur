@@ -6,7 +6,6 @@ export interface FallbackFAQ {
   order: number;
   active: boolean;
   updatedAt?: any;
-  [key: string]: any;
 }
 
 export const faqFallback: FallbackFAQ[] = [

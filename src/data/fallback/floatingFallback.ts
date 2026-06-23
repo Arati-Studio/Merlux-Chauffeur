@@ -5,8 +5,8 @@ export interface FloatingSettings {
     icons: Array<{
       id: string;
       platform?: string;
-      url?: string;
-      active?: boolean;
+      url: string;
+      active: boolean;
       color?: string;
       [key: string]: any;
     }>;
@@ -23,7 +23,7 @@ export interface FloatingSettings {
     id: string;
     text?: string;
     url?: string;
-    active?: boolean;
+    active: boolean;
     bgColor?: string;
     textColor?: string;
     closeable?: boolean;
@@ -32,16 +32,15 @@ export interface FloatingSettings {
   }>;
   popups: Array<{
     id: string;
-    title?: string;
+    title: string;
     content?: string;
-    active?: boolean;
+    active: boolean;
     delay?: number;
     trigger?: 'load' | 'scroll' | 'exit';
     width?: string;
     showClose?: boolean;
     [key: string]: any;
   }>;
-  [key: string]: any;
 }
 
 export const floatingFallback: FloatingSettings = {

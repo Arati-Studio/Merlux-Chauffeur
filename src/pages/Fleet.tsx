@@ -3,220 +3,10 @@ import { motion } from 'motion/react';
 import { User, Briefcase, Check, Star, Navigation } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { db } from '../lib/firebase';
-import { collection, getDocs, orderBy, query } from 'firebase/firestore';
+import { collection, getDocs, query } from 'firebase/firestore';
+import { fleetFallback } from '../data/fallback/fleetFallback';
 import { cn, getAssetPath } from '../lib/utils';
 import SEO from '../components/SEO';
-
-const DEFAULT_FLEET = [
-  {
-    "type": "suv",
-    "excerpt": "Perfect for corporate travel and airport transfers for up to 3 passengers.",
-    "hourlyPrice": 109,
-    "model": "S Class",
-    "bestFor": [
-      "Business Travel",
-      "City transfers",
-      "Solo/Couple rides"
-    ],
-    "kmRanges": [
-      {
-        "surcharge": 0,
-        "label": "0-25"
-      },
-      {
-        "surcharge": 2.39,
-        "label": "25-50"
-      },
-      {
-        "surcharge": 2.86,
-        "label": "50-100"
-      },
-      {
-        "label": "100+",
-        "surcharge": 2.39
-      }
-    ],
-    "features": [
-      "Leather Interior",
-      "Climate Control",
-      "Bottled Water",
-      "Wifi"
-    ],
-    "img": "assets/SUV.webp",
-    "pax": 4,
-    "basePrice": 114.5,
-    "bags": 1,
-    "plateNo": "1AB-CD",
-    "name": "Business SUV",
-    "price": 0
-  },
-  {
-    "model": "First Class",
-    "bestFor": [
-      "Group Travel",
-      "Family Trips",
-      "Airport Transfers"
-    ],
-    "excerpt": "Perfect for group travel and family trips with spacious seating for up to 4 passengers.",
-    "hourlyPrice": 126,
-    "type": "van",
-    "features": [
-      "Spacious Interior",
-      "Climate Control",
-      "WiFi",
-      "Entertainment System"
-    ],
-    "kmRanges": [
-      {
-        "label": "0-25",
-        "surcharge": 0
-      },
-      {
-        "label": "25-50",
-        "surcharge": 2.86
-      },
-      {
-        "surcharge": 3.34,
-        "label": "50-100"
-      },
-      {
-        "surcharge": 2.86,
-        "label": "100+"
-      }
-    ],
-    "pax": 4,
-    "basePrice": 133.9,
-    "img": "assets/Van.webp",
-    "price": 0,
-    "name": "Business Van",
-    "bags": 2,
-  },
-  {
-    "features": [
-      "Luxury Leather Interior",
-      "Advanced Climate Control",
-      "Premium Sound System",
-      "Bottled Premium Water",
-      "Executive Amenities"
-    ],
-    "kmRanges": [
-      {
-        "label": "0-25",
-        "surcharge": 0
-      },
-      {
-        "label": "25-50",
-        "surcharge": 3.34
-      },
-      {
-        "surcharge": 3.82,
-        "label": "50-100"
-      },
-      {
-        "surcharge": 3,
-        "label": "100+"
-      }
-    ],
-    "type": "sedan",
-    "model": "S-Class First Edition",
-    "bestFor": [
-      "Luxury Travel",
-      "VIP Transfers",
-      "Premium Business Meetings"
-    ],
-    "excerpt": "Experience luxury and elegance with our First Class Sedan, perfect for VIP transfers and premium business travel for up to 4 passengers.",
-    "hourlyPrice": 145.5,
-    "name": "First Class Sedan",
-    "bags": 4,
-    "price": 0,
-    "pax": 4,
-    "basePrice": 152.75,
-    "img": "assets/First Class Sedan.webp"
-  },
-  {
-    "pax": 3,
-    "basePrice": 95.5,
-    "img": "assets/Sedan.webp",
-    "name": "Business Sedan",
-    "bags": 3,
-    "price": 0,
-    "type": "sedan",
-    "model": "E Class",
-    "bestFor": [
-      "Executive Travel",
-      "Business Meetings",
-      "City Transfers"
-    ],
-    "excerpt": "Perfect for corporate travel and airport transfers for up to 3 passengers.",
-    "hourlyPrice": 90.91,
-    "features": [
-      "Premium Interior",
-      "Climate Control",
-      "WiFi",
-      "Bottled Water"
-    ],
-    "kmRanges": [
-      {
-        "label": "0-25",
-        "surcharge": 0
-      },
-      {
-        "label": "25-50",
-        "surcharge": 1.91
-      },
-      {
-        "label": "50-100",
-        "surcharge": 2.39
-      },
-      {
-        "label": "100+",
-        "surcharge": 1.91
-      }
-    ]
-  },
-  {
-    "model": "Sprinter Class",
-    "bestFor": [
-      "Large Groups",
-      "Corporate Events",
-      "Charter Services"
-    ],
-    "excerpt": "Perfect for large groups and corporate events with spacious seating for up to 10 passengers.",
-    "hourlyPrice": 200,
-    "type": "Bus",
-    "features": [
-      "Spacious Seating",
-      "Climate Control",
-      "WiFi",
-      "Large Luggage Space"
-    ],
-    "kmRanges": [
-      {
-        "surcharge": 0,
-        "label": "0-25"
-      },
-      {
-        "label": "25-50",
-        "surcharge": 3.82
-      },
-      {
-        "surcharge": 4.3,
-        "label": "50-100"
-      },
-      {
-        "surcharge": 3.82,
-        "label": "100+"
-      }
-    ],
-    "pax": 10,
-    "basePrice": 181.8,
-    "img": "assets/Sprinter.webp",
-    "price": 0,
-    "name": "Business Sprinter",
-    "bags": 12,
-    "plateNo": "1AC-DF"
-  }
-];
 
 export default function Fleet() {
   const [fleetList, setFleetList] = useState<any[]>([]);
@@ -232,7 +22,7 @@ export default function Fleet() {
           ...doc.data()
         }));
 
-        const listToUse = data.length > 0 ? data : DEFAULT_FLEET;
+        const listToUse = data.length > 0 ? data : fleetFallback;
         const sortedList = [...listToUse].sort((a: any, b: any) => {
           const priceA = Number(a.basePrice || a.price || a.hourlyPrice || 0);
           const priceB = Number(b.basePrice || b.price || b.hourlyPrice || 0);
@@ -241,8 +31,8 @@ export default function Fleet() {
 
         setFleetList(sortedList);
       } catch (error) {
-        console.error('Error fetching fleet:', error);
-        const sortedDefault = [...DEFAULT_FLEET].sort((a: any, b: any) => {
+        console.warn('Fleet dynamic loading suspended, using fallback:', error);
+        const sortedDefault = [...fleetFallback].sort((a: any, b: any) => {
           const priceA = Number(a.basePrice || a.price || a.hourlyPrice || 0);
           const priceB = Number(b.basePrice || b.price || b.hourlyPrice || 0);
           return priceB - priceA;

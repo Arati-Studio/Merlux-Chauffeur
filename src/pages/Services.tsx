@@ -6,6 +6,7 @@ import { motion } from 'motion/react';
 import { ArrowRight } from 'lucide-react';
 import SEO from '../components/SEO';
 import { pagesFallback } from '../data/fallback/pagesFallback';
+import { getCachedDocs } from '../lib/firestore-cache';
 
 export default function Services() {
   const navigate = useNavigate();
@@ -15,13 +16,11 @@ export default function Services() {
   useEffect(() => {
     const fetchServices = async () => {
       try {
-        // Query only by category to be safe with indexes, filter active in memory
         const q = query(
           collection(db, 'pages'),
           where('category', '==', 'Services')
         );
-        const snap = await getDocs(q);
-        const fetched = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+        const fetched = await getCachedDocs(q, 'services_list');
         
         // Filter in memory for maximum reliability and handle missing 'active' field
         const filtered = fetched
