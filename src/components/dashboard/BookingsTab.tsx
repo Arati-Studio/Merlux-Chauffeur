@@ -3004,9 +3004,12 @@ export default function BookingsTab({
               animate={{ scale: 1, y: 0 }}
               className="w-full max-w-lg glass p-4 md:p-8 rounded-2xl border border-gold/20 max-h-[95vh] md:max-h-[90vh] overflow-y-auto custom-scrollbar"
             >
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-display text-gold">Booking Details</h3>
-                <button onClick={() => { setShowViewModal(false); setShowDistanceBreakdown(false); }} className="text-white/40 hover:text-white">
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <h3 className="text-xl font-display text-gold">Booking Details</h3>
+                  <p className="text-[10px] font-mono text-white/50 uppercase tracking-widest mt-1">ID: <span className="text-white font-bold select-all">{viewingBooking.id}</span></p>
+                </div>
+                <button onClick={() => { setShowViewModal(false); setShowDistanceBreakdown(false); }} className="text-white/40 hover:text-white p-1">
                   <X size={20} />
                 </button>
               </div>

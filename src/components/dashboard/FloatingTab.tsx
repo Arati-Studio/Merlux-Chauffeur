@@ -900,8 +900,8 @@ const FloatingTab: React.FC<FloatingTabProps> = ({
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
             <div className="space-y-6">
               <div className="p-6 bg-black/20 rounded-2xl border border-white/5 space-y-6">
-                <label className="text-[10px] uppercase tracking-widest font-black text-gold/60 flex items-center gap-2">
-                  <Layout size={12} />
+                <label className="text-[10px] uppercase tracking-widest font-black text-gold/60 flex items-center gap-2 border-b border-white/5 pb-2">
+                  <Layout size={12} className="text-gold" />
                   Layout & Display
                 </label>
 
@@ -1021,56 +1021,112 @@ const FloatingTab: React.FC<FloatingTabProps> = ({
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <span className="text-[9px] text-white/30 uppercase font-black tracking-widest ml-1">Offset Margin (px)</span>
-                  <input type="number" step="4" value={floatingSettings?.toast?.offset || 16} onChange={(e) => setFloatingSettings((prev: any) => ({ ...prev, toast: { ...(prev?.toast || {}), offset: parseInt(e.target.value) } }))} className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-xs" />
-                </div>
-
-                <div className="space-y-2">
-                  <span className="text-[9px] text-white/30 uppercase font-black tracking-widest ml-1">Padding Inside (px)</span>
-                  <input type="number" step="4" value={floatingSettings?.toast?.padding || 16} onChange={(e) => setFloatingSettings((prev: any) => ({ ...prev, toast: { ...(prev?.toast || {}), padding: parseInt(e.target.value) } }))} className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-xs" />
-                </div>
-
-                <div className="space-y-2">
-                  <span className="text-[9px] text-white/30 uppercase font-black tracking-widest ml-1">Animation Speed</span>
-                  <input type="number" step="0.1" value={floatingSettings?.toast?.animationSpeed || 1} onChange={(e) => setFloatingSettings((prev: any) => ({ ...prev, toast: { ...(prev?.toast || {}), animationSpeed: parseFloat(e.target.value) } }))} className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-xs" />
-                </div>
-
-                <div className="space-y-2">
-                  <span className="text-[9px] text-white/30 uppercase font-black tracking-widest ml-1">Auto Close Duration (ms)</span>
-                  <input type="number" step="500" value={floatingSettings?.toast?.autoCloseDuration || 5000} onChange={(e) => setFloatingSettings((prev: any) => ({ ...prev, toast: { ...(prev?.toast || {}), autoCloseDuration: parseInt(e.target.value) } }))} className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-xs" />
+                {/* Dimensions & Timing Sub-Card Grid */}
+                <div className="pt-4 border-t border-white/5 space-y-4">
+                  <span className="text-[10px] text-gold/60 uppercase font-black tracking-widest block">Dimensions & Timing Controls</span>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <span className="text-[9px] text-white/30 uppercase font-black tracking-widest ml-1">Offset Margin (px)</span>
+                      <input
+                        type="number"
+                        step="4"
+                        value={floatingSettings?.toast?.offset || 16}
+                        onChange={(e) => setFloatingSettings((prev: any) => ({ ...prev, toast: { ...(prev?.toast || {}), offset: parseInt(e.target.value) || 0 } }))}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs outline-none focus:border-gold focus:bg-white/[0.08] text-white/80 transition-all"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <span className="text-[9px] text-white/30 uppercase font-black tracking-widest ml-1">Padding Inside (px)</span>
+                      <input
+                        type="number"
+                        step="4"
+                        value={floatingSettings?.toast?.padding || 16}
+                        onChange={(e) => setFloatingSettings((prev: any) => ({ ...prev, toast: { ...(prev?.toast || {}), padding: parseInt(e.target.value) || 0 } }))}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs outline-none focus:border-gold focus:bg-white/[0.08] text-white/80 transition-all"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <span className="text-[9px] text-white/30 uppercase font-black tracking-widest ml-1">Animation Speed (s)</span>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={floatingSettings?.toast?.animationSpeed || 1}
+                        onChange={(e) => setFloatingSettings((prev: any) => ({ ...prev, toast: { ...(prev?.toast || {}), animationSpeed: parseFloat(e.target.value) || 0 } }))}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs outline-none focus:border-gold focus:bg-white/[0.08] text-white/80 transition-all"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <span className="text-[9px] text-white/30 uppercase font-black tracking-widest ml-1">Auto Close (ms)</span>
+                      <input
+                        type="number"
+                        step="500"
+                        value={floatingSettings?.toast?.autoCloseDuration || 5000}
+                        onChange={(e) => setFloatingSettings((prev: any) => ({ ...prev, toast: { ...(prev?.toast || {}), autoCloseDuration: parseInt(e.target.value) || 0 } }))}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs outline-none focus:border-gold focus:bg-white/[0.08] text-white/80 transition-all"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
 
             <div className="space-y-6">
               <div className="p-6 bg-black/20 rounded-2xl border border-white/5 space-y-6">
-                <label className="text-[10px] uppercase tracking-widest font-black text-gold/60 flex items-center gap-2">
-                  <Palette size={12} />
+                <label className="text-[10px] uppercase tracking-widest font-black text-gold/60 flex items-center gap-2 border-b border-white/5 pb-2">
+                  <Palette size={12} className="text-gold" />
                   Style & Colors
                 </label>
 
-                <div className="grid grid-cols-2 gap-4">
-                  {[
-                    { id: 'default', label: 'Border Default' },
-                    { id: 'success', label: 'Border Success' },
-                    { id: 'error', label: 'Border Error' },
-                  ].map(item => (
-                    <div key={item.id} className="space-y-2">
-                      <span className="text-[9px] text-white/30 uppercase font-black tracking-widest ml-1">{item.label}</span>
-                      <input type="color" value={floatingSettings?.toast?.colors?.[item.id] || '#D4AF37'} onChange={(e) => setFloatingSettings((prev: any) => ({ ...prev, toast: { ...(prev?.toast || {}), colors: { ...(prev?.toast?.colors || {}), [item.id]: e.target.value } } }))} className="w-full h-8 cursor-pointer bg-transparent border-none" />
-                    </div>
-                  ))}
-                  {[
-                    { id: 'default', label: 'BG Default' },
-                    { id: 'success', label: 'BG Success' },
-                    { id: 'error', label: 'BG Error' },
-                  ].map(item => (
-                    <div key={item.id} className="space-y-2">
-                      <span className="text-[9px] text-white/30 uppercase font-black tracking-widest ml-1">{item.label}</span>
-                      <input type="color" value={floatingSettings?.toast?.bgColors?.[item.id] || '#000000'} onChange={(e) => setFloatingSettings((prev: any) => ({ ...prev, toast: { ...(prev?.toast || {}), bgColors: { ...(prev?.toast?.bgColors || {}), [item.id]: e.target.value } } }))} className="w-full h-8 cursor-pointer bg-transparent border-none" />
-                    </div>
-                  ))}
+                {/* Border Accent Colors group */}
+                <div className="space-y-3">
+                  <span className="text-[10px] text-white/40 uppercase font-black tracking-widest block border-b border-white/5 pb-1">Border Accent Colors</span>
+                  <div className="grid grid-cols-3 gap-3">
+                    {[
+                      { id: 'default', label: 'Default' },
+                      { id: 'success', label: 'Success' },
+                      { id: 'error', label: 'Error' },
+                    ].map(item => (
+                      <div key={item.id} className="bg-white/[0.02] border border-white/5 rounded-xl p-3 flex flex-col items-center gap-2 text-center">
+                        <span className="text-[9px] text-white/50 uppercase font-bold tracking-wider">{item.label}</span>
+                        <div className="relative w-full h-8 rounded-lg overflow-hidden border border-white/10 bg-black/40 flex items-center justify-center group cursor-pointer hover:border-white/25 transition-colors">
+                          <input 
+                            type="color" 
+                            value={floatingSettings?.toast?.colors?.[item.id] || '#D4AF37'} 
+                            onChange={(e) => setFloatingSettings((prev: any) => ({ ...prev, toast: { ...(prev?.toast || {}), colors: { ...(prev?.toast?.colors || {}), [item.id]: e.target.value } } }))} 
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
+                          />
+                          <div className="w-4 h-4 rounded-full border border-white/20" style={{ backgroundColor: floatingSettings?.toast?.colors?.[item.id] || '#D4AF37' }} />
+                        </div>
+                        <span className="text-[9px] font-mono uppercase text-white/40">{floatingSettings?.toast?.colors?.[item.id] || '#D4AF37'}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Background Colors group */}
+                <div className="space-y-3">
+                  <span className="text-[10px] text-white/40 uppercase font-black tracking-widest block border-b border-white/5 pb-1">Background Colors</span>
+                  <div className="grid grid-cols-3 gap-3">
+                    {[
+                      { id: 'default', label: 'Default' },
+                      { id: 'success', label: 'Success' },
+                      { id: 'error', label: 'Error' },
+                    ].map(item => (
+                      <div key={item.id} className="bg-white/[0.02] border border-white/5 rounded-xl p-3 flex flex-col items-center gap-2 text-center">
+                        <span className="text-[9px] text-white/50 uppercase font-bold tracking-wider">{item.label}</span>
+                        <div className="relative w-full h-8 rounded-lg overflow-hidden border border-white/10 bg-black/40 flex items-center justify-center group cursor-pointer hover:border-white/25 transition-colors">
+                          <input 
+                            type="color" 
+                            value={floatingSettings?.toast?.bgColors?.[item.id] || '#000000'} 
+                            onChange={(e) => setFloatingSettings((prev: any) => ({ ...prev, toast: { ...(prev?.toast || {}), bgColors: { ...(prev?.toast?.bgColors || {}), [item.id]: e.target.value } } }))} 
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
+                          />
+                          <div className="w-4 h-4 rounded-full border border-white/20" style={{ backgroundColor: floatingSettings?.toast?.bgColors?.[item.id] || '#000000' }} />
+                        </div>
+                        <span className="text-[9px] font-mono uppercase text-white/40">{floatingSettings?.toast?.bgColors?.[item.id] || '#000000'}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1517,34 +1573,297 @@ const FloatingTab: React.FC<FloatingTabProps> = ({
 
                     <div className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl space-y-4">
                       <div className="flex items-center justify-between">
-                        <label className="text-[10px] uppercase tracking-widest font-bold text-gold/60">Color Logic</label>
-                        <div className="w-4 h-4 rounded-full border border-white/10" style={{ backgroundColor: bar.bgColor || '#D4AF37' }} />
+                        <label className="text-[10px] uppercase tracking-widest font-bold text-gold/60">Color Logic & Style</label>
+                        <div 
+                          className="w-8 h-4 rounded border border-white/10" 
+                          style={{ 
+                            background: bar.bgType === 'gradient' 
+                              ? (bar.bgGradient || 'linear-gradient(90deg, #D4AF37, #F1D483)') 
+                              : (bar.bgColor || '#D4AF37') 
+                          }} 
+                        />
                       </div>
+
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-[9px] uppercase tracking-widest font-bold text-white/40 mb-1.5 block">Background Style Type</label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newItems = [...(floatingSettings?.bars || [])];
+                                newItems[editingBarIndex as number].bgType = 'solid';
+                                setFloatingSettings({ ...floatingSettings, bars: newItems });
+                              }}
+                              className={cn(
+                                "py-1.5 px-3 rounded-lg text-xs font-bold border transition-all",
+                                (bar.bgType !== 'gradient') 
+                                  ? "bg-gold text-black border-gold" 
+                                  : "bg-white/5 text-white/60 border-white/10 hover:bg-white/10"
+                              )}
+                            >
+                              Solid Color
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newItems = [...(floatingSettings?.bars || [])];
+                                newItems[editingBarIndex as number].bgType = 'gradient';
+                                if (!newItems[editingBarIndex as number].bgGradient) {
+                                  newItems[editingBarIndex as number].bgGradient = 'linear-gradient(90deg, #D4AF37, #F1D483)';
+                                }
+                                setFloatingSettings({ ...floatingSettings, bars: newItems });
+                              }}
+                              className={cn(
+                                "py-1.5 px-3 rounded-lg text-xs font-bold border transition-all",
+                                (bar.bgType === 'gradient') 
+                                  ? "bg-gold text-black border-gold" 
+                                  : "bg-white/5 text-white/60 border-white/10 hover:bg-white/10"
+                              )}
+                            >
+                              Gradient Color Set
+                            </button>
+                          </div>
+                        </div>
+
+                        {bar.bgType === 'gradient' ? (
+                          <div className="p-3 bg-white/[0.01] border border-white/5 rounded-xl space-y-3">
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="text-[8px] uppercase tracking-widest text-white/30 mb-1 block">Gradient Color 1</label>
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="color"
+                                    value={bar.gradientColor1 || '#D4AF37'}
+                                    onChange={(e) => {
+                                      const newItems = [...(floatingSettings?.bars || [])];
+                                      const b = newItems[editingBarIndex as number];
+                                      b.gradientColor1 = e.target.value;
+                                      const c1 = b.gradientColor1 || '#D4AF37';
+                                      const c2 = b.gradientColor2 || '#F1D483';
+                                      const ang = b.gradientAngle || '90';
+                                      b.bgGradient = `linear-gradient(${ang}deg, ${c1} 0%, ${c2} 100%)`;
+                                      setFloatingSettings({ ...floatingSettings, bars: newItems });
+                                    }}
+                                    className="w-8 h-8 bg-transparent cursor-pointer border-none p-0 shrink-0"
+                                  />
+                                  <span className="text-[10px] font-mono uppercase text-white/50">{bar.gradientColor1 || '#D4AF37'}</span>
+                                </div>
+                              </div>
+                              <div>
+                                <label className="text-[8px] uppercase tracking-widest text-white/30 mb-1 block">Gradient Color 2</label>
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="color"
+                                    value={bar.gradientColor2 || '#F1D483'}
+                                    onChange={(e) => {
+                                      const newItems = [...(floatingSettings?.bars || [])];
+                                      const b = newItems[editingBarIndex as number];
+                                      b.gradientColor2 = e.target.value;
+                                      const c1 = b.gradientColor1 || '#D4AF37';
+                                      const c2 = b.gradientColor2 || '#F1D483';
+                                      const ang = b.gradientAngle || '90';
+                                      b.bgGradient = `linear-gradient(${ang}deg, ${c1} 0%, ${c2} 100%)`;
+                                      setFloatingSettings({ ...floatingSettings, bars: newItems });
+                                    }}
+                                    className="w-8 h-8 bg-transparent cursor-pointer border-none p-0 shrink-0"
+                                  />
+                                  <span className="text-[10px] font-mono uppercase text-white/50">{bar.gradientColor2 || '#F1D483'}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="text-[8px] uppercase tracking-widest text-white/30 mb-1 block">Gradient Direction / Angle</label>
+                              <select
+                                value={bar.gradientAngle || '90'}
+                                onChange={(e) => {
+                                  const newItems = [...(floatingSettings?.bars || [])];
+                                  const b = newItems[editingBarIndex as number];
+                                  b.gradientAngle = e.target.value;
+                                  const c1 = b.gradientColor1 || '#D4AF37';
+                                  const c2 = b.gradientColor2 || '#F1D483';
+                                  const ang = b.gradientAngle || '90';
+                                  b.bgGradient = `linear-gradient(${ang}deg, ${c1} 0%, ${c2} 100%)`;
+                                  setFloatingSettings({ ...floatingSettings, bars: newItems });
+                                }}
+                                className="custom-select w-full py-1 text-[10px]"
+                              >
+                                <option value="90">Left to Right (90°)</option>
+                                <option value="135">Diagonal Top-Left (135°)</option>
+                                <option value="45">Diagonal Bottom-Left (45°)</option>
+                                <option value="180">Top to Bottom (180°)</option>
+                                <option value="270">Right to Left (270°)</option>
+                              </select>
+                            </div>
+                          </div>
+                        ) : (
+                          <div>
+                            <label className="text-[8px] uppercase tracking-widest text-white/20 mb-1 block">Solid Background Color</label>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="color"
+                                value={bar.bgColor || '#D4AF37'}
+                                onChange={(e) => {
+                                  const newItems = [...(floatingSettings?.bars || [])];
+                                  newItems[editingBarIndex as number].bgColor = e.target.value;
+                                  setFloatingSettings({ ...floatingSettings, bars: newItems });
+                                }}
+                                className="w-8 h-8 bg-transparent cursor-pointer border-none p-0 shrink-0"
+                              />
+                              <span className="text-[10px] font-mono uppercase text-white/50">{bar.bgColor || '#D4AF37'}</span>
+                            </div>
+                          </div>
+                        )}
+
+                        <div>
+                          <label className="text-[8px] uppercase tracking-widest text-white/20 mb-1 block">Text Color</label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="color"
+                              value={bar.textColor || '#000000'}
+                              onChange={(e) => {
+                                const newItems = [...(floatingSettings?.bars || [])];
+                                newItems[editingBarIndex as number].textColor = e.target.value;
+                                setFloatingSettings({ ...floatingSettings, bars: newItems });
+                              }}
+                              className="w-8 h-8 bg-transparent cursor-pointer border-none p-0 shrink-0"
+                            />
+                            <span className="text-[10px] font-mono uppercase text-white/50">{bar.textColor || '#000000'}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Targeting & Display Rules */}
+                    <div className="p-6 bg-white/[0.02] border border-white/5 rounded-2xl space-y-4">
+                      <h4 className="text-xs font-display text-gold uppercase tracking-wider border-b border-white/5 pb-2">Targeting & Display Rules</h4>
+                      
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <label className="text-[8px] uppercase tracking-widest text-white/20 mb-1 block">Background</label>
-                          <input
-                            type="color"
-                            value={bar.bgColor || '#D4AF37'}
+                          <label className="text-[9px] uppercase tracking-widest font-bold text-white/40 mb-1 block">Display Position</label>
+                          <select
+                            value={bar.position || 'top'}
                             onChange={(e) => {
                               const newItems = [...(floatingSettings?.bars || [])];
-                              newItems[editingBarIndex as number].bgColor = e.target.value;
+                              newItems[editingBarIndex as number].position = e.target.value;
                               setFloatingSettings({ ...floatingSettings, bars: newItems });
                             }}
-                            className="w-full h-8 bg-transparent cursor-pointer border-none p-0"
+                            className="custom-select w-full py-2 px-3 text-xs"
+                          >
+                            <option value="top">Header (Top)</option>
+                            <option value="bottom">Footer (Bottom)</option>
+                          </select>
+                        </div>
+                        
+                        <div>
+                          <label className="text-[9px] uppercase tracking-widest font-bold text-white/40 mb-1 block">Page Targeting</label>
+                          <select
+                            value={bar.displayCondition || 'all'}
+                            onChange={(e) => {
+                              const newItems = [...(floatingSettings?.bars || [])];
+                              newItems[editingBarIndex as number].displayCondition = e.target.value;
+                              setFloatingSettings({ ...floatingSettings, bars: newItems });
+                            }}
+                            className="custom-select w-full py-2 px-3 text-xs"
+                          >
+                            <option value="all">All Pages</option>
+                            <option value="landing">Home/Landing Only</option>
+                            <option value="specific">Specific Pages</option>
+                            <option value="except">All Except Pages</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Specific/Except pages inputs */}
+                      {(bar.displayCondition === 'specific' || bar.displayCondition === 'except') && (
+                        <div>
+                          <label className="text-[9px] uppercase tracking-widest font-bold text-white/40 mb-1 block">
+                            {bar.displayCondition === 'specific' ? 'Target Pages' : 'Excluded Pages'} (Comma-separated, e.g. /, /blog, /booking)
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="/blog, /services, /booking"
+                            value={
+                              bar.displayCondition === 'specific' 
+                                ? (bar.specificPages || []).join(', ') 
+                                : (bar.exceptPages || []).join(', ')
+                            }
+                            onChange={(e) => {
+                              const pages = e.target.value.split(',').map(p => p.trim()).filter(p => p.length > 0);
+                              const newItems = [...(floatingSettings?.bars || [])];
+                              if (bar.displayCondition === 'specific') {
+                                newItems[editingBarIndex as number].specificPages = pages;
+                              } else {
+                                newItems[editingBarIndex as number].exceptPages = pages;
+                              }
+                              setFloatingSettings({ ...floatingSettings, bars: newItems });
+                            }}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs outline-none focus:border-gold transition-all"
+                          />
+                        </div>
+                      )}
+
+                      {/* Timing rules: waiting delay and display auto close duration */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[9px] uppercase tracking-widest font-bold text-white/40 mb-1 block">Waiting Delay (ms)</label>
+                          <input
+                            type="number"
+                            step="500"
+                            placeholder="0 (Immediate)"
+                            value={bar.delay ?? 0}
+                            onChange={(e) => {
+                              const newItems = [...(floatingSettings?.bars || [])];
+                              newItems[editingBarIndex as number].delay = parseInt(e.target.value) || 0;
+                              setFloatingSettings({ ...floatingSettings, bars: newItems });
+                            }}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs outline-none focus:border-gold transition-all"
                           />
                         </div>
                         <div>
-                          <label className="text-[8px] uppercase tracking-widest text-white/20 mb-1 block">Text Color</label>
+                          <label className="text-[9px] uppercase tracking-widest font-bold text-white/40 mb-1 block">Display Duration (ms)</label>
                           <input
-                            type="color"
-                            value={bar.textColor || '#000000'}
+                            type="number"
+                            step="500"
+                            placeholder="0 (Keep forever)"
+                            value={bar.autoCloseTime ?? 0}
                             onChange={(e) => {
                               const newItems = [...(floatingSettings?.bars || [])];
-                              newItems[editingBarIndex as number].textColor = e.target.value;
+                              newItems[editingBarIndex as number].autoCloseTime = parseInt(e.target.value) || 0;
                               setFloatingSettings({ ...floatingSettings, bars: newItems });
                             }}
-                            className="w-full h-8 bg-transparent cursor-pointer border-none p-0"
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs outline-none focus:border-gold transition-all"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Active Date Range Validity */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[9px] uppercase tracking-widest font-bold text-white/40 mb-1 block">Valid From Date</label>
+                          <input
+                            type="datetime-local"
+                            value={bar.startDate || ''}
+                            onChange={(e) => {
+                              const newItems = [...(floatingSettings?.bars || [])];
+                              newItems[editingBarIndex as number].startDate = e.target.value;
+                              setFloatingSettings({ ...floatingSettings, bars: newItems });
+                            }}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white/60 outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[9px] uppercase tracking-widest font-bold text-white/40 mb-1 block">Valid Until Date</label>
+                          <input
+                            type="datetime-local"
+                            value={bar.endDate || ''}
+                            onChange={(e) => {
+                              const newItems = [...(floatingSettings?.bars || [])];
+                              newItems[editingBarIndex as number].endDate = e.target.value;
+                              setFloatingSettings({ ...floatingSettings, bars: newItems });
+                            }}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white/60 outline-none"
                           />
                         </div>
                       </div>
@@ -1561,8 +1880,11 @@ const FloatingTab: React.FC<FloatingTabProps> = ({
                             newItems[editingBarIndex as number].countdownTarget = e.target.value;
                             setFloatingSettings({ ...floatingSettings, bars: newItems });
                           }}
-                          className="w-full bg-black/20 border border-white/5 rounded-lg px-2 py-2 text-[10px] text-white/60 outline-none"
+                          className="w-full bg-black/20 border border-white/5 rounded-lg px-2 py-2 text-[10px] text-white/60 outline-none focus:border-gold transition-colors"
                         />
+                        <p className="text-[9px] text-white/30 mt-2 leading-relaxed">
+                          Select a target date & time (e.g., for a flash sale or private event). A premium live countdown clock (e.g., <strong>2d 04h 15m 30s</strong>) will automatically display next to your promo content.
+                        </p>
                       </div>
                       <div className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl flex items-center justify-between">
                         <div>
@@ -1698,11 +2020,197 @@ const FloatingTab: React.FC<FloatingTabProps> = ({
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white/[0.02] border border-white/5 p-6 rounded-2xl">
-                      <div className="space-y-4">
-                        <label className="text-[10px] uppercase tracking-widest font-bold text-gold/60">Display Strategy</label>
-                        <div className="space-y-2">
-                          <span className="text-[8px] uppercase tracking-widest text-white/20">Trigger Type</span>
+                    {/* Popup Background & Color Style Card */}
+                    <div className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl space-y-4">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] uppercase tracking-widest font-bold text-gold/60">Popup Background & Text Style</label>
+                        <div 
+                          className="w-8 h-4 rounded border border-white/10" 
+                          style={{ 
+                            background: popup.bgType === 'gradient' 
+                              ? (popup.bgGradient || 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)') 
+                              : (popup.bgColor || '#1a1a1a') 
+                          }} 
+                        />
+                      </div>
+
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-[9px] uppercase tracking-widest font-bold text-white/40 mb-1.5 block">Background Style Type</label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newItems = [...(floatingSettings?.popups || [])];
+                                newItems[editingPopupIndex as number].bgType = 'solid';
+                                setFloatingSettings({ ...floatingSettings, popups: newItems });
+                              }}
+                              className={cn(
+                                "py-1.5 px-3 rounded-lg text-xs font-bold border transition-all",
+                                (popup.bgType !== 'gradient') 
+                                  ? "bg-gold text-black border-gold" 
+                                  : "bg-white/5 text-white/60 border-white/10 hover:bg-white/10"
+                              )}
+                            >
+                              Solid Color
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newItems = [...(floatingSettings?.popups || [])];
+                                newItems[editingPopupIndex as number].bgType = 'gradient';
+                                if (!newItems[editingPopupIndex as number].bgGradient) {
+                                  newItems[editingPopupIndex as number].bgGradient = 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)';
+                                }
+                                setFloatingSettings({ ...floatingSettings, popups: newItems });
+                              }}
+                              className={cn(
+                                "py-1.5 px-3 rounded-lg text-xs font-bold border transition-all",
+                                (popup.bgType === 'gradient') 
+                                  ? "bg-gold text-black border-gold" 
+                                  : "bg-white/5 text-white/60 border-white/10 hover:bg-white/10"
+                              )}
+                            >
+                              Gradient Color Set
+                            </button>
+                          </div>
+                        </div>
+
+                        {popup.bgType === 'gradient' ? (
+                          <div className="p-3 bg-white/[0.01] border border-white/5 rounded-xl space-y-3">
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="text-[8px] uppercase tracking-widest text-white/30 mb-1 block">Gradient Color 1</label>
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="color"
+                                    value={popup.gradientColor1 || '#1a1a1a'}
+                                    onChange={(e) => {
+                                      const newItems = [...(floatingSettings?.popups || [])];
+                                      const p = newItems[editingPopupIndex as number];
+                                      p.gradientColor1 = e.target.value;
+                                      const c1 = p.gradientColor1 || '#1a1a1a';
+                                      const c2 = p.gradientColor2 || '#2a2a2a';
+                                      const ang = p.gradientAngle || '135';
+                                      p.bgGradient = `linear-gradient(${ang}deg, ${c1} 0%, ${c2} 100%)`;
+                                      setFloatingSettings({ ...floatingSettings, popups: newItems });
+                                    }}
+                                    className="w-8 h-8 bg-transparent cursor-pointer border-none p-0 shrink-0"
+                                  />
+                                  <span className="text-[10px] font-mono uppercase text-white/50">{popup.gradientColor1 || '#1a1a1a'}</span>
+                                </div>
+                              </div>
+                              <div>
+                                <label className="text-[8px] uppercase tracking-widest text-white/30 mb-1 block">Gradient Color 2</label>
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="color"
+                                    value={popup.gradientColor2 || '#2a2a2a'}
+                                    onChange={(e) => {
+                                      const newItems = [...(floatingSettings?.popups || [])];
+                                      const p = newItems[editingPopupIndex as number];
+                                      p.gradientColor2 = e.target.value;
+                                      const c1 = p.gradientColor1 || '#1a1a1a';
+                                      const c2 = p.gradientColor2 || '#2a2a2a';
+                                      const ang = p.gradientAngle || '135';
+                                      p.bgGradient = `linear-gradient(${ang}deg, ${c1} 0%, ${c2} 100%)`;
+                                      setFloatingSettings({ ...floatingSettings, popups: newItems });
+                                    }}
+                                    className="w-8 h-8 bg-transparent cursor-pointer border-none p-0 shrink-0"
+                                  />
+                                  <span className="text-[10px] font-mono uppercase text-white/50">{popup.gradientColor2 || '#2a2a2a'}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="text-[8px] uppercase tracking-widest text-white/30 mb-1 block">Gradient Direction / Angle</label>
+                              <select
+                                value={popup.gradientAngle || '135'}
+                                onChange={(e) => {
+                                  const newItems = [...(floatingSettings?.popups || [])];
+                                  const p = newItems[editingPopupIndex as number];
+                                  p.gradientAngle = e.target.value;
+                                  const c1 = p.gradientColor1 || '#1a1a1a';
+                                  const c2 = p.gradientColor2 || '#2a2a2a';
+                                  const ang = p.gradientAngle || '135';
+                                  p.bgGradient = `linear-gradient(${ang}deg, ${c1} 0%, ${c2} 100%)`;
+                                  setFloatingSettings({ ...floatingSettings, popups: newItems });
+                                }}
+                                className="custom-select w-full py-1 text-[10px]"
+                              >
+                                <option value="135">Diagonal Top-Left (135°)</option>
+                                <option value="45">Diagonal Bottom-Left (45°)</option>
+                                <option value="90">Left to Right (90°)</option>
+                                <option value="180">Top to Bottom (180°)</option>
+                                <option value="270">Right to Left (270°)</option>
+                              </select>
+                            </div>
+                          </div>
+                        ) : (
+                          <div>
+                            <label className="text-[8px] uppercase tracking-widest text-white/20 mb-1 block">Solid Background Color</label>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="color"
+                                value={popup.bgColor || '#1a1a1a'}
+                                onChange={(e) => {
+                                  const newItems = [...(floatingSettings?.popups || [])];
+                                  newItems[editingPopupIndex as number].bgColor = e.target.value;
+                                  setFloatingSettings({ ...floatingSettings, popups: newItems });
+                                }}
+                                className="w-8 h-8 bg-transparent cursor-pointer border-none p-0 shrink-0"
+                              />
+                              <span className="text-[10px] font-mono uppercase text-white/50">{popup.bgColor || '#1a1a1a'}</span>
+                            </div>
+                          </div>
+                        )}
+
+                        <div>
+                          <label className="text-[8px] uppercase tracking-widest text-white/20 mb-1 block">Text Color</label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="color"
+                              value={popup.textColor || '#FFFFFF'}
+                              onChange={(e) => {
+                                const newItems = [...(floatingSettings?.popups || [])];
+                                newItems[editingPopupIndex as number].textColor = e.target.value;
+                                setFloatingSettings({ ...floatingSettings, popups: newItems });
+                              }}
+                              className="w-8 h-8 bg-transparent cursor-pointer border-none p-0 shrink-0"
+                            />
+                            <span className="text-[10px] font-mono uppercase text-white/50">{popup.textColor || '#FFFFFF'}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Targeting & Timing Controls */}
+                    <div className="p-6 bg-white/[0.02] border border-white/5 rounded-2xl space-y-4">
+                      <h4 className="text-xs font-display text-gold uppercase tracking-wider border-b border-white/5 pb-2">Targeting & Timing Rules</h4>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[9px] uppercase tracking-widest font-bold text-white/40 mb-1 block">Display Position</label>
+                          <select
+                            value={popup.position || 'center'}
+                            onChange={(e) => {
+                              const newItems = [...(floatingSettings?.popups || [])];
+                              newItems[editingPopupIndex as number].position = e.target.value;
+                              setFloatingSettings({ ...floatingSettings, popups: newItems });
+                            }}
+                            className="custom-select w-full py-2 px-3 text-xs"
+                          >
+                            <option value="center">Center Modal</option>
+                            <option value="bottom-right">Bottom Right Banner</option>
+                            <option value="bottom-left">Bottom Left Banner</option>
+                            <option value="top-right">Top Right Banner</option>
+                            <option value="top-left">Top Left Banner</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="text-[9px] uppercase tracking-widest font-bold text-white/40 mb-1 block">Trigger Type</label>
                           <select
                             value={popup.trigger || 'timer'}
                             onChange={(e) => {
@@ -1710,7 +2218,7 @@ const FloatingTab: React.FC<FloatingTabProps> = ({
                               newItems[editingPopupIndex as number].trigger = e.target.value;
                               setFloatingSettings({ ...floatingSettings, popups: newItems });
                             }}
-                            className="custom-select w-full py-1 text-[10px]"
+                            className="custom-select w-full py-2 px-3 text-xs"
                           >
                             <option value="timer">Automatic Timer</option>
                             <option value="exit">Exit Intent Detection</option>
@@ -1718,22 +2226,134 @@ const FloatingTab: React.FC<FloatingTabProps> = ({
                           </select>
                         </div>
                       </div>
-                      <div className="space-y-4">
-                        <label className="text-[10px] uppercase tracking-widest font-bold text-gold/60">Timing Control</label>
-                        <div className="space-y-2 text-center">
-                          <span className="text-xs font-mono text-gold bg-gold/10 px-3 py-1 rounded inline-block">{popup.delay || 5000}ms</span>
-                          <input
-                            type="range"
-                            min="0"
-                            max="60000"
-                            step="500"
-                            value={popup.delay || 5000}
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[9px] uppercase tracking-widest font-bold text-white/40 mb-1 block">Page Targeting</label>
+                          <select
+                            value={popup.displayCondition || 'all'}
                             onChange={(e) => {
                               const newItems = [...(floatingSettings?.popups || [])];
-                              newItems[editingPopupIndex as number].delay = parseInt(e.target.value);
+                              newItems[editingPopupIndex as number].displayCondition = e.target.value;
                               setFloatingSettings({ ...floatingSettings, popups: newItems });
                             }}
-                            className="w-full h-1.5"
+                            className="custom-select w-full py-2 px-3 text-xs"
+                          >
+                            <option value="all">All Pages</option>
+                            <option value="landing">Home/Landing Only</option>
+                            <option value="specific">Specific Pages</option>
+                            <option value="except">All Except Pages</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="text-[9px] uppercase tracking-widest font-bold text-white/40 mb-1 block">Waiting Delay (ms)</label>
+                          <input
+                            type="number"
+                            step="500"
+                            placeholder="5000"
+                            value={popup.delay ?? 5000}
+                            onChange={(e) => {
+                              const newItems = [...(floatingSettings?.popups || [])];
+                              newItems[editingPopupIndex as number].delay = parseInt(e.target.value) || 0;
+                              setFloatingSettings({ ...floatingSettings, popups: newItems });
+                            }}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs outline-none focus:border-gold transition-all"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Specific/Except pages inputs */}
+                      {(popup.displayCondition === 'specific' || popup.displayCondition === 'except') && (
+                        <div>
+                          <label className="text-[9px] uppercase tracking-widest font-bold text-white/40 mb-1 block">
+                            {popup.displayCondition === 'specific' ? 'Target Pages' : 'Excluded Pages'} (Comma-separated, e.g. /, /blog, /booking)
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="/blog, /services, /booking"
+                            value={
+                              popup.displayCondition === 'specific' 
+                                ? (popup.specificPages || []).join(', ') 
+                                : (popup.exceptPages || []).join(', ')
+                            }
+                            onChange={(e) => {
+                              const pages = e.target.value.split(',').map(p => p.trim()).filter(p => p.length > 0);
+                              const newItems = [...(floatingSettings?.popups || [])];
+                              if (popup.displayCondition === 'specific') {
+                                newItems[editingPopupIndex as number].specificPages = pages;
+                              } else {
+                                newItems[editingPopupIndex as number].exceptPages = pages;
+                              }
+                              setFloatingSettings({ ...floatingSettings, popups: newItems });
+                            }}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs outline-none focus:border-gold transition-all"
+                          />
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[9px] uppercase tracking-widest font-bold text-white/40 mb-1 block">Display Duration (ms)</label>
+                          <input
+                            type="number"
+                            step="1000"
+                            placeholder="0 (Keep forever)"
+                            value={popup.autoCloseTime ?? 0}
+                            onChange={(e) => {
+                              const newItems = [...(floatingSettings?.popups || [])];
+                              newItems[editingPopupIndex as number].autoCloseTime = parseInt(e.target.value) || 0;
+                              setFloatingSettings({ ...floatingSettings, popups: newItems });
+                            }}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs outline-none focus:border-gold transition-all"
+                          />
+                          <p className="text-[8px] text-white/20 mt-1">0 to show forever, or auto-close.</p>
+                        </div>
+
+                        <div>
+                          <label className="text-[9px] uppercase tracking-widest font-bold text-white/40 mb-1 block">Accent Color</label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="color"
+                              value={popup.accentColor || '#D4AF37'}
+                              onChange={(e) => {
+                                const newItems = [...(floatingSettings?.popups || [])];
+                                newItems[editingPopupIndex as number].accentColor = e.target.value;
+                                setFloatingSettings({ ...floatingSettings, popups: newItems });
+                              }}
+                              className="h-8 w-12 bg-transparent cursor-pointer border-none p-0"
+                            />
+                            <span className="text-xs font-mono uppercase text-white/60">{popup.accentColor || '#D4AF37'}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Active Date Range Validity */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[9px] uppercase tracking-widest font-bold text-white/40 mb-1 block">Valid From Date</label>
+                          <input
+                            type="datetime-local"
+                            value={popup.startDate || ''}
+                            onChange={(e) => {
+                              const newItems = [...(floatingSettings?.popups || [])];
+                              newItems[editingPopupIndex as number].startDate = e.target.value;
+                              setFloatingSettings({ ...floatingSettings, popups: newItems });
+                            }}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white/60 outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[9px] uppercase tracking-widest font-bold text-white/40 mb-1 block">Valid Until Date</label>
+                          <input
+                            type="datetime-local"
+                            value={popup.endDate || ''}
+                            onChange={(e) => {
+                              const newItems = [...(floatingSettings?.popups || [])];
+                              newItems[editingPopupIndex as number].endDate = e.target.value;
+                              setFloatingSettings({ ...floatingSettings, popups: newItems });
+                            }}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white/60 outline-none"
                           />
                         </div>
                       </div>

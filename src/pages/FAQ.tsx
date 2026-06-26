@@ -4,6 +4,7 @@ import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestor
 import { db } from '../lib/firebase';
 import { ChevronDown, HelpCircle, MessageSquare, Search, CornerDownRight } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { Link } from 'react-router-dom';
 import SEO from '../components/SEO';
 import { faqFallback } from '../data/fallback/faqFallback';
 
@@ -254,12 +255,12 @@ const FAQPage: React.FC = () => {
           <p className="text-white/60 mb-8 max-w-md mx-auto">
             Our Assistant team is available 24/7 to assist you with any inquiries or custom travel requirements.
           </p>
-          <a
-            href="/contact"
+          <Link
+            to="/contact"
             className="inline-flex items-center gap-3 px-8 py-4 rounded-full bg-gold text-black font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-[0_10px_20px_rgba(212,175,55,0.2)]"
           >
             Contact Assistant
-          </a>
+          </Link>
         </motion.div>
       </div>
     </div>

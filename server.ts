@@ -984,6 +984,33 @@ ${sitemapEntries.map(entry => `  <url>
     res.status(404).send('Sitemap HTML directory not found. Please run build first.');
   });
 
+  // Serve sitemap stats JSON file dynamically or fallback default values to prevent HTML parsing crash
+  app.get('/sitemap-stats.json', (req, res) => {
+    const statsPathPublic = path.join(process.cwd(), 'public', 'sitemap-stats.json');
+    const statsPathDist = path.join(process.cwd(), 'dist', 'sitemap-stats.json');
+    let statsPath = statsPathDist;
+    if (!fs.existsSync(statsPath)) {
+      statsPath = statsPathPublic;
+    }
+    if (fs.existsSync(statsPath)) {
+      try {
+        const content = fs.readFileSync(statsPath, 'utf-8');
+        res.header('Content-Type', 'application/json');
+        return res.send(content);
+      } catch (e) {
+        return res.status(500).json({ error: 'Failed to read sitemap-stats.json' });
+      }
+    }
+    res.json({
+      lastGenerated: null,
+      totalUrls: 0,
+      pages: 0,
+      blogs: 0,
+      offers: 0,
+      tours: 0
+    });
+  });
+
   app.get('/robots.txt', (req, res) => {
     const SITE_URL = getSiteUrl(req);
     const robotsPath = path.join(process.cwd(), 'dist', 'robots.txt');

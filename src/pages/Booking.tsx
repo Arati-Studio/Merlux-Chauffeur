@@ -278,6 +278,7 @@ export default function Booking() {
   const initialState = location.state as {
     service?: string;
     step?: number;
+    vehicle?: string;
   } | null;
 
   const { isLoaded, loadError } = useJsApiLoader({
@@ -345,7 +346,7 @@ export default function Booking() {
     dropoff: "",
     date: "",
     time: "",
-    vehicle: "",
+    vehicle: initialState?.vehicle || "",
     passengers: 1,
     flightNumber: "",
     notes: "",

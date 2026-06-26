@@ -311,5 +311,13 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAdmin();
     }
+
+    match /subscribers/{subscriberId} {
+      allow read, list: if isAdmin();
+      allow create: if request.resource.data.keys().hasAll(['email', 'subscribedAt', 'source', 'status']) &&
+                    request.resource.data.email is string &&
+                    request.resource.data.subscribedAt == request.time;
+      allow update, delete: if isAdmin();
+    }
   }
 }

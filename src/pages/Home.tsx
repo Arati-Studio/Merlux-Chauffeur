@@ -16,6 +16,9 @@ import { fleetFallback } from '../data/fallback/fleetFallback';
 import { getCachedDocs } from '../lib/firestore-cache';
 import * as Icons from 'lucide-react';
 import SEO from '../components/SEO';
+import LazyImage from '../components/LazyImage';
+import Testimonials from '../components/Testimonials';
+import NewsletterSubscribe from '../components/NewsletterSubscribe';
 
 const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
   e.currentTarget.src = "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?q=80&w=2070&auto=format&fit=crop";
@@ -306,12 +309,12 @@ export default function Home() {
               initial={{ opacity: 0, x: -30 }}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
-              className="group relative h-[500px] rounded-[3rem] overflow-hidden border border-white/10"
+              className="group relative h-[500px] rounded-[3rem] overflow-hidden border border-white/10 animate-fade-in"
             >
-              <img
+              <LazyImage
                 src="https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?q=80&w=2070&auto=format&fit=crop"
                 alt="Offers"
-                className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110 opacity-60"
+                className="transition-transform duration-[1.5s] ease-out group-hover:scale-110 opacity-60"
                 referrerPolicy="no-referrer"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
@@ -330,12 +333,12 @@ export default function Home() {
               initial={{ opacity: 0, x: 30 }}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
-              className="group relative h-[500px] rounded-[3rem] overflow-hidden border border-white/10"
+              className="group relative h-[500px] rounded-[3rem] overflow-hidden border border-white/10 animate-fade-in"
             >
-              <img
+              <LazyImage
                 src="https://images.unsplash.com/photo-1506973035872-a4ec16b8e8d9?q=80&w=2070&auto=format&fit=crop"
                 alt="Tours"
-                className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110 opacity-60"
+                className="transition-transform duration-[1.5s] ease-out group-hover:scale-110 opacity-60"
                 referrerPolicy="no-referrer"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
@@ -610,11 +613,11 @@ export default function Home() {
                   className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-stretch"
                 >
                   <div className="rounded-[3rem] overflow-hidden h-full relative group border border-white/10 hover:border-gold/30 transition-colors">
-                    <img
+                    <LazyImage
                       src={getAssetPath(fleetList[currentFleet]?.images?.[0] || fleetList[currentFleet]?.img)}
                       alt={fleetList[currentFleet]?.name}
                       onError={handleImageError}
-                      className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
+                      className="transition-transform duration-[1.5s] ease-out group-hover:scale-105"
                       referrerPolicy="no-referrer"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/20" />
@@ -696,6 +699,9 @@ export default function Home() {
         </section>
       )}
 
+      {/* Testimonials Carousel Section */}
+      <Testimonials />
+
       {/* 6. Latest Blogs */}
       {blogsList.length > 0 && (
         <section className="py-24 bg-[#050505]">
@@ -723,11 +729,11 @@ export default function Home() {
                 >
                   {/* Image */}
                   <div className="h-52 relative overflow-hidden">
-                    <img
+                    <LazyImage
                       src={getAssetPath(blog.image || blog.img)}
                       alt={blog.title}
                       onError={handleImageError}
-                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                      className="transition-transform duration-700 group-hover:scale-110"
                       referrerPolicy="no-referrer"
                     />
                     <div className="absolute top-4 left-4 bg-gold text-black px-4 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest">
@@ -787,14 +793,14 @@ export default function Home() {
                   viewport={{ once: true }}
                   transition={{ delay: i * 0.1 }}
                   onClick={() => navigate(`/tours/${tour.id}`)}
-                  className="group bg-white/5 border border-white/10 rounded-[2rem] overflow-hidden hover:border-gold/50 transition-all duration-700 cursor-pointer relative"
+                  className="group bg-white/[0.03] border border-white/10 rounded-[2rem] overflow-hidden hover:border-gold/50 transition-all duration-700 cursor-pointer relative"
                 >
                   <div className="aspect-[14/9] overflow-hidden relative">
-                    <img
+                    <LazyImage
                       src={getAssetPath(tour.image || tour.img || "https://images.unsplash.com/photo-1506973035872-a4ec16b8e8d9?q=80&w=2070&auto=format&fit=crop")}
                       alt={tour.title || tour.name}
                       onError={handleImageError}
-                      className="w-full h-full object-cover transition-transform duration-[1.5s] group-hover:scale-110"
+                      className="transition-transform duration-[1.5s] ease-out group-hover:scale-110"
                       referrerPolicy="no-referrer"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 group-hover:opacity-40 transition-opacity" />
@@ -853,6 +859,13 @@ export default function Home() {
           </div>
         </section>
       )}
+
+      {/* Newsletter Subscribe Section */}
+      <section className="py-12 bg-black">
+        <div className="max-w-4xl mx-auto px-6">
+          <NewsletterSubscribe />
+        </div>
+      </section>
     </div>
   );
 }

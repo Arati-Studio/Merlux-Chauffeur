@@ -1306,7 +1306,7 @@ export default function Tours() {
                         <p className="text-[10px] uppercase tracking-widest text-white/30 font-bold">Comprehensive Itinerary</p>
                       </div>
                       <div className="space-y-4">
-                        {(selectedTour.itinerary || []).sort((a: any, b: any) => a.order - b.order).map((step: any, idx: number) => (
+                        {[...(selectedTour.itinerary || [])].sort((a: any, b: any) => (a.order || 0) - (b.order || 0)).map((step: any, idx: number) => (
                           <div key={`itinerary-${idx}`} className="relative group">
                             <button
                               onClick={() => setExpandedItinerary(expandedItinerary === idx ? null : idx)}
@@ -1324,7 +1324,7 @@ export default function Tours() {
                                 </div>
                                 <div>
                                   <h4 className={cn("text-lg font-bold transition-colors", expandedItinerary === idx ? "text-white" : "text-white/60 group-hover:text-white")}>
-                                    {step.name}
+                                    {step.name || step.title}
                                   </h4>
                                   <p className="text-[9px] uppercase tracking-widest text-white/30 font-bold">Planned Phase</p>
                                 </div>
@@ -1344,7 +1344,7 @@ export default function Tours() {
                                   <div className="glass-heavy mt-2 p-8 rounded-3xl border border-white/10 bg-black/40">
                                     <div className="flex flex-col md:flex-row gap-8">
                                       <div className="flex-1">
-                                        <div className="text-sm text-white/60 leading-relaxed font-sans italic" dangerouslySetInnerHTML={{ __html: step.details }} />
+                                        <div className="text-sm text-white/60 leading-relaxed font-sans italic" dangerouslySetInnerHTML={{ __html: step.details || step.description || '' }} />
                                       </div>
                                       {step.image && (
                                         <div className="w-full md:w-48 aspect-video rounded-2xl overflow-hidden border border-white/10 shrink-0 shadow-2xl">
@@ -1480,7 +1480,7 @@ export default function Tours() {
                 ) : paginatedTours.length > 0 ? (
                   paginatedTours.map((tour, tourIdx) => (
                     <div
-                      key={tour.id ? `tour-${tour.id}` : `tour-idx-${tourIdx}`}
+                      key={`tour-${tour.id || tourIdx}-${tourIdx}`}
                       onClick={() => handleTourSelect(tour)}
                       className="group bg-white/5 border border-white/10 rounded-[2rem] overflow-hidden hover:border-gold/50 transition-all duration-700 cursor-pointer relative"
                     >
@@ -1724,7 +1724,7 @@ export default function Tours() {
 
                         return (
                           <div
-                            key={f.id || `fleet-${f.name}-${idx}`}
+                            key={`fleet-${f.id || f.name || idx}-${idx}`}
                             onClick={() => handleFleetSelect(f)}
                             className={cn(
                               "bg-white/5 border p-1 rounded-3xl transition-all cursor-pointer group relative overflow-hidden flex flex-col min-h-[160px]",

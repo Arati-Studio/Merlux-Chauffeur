@@ -10,6 +10,57 @@ import { useSettings } from '../lib/SettingsContext';
 import { cn } from '../lib/utils';
 import { useLocation, useNavigate } from 'react-router-dom';
 
+function PromoBarCountdown({ targetDate, textColor }: { targetDate: string; textColor?: string }) {
+  const [timeLeft, setTimeLeft] = useState<{ days: number; hours: number; minutes: number; seconds: number } | null>(null);
+
+  useEffect(() => {
+    if (!targetDate) return;
+    
+    const updateTime = () => {
+      const target = new Date(targetDate).getTime();
+      const now = new Date().getTime();
+      const diff = target - now;
+      
+      if (diff <= 0) {
+        setTimeLeft(null);
+      } else {
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+        setTimeLeft({ days, hours, minutes, seconds });
+      }
+    };
+
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
+    return () => clearInterval(interval);
+  }, [targetDate]);
+
+  if (!timeLeft) return null;
+
+  return (
+    <div 
+      className="inline-flex items-center gap-1 md:gap-1.5 px-2 py-0.5 md:py-1 rounded-lg bg-black/10 border border-white/5 font-mono text-[9px] md:text-xs font-bold shrink-0 ml-1.5" 
+      style={{ color: textColor || '#000000', borderColor: 'rgba(0,0,0,0.1)' }}
+    >
+      <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block mr-0.5 animate-pulse"></span>
+      {timeLeft.days > 0 && (
+        <>
+          <span>{timeLeft.days}</span>
+          <span className="text-[7px] md:text-[8px] opacity-50 uppercase font-sans mr-0.5">d</span>
+        </>
+      )}
+      <span>{timeLeft.hours.toString().padStart(2, '0')}</span>
+      <span className="text-[7px] md:text-[8px] opacity-40 uppercase font-sans">:</span>
+      <span>{timeLeft.minutes.toString().padStart(2, '0')}</span>
+      <span className="text-[7px] md:text-[8px] opacity-40 uppercase font-sans">:</span>
+      <span>{timeLeft.seconds.toString().padStart(2, '0')}</span>
+      <span className="text-[7px] md:text-[8px] opacity-50 uppercase font-sans">s</span>
+    </div>
+  );
+}
+
 export default function FloatingElements() {
   const { floatingSettings } = useSettings();
   const location = useLocation();
@@ -330,6 +381,10 @@ export default function FloatingElements() {
                             dangerouslySetInnerHTML={{ __html: bar.content || '' }}
                           />
                           
+                          {bar.countdownTarget && (
+                            <PromoBarCountdown targetDate={bar.countdownTarget} textColor={bar.textColor} />
+                          )}
+                          
                           {bar.ctaText && (
                             <button 
                               onClick={() => handleCTAClick(bar)}
@@ -362,6 +417,10 @@ export default function FloatingElements() {
                       className="font-bold tracking-tight text-center uppercase text-[9px] md:text-xs"
                       dangerouslySetInnerHTML={{ __html: bar.content || '' }}
                     />
+                    
+                    {bar.countdownTarget && (
+                      <PromoBarCountdown targetDate={bar.countdownTarget} textColor={bar.textColor} />
+                    )}
                     
                     {bar.ctaText && (
                       <button 

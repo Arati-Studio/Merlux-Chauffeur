@@ -509,8 +509,13 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
     try {
       const response = await fetch('/sitemap-stats.json');
       if (response.ok) {
-        const data = await response.json();
-        setSitemapStats(data);
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const data = await response.json();
+          setSitemapStats(data);
+        } else {
+          console.warn('Sitemap stats response was not JSON:', contentType);
+        }
       }
     } catch (err) {
       console.error('Error fetching sitemap stats:', err);

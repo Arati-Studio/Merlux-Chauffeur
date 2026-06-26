@@ -1,5 +1,6 @@
 import { motion } from 'motion/react';
 import { Shield, Clock, Award, Star, Compass, Target } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import SEO from '../components/SEO';
 
 export default function About() {
@@ -194,18 +195,18 @@ export default function About() {
             the <span className="text-gold italic">pinnacle</span> of travel?
           </h2>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
-            <a 
-              href="/booking" 
+            <Link 
+              to="/booking" 
               className="bg-gold text-black px-12 py-5 rounded-sm font-bold uppercase tracking-[0.2em] text-[10px] hover:bg-white transition-all duration-500 w-full sm:w-auto text-center"
             >
               Book Your Chauffeur
-            </a>
-            <a 
-              href="/fleet" 
+            </Link>
+            <Link 
+              to="/fleet" 
               className="border border-white/20 text-white px-12 py-5 rounded-sm font-bold uppercase tracking-[0.2em] text-[10px] hover:bg-white/10 transition-all duration-500 w-full sm:w-auto text-center"
             >
               Explore Our Fleet
-            </a>
+            </Link>
           </div>
         </div>
       </section>
