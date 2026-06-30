@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://merlux.au/sitemap_index.xml

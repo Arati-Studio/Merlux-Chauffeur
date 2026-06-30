@@ -43,7 +43,8 @@ export async function getCachedDoc(docRef: DocumentReference): Promise<DocumentD
       const entry: CacheEntry<any> = JSON.parse(cached);
       return entry.data;
     }
-    throw err;
+    console.warn(`Firestore getCachedDoc failed for path: ${docRef.path}. Returning null to prevent app crash.`, err);
+    return null;
   }
 }
 
@@ -68,7 +69,8 @@ export async function getCachedDocs(q: Query, cacheId: string): Promise<any[]> {
       const entry: CacheEntry<any[]> = JSON.parse(cached);
       return entry.data;
     }
-    throw err;
+    console.warn(`Firestore getCachedDocs failed for cacheId: ${cacheId}. Returning empty array to prevent app crash.`, err);
+    return [];
   }
 }
 

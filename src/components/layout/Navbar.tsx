@@ -72,6 +72,8 @@ export default function Navbar() {
       if (doc.exists()) {
         setSystemSettings(doc.data());
       }
+    }, (err) => {
+      console.warn('Error fetching system settings in Navbar onSnapshot:', err);
     });
 
     const handleClickOutside = (event: MouseEvent) => {

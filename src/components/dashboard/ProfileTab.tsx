@@ -80,6 +80,8 @@ export default function ProfileTab({
         if (data.vehicleInsuranceBase64) setVehicleInsuranceBase64(data.vehicleInsuranceBase64);
         if (data.vehicleInsuranceFileName) setVehicleInsuranceFileName(data.vehicleInsuranceFileName);
       }
+    }, (err) => {
+      console.warn('Error in ProfileTab onSnapshot for user:', err);
     });
     return () => unsub();
   }, [user?.uid]);
@@ -124,6 +126,8 @@ export default function ProfileTab({
             totalBookings
           });
           setLoadingStats(false);
+        }, (err) => {
+          console.warn('Error fetching admin users stats in ProfileTab:', err);
         });
       }, (err) => {
         console.error('Error fetching admin bookings stats:', err);

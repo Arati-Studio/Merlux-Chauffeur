@@ -12,6 +12,10 @@ import { OfflineDetector } from "./components/OfflineDetector";
 import SearchDialog from "./components/SearchDialog";
 import AnimatedPage from "./components/layout/AnimatedPage";
 import { AnimatePresence } from "motion/react";
+import { Helmet } from "react-helmet-async";
+import { blogsFallback } from "./data/fallback/blogsFallback";
+import { toursFallback } from "./data/fallback/toursFallback";
+import { offersFallback } from "./data/fallback/offersFallback";
 
 const Home = lazy(() => import("./pages/Home"));
 const Booking = lazy(() => import("./pages/Booking"));
@@ -29,6 +33,59 @@ const DynamicPage = lazy(() => import("./pages/DynamicPage"));
 const Offers = lazy(() => import("./pages/Offers"));
 const Tours = lazy(() => import("./pages/Tours"));
 const PaymentSuccess = lazy(() => import("./pages/PaymentSuccess"));
+
+function DynamicSEO() {
+  const location = useLocation();
+  const pathname = location.pathname;
+  const parts = pathname.split("/").filter(Boolean);
+
+  let title = "";
+  let description = "";
+  let image = "";
+
+  if (parts.length === 2) {
+    const section = parts[0];
+    const slug = parts[1];
+
+    if (section === "blog") {
+      const post = blogsFallback.find((p) => p.slug === slug);
+      if (post) {
+        title = post.metaTitle || `${post.title} | Merlux Journal`;
+        description = post.metaDescription || post.excerpt;
+        image = post.featuredImage;
+      }
+    } else if (section === "tours") {
+      const tour = toursFallback.find((t) => t.slug === slug);
+      if (tour) {
+        title = `${tour.title} | Private Tours Melbourne`;
+        description = tour.shortDescription;
+        image = tour.image;
+      }
+    } else if (section === "offers") {
+      const offer = offersFallback.find((o) => o.slug === slug);
+      if (offer) {
+        title = `${offer.title} | Exclusive Offers`;
+        description = offer.description;
+        image = offer.image;
+      }
+    }
+  }
+
+  if (!title) return null;
+
+  return (
+    <Helmet>
+      <title>{title}</title>
+      <meta name="description" content={description} />
+      <meta property="og:title" content={title} />
+      <meta property="og:description" content={description} />
+      {image && <meta property="og:image" content={image} />}
+      <meta name="twitter:title" content={title} />
+      <meta name="twitter:description" content={description} />
+      {image && <meta name="twitter:image" content={image} />}
+    </Helmet>
+  );
+}
 
 function AppLayout() {
   const { floatingSettings } = useSettings();
@@ -59,6 +116,7 @@ function AppLayout() {
 
   return (
     <div className="min-h-screen bg-black text-white font-sans selection:bg-gold selection:text-black flex flex-col">
+      <DynamicSEO />
       <FloatingElements />
       <OfflineDetector />
       <SearchDialog isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />

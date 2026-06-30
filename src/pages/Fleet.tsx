@@ -1,12 +1,44 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { User, Briefcase, Check, Star, Navigation, X, Gauge, ShieldCheck, Zap, Fuel, Activity, Compass, Calendar, MapPin, Heart } from 'lucide-react';
+import { User, Briefcase, Check, Star, Navigation, X, Gauge, ShieldCheck, Zap, Fuel, Activity, Compass, Calendar, MapPin, Heart, ChevronLeft, ChevronRight, Eye, Camera } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { db } from '../lib/firebase';
 import { collection, getDocs, query } from 'firebase/firestore';
 import { fleetFallback } from '../data/fallback/fleetFallback';
 import { cn, getAssetPath } from '../lib/utils';
 import SEO from '../components/SEO';
+
+// High-quality interior and exterior fleet shots for the showcase gallery
+const GALLERY_IMAGES = [
+  {
+    id: 'ext_sedan',
+    src: '/src/assets/images/fleet_exterior_sedan.webp',
+    category: 'exterior',
+    title: 'Mercedes-Benz S-Class Prestige',
+    description: 'Immaculate high-gloss black finish captured outside Melbourne’s premium corporate hubs, ready for executive service.'
+  },
+  {
+    id: 'int_cabin',
+    src: '/src/assets/images/fleet_interior_cabin.webp',
+    category: 'interior',
+    title: 'First-Class Executive Cabin',
+    description: 'Plush cream Nappa leather interior featuring individual climate controls, soft ambient gold lighting, and spacious legroom.'
+  },
+  {
+    id: 'ext_suv',
+    src: '/src/assets/images/fleet_exterior_suv.webp',
+    category: 'exterior',
+    title: 'Prestige SUV Alpine Tourer',
+    description: 'Robust, elegant SUV silhouette framed by the golden rays of sunset, ideal for regional travel and airport transfers.'
+  },
+  {
+    id: 'int_cockpit',
+    src: '/src/assets/images/fleet_interior_cockpit.webp',
+    category: 'interior',
+    title: 'State-of-the-Art Chauffeur Cockpit',
+    description: 'Sleek, integrated digital display cluster paired with premium leather trim and tactile controls for secure, smooth navigation.'
+  }
+];
 
 // Detailed specifications and availability status resolver for fleet showcase
 function getVehicleSpecs(car: any) {
@@ -124,14 +156,130 @@ function getVehicleSpecs(car: any) {
   return specs;
 }
 
+interface LightboxHelperProps {
+  image: {
+    src: string;
+    title: string;
+    category: string;
+    description: string;
+  };
+  index: number;
+  total: number;
+  onClose: () => void;
+  onNext: () => void;
+  onPrev: () => void;
+}
+
+function LightboxHelper({ image, index, total, onClose, onNext, onPrev }: LightboxHelperProps) {
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') {
+        onNext();
+      } else if (e.key === 'ArrowLeft') {
+        onPrev();
+      } else if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onNext, onPrev, onClose]);
+
+  return (
+    <>
+      {/* Lightbox Backdrop */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="fixed inset-0 bg-black/98 backdrop-blur-xl z-[200] cursor-zoom-out"
+      />
+
+      {/* Lightbox Frame */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        transition={{ type: "spring", damping: 30, stiffness: 300 }}
+        className="fixed inset-0 z-[210] pointer-events-none flex flex-col justify-between p-4 md:p-8"
+      >
+        {/* Top Control Bar */}
+        <div className="w-full flex items-center justify-between pointer-events-auto max-w-7xl mx-auto">
+          <div className="flex items-center gap-3">
+            <Camera className="text-gold w-4 h-4" />
+            <span className="text-white/60 font-mono text-[10px] md:text-xs uppercase tracking-widest">
+              Shot {index + 1} of {total} — {image.category}
+            </span>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-11 h-11 rounded-full bg-white/5 border border-white/10 hover:border-gold/50 flex items-center justify-center hover:bg-gold/15 text-white hover:text-gold transition-all duration-300 group shadow-lg pointer-events-auto"
+            title="Close Lightbox (Esc)"
+          >
+            <X size={18} className="transition-transform duration-300 group-hover:rotate-90" />
+          </button>
+        </div>
+
+        {/* Center Image Container with Navigation Chevrons */}
+        <div className="flex-1 w-full flex items-center justify-between max-w-7xl mx-auto my-4 relative">
+          {/* Left Arrow Button */}
+          <div className="absolute left-0 md:-left-4 z-20 pointer-events-auto">
+            <button
+              onClick={onPrev}
+              className="w-12 h-12 rounded-full bg-black/60 border border-white/10 hover:border-gold/50 flex items-center justify-center hover:bg-gold/15 text-white hover:text-gold transition-all shadow-2xl group"
+              title="Previous Image (Left Arrow)"
+            >
+              <ChevronLeft size={22} className="transition-transform group-hover:-translate-x-0.5" />
+            </button>
+          </div>
+
+          {/* Main Large Image */}
+          <div className="flex-1 h-full max-h-[65vh] md:max-h-[75vh] flex items-center justify-center px-4 md:px-12 relative pointer-events-auto">
+            <img
+              src={getAssetPath(image.src)}
+              alt={image.title}
+              className="max-w-full max-h-full object-contain rounded-2xl border border-white/5 shadow-[0_20px_50px_rgba(0,0,0,0.95)]"
+              referrerPolicy="no-referrer"
+            />
+          </div>
+
+          {/* Right Arrow Button */}
+          <div className="absolute right-0 md:-right-4 z-20 pointer-events-auto">
+            <button
+              onClick={onNext}
+              className="w-12 h-12 rounded-full bg-black/60 border border-white/10 hover:border-gold/50 flex items-center justify-center hover:bg-gold/15 text-white hover:text-gold transition-all shadow-2xl group"
+              title="Next Image (Right Arrow)"
+            >
+              <ChevronRight size={22} className="transition-transform group-hover:translate-x-0.5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Bottom Description Bar */}
+        <div className="w-full text-center pointer-events-auto max-w-2xl mx-auto bg-black/60 backdrop-blur-md p-6 rounded-2xl border border-white/5 shadow-2xl">
+          <h3 className="text-xl md:text-2xl font-display text-gold mb-1.5 tracking-tight">
+            {image.title}
+          </h3>
+          <p className="text-white/75 text-xs md:text-sm font-light leading-relaxed">
+            {image.description}
+          </p>
+        </div>
+      </motion.div>
+    </>
+  );
+}
+
 export default function Fleet() {
   const [fleetList, setFleetList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCar, setSelectedCar] = useState<any | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [activeGalleryFilter, setActiveGalleryFilter] = useState<'all' | 'exterior' | 'interior'>('all');
+  const [activeLightboxIndex, setActiveLightboxIndex] = useState<number | null>(null);
 
   useEffect(() => {
-    if (drawerOpen) {
+    if (drawerOpen || activeLightboxIndex !== null) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
@@ -139,7 +287,7 @@ export default function Fleet() {
     return () => {
       document.body.style.overflow = '';
     };
-  }, [drawerOpen]);
+  }, [drawerOpen, activeLightboxIndex]);
 
   useEffect(() => {
     const fetchFleet = async () => {
@@ -254,7 +402,7 @@ export default function Fleet() {
                           className="flex-1 sm:flex-initial border border-gold/20 hover:border-gold/50 text-white hover:text-gold bg-white/5 hover:bg-gold/5 py-4 md:py-5 px-8 md:px-10 rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] md:text-xs hover:scale-105 active:scale-95 transition-all text-center flex items-center justify-center gap-2"
                         >
                           <Gauge size={12} className="text-gold" />
-                          Specs & Availability
+                          Specifications
                         </button>
                       </div>
                       <div className="flex flex-col text-center sm:text-right">
@@ -332,6 +480,91 @@ export default function Fleet() {
             ))}
           </div>
         )}
+
+        {/* Interactive Fleet Showcase Gallery Section */}
+        <motion.div
+          initial={{ opacity: 0, y: 40 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-50px" }}
+          transition={{ duration: 0.8 }}
+          className="mt-32 border-t border-white/5 pt-12"
+        >
+          {/* Gallery Header */}
+          <div className="text-center mb-12">
+            <span className="text-gold uppercase tracking-[0.3em] text-[10px] md:text-xs font-bold mb-4 block">Visual Presentation</span>
+            <h2 className="text-3xl md:text-5xl font-display mb-4 tracking-tight">Fleet Gallery</h2>
+            <p className="text-white/50 max-w-xl mx-auto font-light tracking-wide text-xs md:text-sm px-4">
+              Explore immersive high-resolution showcases of our pristine exteriors, custom-stitched rear executive cabins, and state-of-the-art chauffeur cockpits.
+            </p>
+          </div>
+
+          {/* Category Filter Tabs */}
+          <div className="flex justify-center items-center gap-2 mb-12 px-4 flex-wrap">
+            {(['all', 'exterior', 'interior'] as const).map((filter) => (
+              <button
+                key={filter}
+                onClick={() => setActiveGalleryFilter(filter)}
+                className={cn(
+                  "px-5 py-2.5 rounded-full text-[10px] md:text-xs font-black uppercase tracking-[0.2em] transition-all duration-300 border",
+                  activeGalleryFilter === filter
+                    ? "bg-gold text-black border-gold shadow-[0_5px_15px_rgba(212,175,55,0.2)] font-black"
+                    : "bg-transparent text-white/50 border-white/10 hover:text-white hover:border-white/30 font-bold"
+                )}
+              >
+                {filter === 'all' ? 'All Aspects' : filter === 'exterior' ? 'Exterior Shots' : 'Cabin Interiors'}
+              </button>
+            ))}
+          </div>
+
+          {/* Grid of Gallery Thumbnails */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8 max-w-5xl mx-auto px-4">
+            {GALLERY_IMAGES.filter(img => activeGalleryFilter === 'all' || img.category === activeGalleryFilter).map((img) => {
+              // Get actual index in GALLERY_IMAGES for lightbox navigation
+              const globalIndex = GALLERY_IMAGES.findIndex(gImg => gImg.id === img.id);
+              return (
+                <motion.div
+                  layout
+                  key={img.id}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.4 }}
+                  onClick={() => setActiveLightboxIndex(globalIndex)}
+                  className="group relative aspect-video overflow-hidden rounded-[1.5rem] border border-white/10 hover:border-gold/30 bg-white/[0.01] cursor-pointer"
+                >
+                  {/* Subtle Glow backdrop */}
+                  <div className="absolute -inset-1 bg-gradient-to-tr from-gold/10 to-transparent blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                  
+                  {/* Image */}
+                  <img
+                    src={getAssetPath(img.src)}
+                    alt={img.title}
+                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                    referrerPolicy="no-referrer"
+                  />
+                  
+                  {/* Hover Overlay */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-black/20 opacity-80 md:opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-6">
+                    <div className="absolute top-4 right-4 bg-black/60 backdrop-blur-md p-3 rounded-full border border-white/10 text-gold transform translate-y-2 md:translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300">
+                      <Eye size={16} />
+                    </div>
+                    
+                    <span className="text-gold uppercase tracking-widest text-[9px] font-black mb-1 flex items-center gap-1.5">
+                      <Camera size={10} />
+                      {img.category} shot
+                    </span>
+                    <h3 className="text-lg md:text-xl font-display text-white mb-1.5 group-hover:text-gold transition-colors">
+                      {img.title}
+                    </h3>
+                    <p className="text-white/60 text-xs font-light line-clamp-2 leading-relaxed">
+                      {img.description}
+                    </p>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        </motion.div>
 
         {/* Explore More Section */}
         <div className="mt-32 max-w-5xl mx-auto px-4">
@@ -627,6 +860,32 @@ export default function Fleet() {
                 </div>
               </motion.div>
             </>
+          );
+        })()}
+      </AnimatePresence>
+
+      {/* Immersive Lightbox Gallery View */}
+      <AnimatePresence>
+        {activeLightboxIndex !== null && (() => {
+          const currentImg = GALLERY_IMAGES[activeLightboxIndex];
+          
+          const handleNextLightbox = () => {
+            setActiveLightboxIndex((prev) => (prev === null ? null : (prev + 1) % GALLERY_IMAGES.length));
+          };
+
+          const handlePrevLightbox = () => {
+            setActiveLightboxIndex((prev) => (prev === null ? null : (prev - 1 + GALLERY_IMAGES.length) % GALLERY_IMAGES.length));
+          };
+
+          return (
+            <LightboxHelper
+              image={currentImg}
+              index={activeLightboxIndex}
+              total={GALLERY_IMAGES.length}
+              onClose={() => setActiveLightboxIndex(null)}
+              onNext={handleNextLightbox}
+              onPrev={handlePrevLightbox}
+            />
           );
         })()}
       </AnimatePresence>

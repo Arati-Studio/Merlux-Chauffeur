@@ -14,11 +14,16 @@ import {
   CalendarArrowDown, CalendarArrowUp, RefreshCw, Blocks, Map as MapIcon,
   Globe, Mail, Phone, Eye, Star, User, UserMinus, SquarePen, AlertTriangle,
   ChevronDown, CheckSquare as CheckCloud, Route as RouteIcon, ArrowRight, Bell, CreditCard,
-  Square, SquareCheck, UserCheck, Plus, CircleX, Loader2, MessageSquare
+  Square, SquareCheck, UserCheck, Plus, CircleX, Loader2, MessageSquare, Download
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { cn } from '../../lib/utils';
+import { fleetFallback } from '../../data/fallback/fleetFallback';
+import { extrasFallback } from '../../data/fallback/extrasFallback';
+import { toursFallback } from '../../data/fallback/toursFallback';
+import { offersFallback } from '../../data/fallback/offersFallback';
 import RouteMap from './RouteMap';
+import { downloadReceiptPDF } from '../../utils/receiptGenerator';
 import ConfirmationModal from './ConfirmationModal';
 import { db, handleFirestoreError, OperationType } from '../../lib/firebase';
 import {
@@ -98,10 +103,10 @@ export default function BookingsTab({
   const [selectedBookings, setSelectedBookings] = useState<string[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<Date>(new Date());
-  const [fleet, setFleet] = useState<any[]>([]);
-  const [extras, setExtras] = useState<any[]>([]);
-  const [tours, setTours] = useState<any[]>([]);
-  const [offers, setOffers] = useState<any[]>([]);
+  const [fleet, setFleet] = useState<any[]>(fleetFallback);
+  const [extras, setExtras] = useState<any[]>(extrasFallback);
+  const [tours, setTours] = useState<any[]>(toursFallback);
+  const [offers, setOffers] = useState<any[]>(offersFallback);
   const [showNotesPopup, setShowNotesPopup] = useState<string | null>(null);
   const [routeBooking, setRouteBooking] = useState<any>(null);
   const [showRouteModal, setShowRouteModal] = useState(false);
@@ -146,30 +151,44 @@ export default function BookingsTab({
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setBookings(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       setLastSyncedAt(new Date());
+    }, (err) => {
+      console.warn('Error in bookings onSnapshot, utilizing empty/existing state:', err);
     });
 
     const unsubscribeUsers = onSnapshot(query(collection(db, 'users'), limit(500)), (snapshot) => {
       setAllUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (err) => {
+      console.warn('Error in users onSnapshot:', err);
     });
 
     const unsubscribeFleet = onSnapshot(collection(db, 'fleet'), (snap) => {
       setFleet(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (err) => {
+      console.warn('Error in fleet onSnapshot, utilizing fallback:', err);
     });
 
     const unsubscribeExtras = onSnapshot(collection(db, 'extras'), (snap) => {
       setExtras(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (err) => {
+      console.warn('Error in extras onSnapshot, utilizing fallback:', err);
     });
 
     const unsubscribeTours = onSnapshot(collection(db, 'tours'), (snap) => {
       setTours(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (err) => {
+      console.warn('Error in tours onSnapshot, utilizing fallback:', err);
     });
 
     const unsubscribeOffers = onSnapshot(collection(db, 'offers'), (snap) => {
       setOffers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (err) => {
+      console.warn('Error in offers onSnapshot, utilizing fallback:', err);
     });
 
     const unsubscribeSettings = onSnapshot(doc(db, 'settings', 'system'), (snap) => {
       if (snap.exists()) setSystemSettings(snap.data());
+    }, (err) => {
+      console.warn('Error in system settings onSnapshot inside BookingsTab:', err);
     });
 
     return () => {
@@ -2157,14 +2176,25 @@ export default function BookingsTab({
                           <Eye size={16} />
                           <span className="text-[10px] font-bold uppercase tracking-widest">View</span>
                         </button>
-                        <button
-                          onClick={() => navigate('/contact')}
-                          className="flex-1 p-2.5 bg-white/5 border border-white/10 rounded-xl text-white hover:bg-white/10 transition-all flex items-center justify-center gap-2"
-                          title="Contact Us"
-                        >
-                          <Mail size={16} className="text-gold" />
-                          <span className="text-[10px] font-bold uppercase tracking-widest">Contact</span>
-                        </button>
+                        {booking.status === 'completed' ? (
+                          <button
+                            onClick={() => downloadReceiptPDF(booking, fleet, extras)}
+                            className="flex-1 p-2.5 bg-gold/10 border border-gold/30 rounded-xl text-gold hover:bg-gold hover:text-black transition-all flex items-center justify-center gap-2"
+                            title="Download Tax Receipt PDF"
+                          >
+                            <Download size={16} />
+                            <span className="text-[10px] font-bold uppercase tracking-widest">Receipt</span>
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => navigate('/contact')}
+                            className="flex-1 p-2.5 bg-white/5 border border-white/10 rounded-xl text-white hover:bg-white/10 transition-all flex items-center justify-center gap-2"
+                            title="Contact Us"
+                          >
+                            <Mail size={16} className="text-gold" />
+                            <span className="text-[10px] font-bold uppercase tracking-widest">Contact</span>
+                          </button>
+                        )}
                       </div>
                     )
                   ) : null}
@@ -2499,13 +2529,24 @@ export default function BookingsTab({
                           )}
 
                           {!isAdmin && !isDriver && booking.userId === user?.uid && (booking.status === 'cancelled' || booking.status === 'completed') && (
-                            <button
-                              onClick={() => navigate('/contact')}
-                              className="p-2 bg-white/5 text-white rounded-lg hover:bg-white hover:text-black transition-all"
-                              title="Contact Us"
-                            >
-                              <Mail size={14} className="text-gold" />
-                            </button>
+                            <div className="flex items-center gap-1.5">
+                              {booking.status === 'completed' && (
+                                <button
+                                  onClick={() => downloadReceiptPDF(booking, fleet, extras)}
+                                  className="p-2 bg-gold/10 text-gold rounded-lg hover:bg-gold hover:text-black transition-all"
+                                  title="Download Tax Receipt PDF"
+                                >
+                                  <Download size={14} />
+                                </button>
+                              )}
+                              <button
+                                onClick={() => navigate('/contact')}
+                                className="p-2 bg-white/5 text-white rounded-lg hover:bg-white hover:text-black transition-all"
+                                title="Contact Us"
+                              >
+                                <Mail size={14} className="text-gold" />
+                              </button>
+                            </div>
                           )}
 
                           {isAdmin ? (
@@ -3600,6 +3641,15 @@ export default function BookingsTab({
                   </div>
                 )}
 
+                {viewingBooking.status === 'completed' && (
+                  <button
+                    onClick={() => downloadReceiptPDF(viewingBooking, fleet, extras)}
+                    className="w-full bg-gold/10 border border-gold/40 text-gold py-4 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-gold hover:text-black transition-all flex items-center justify-center gap-2 mb-2"
+                  >
+                    <Download size={16} />
+                    Download Trip Receipt
+                  </button>
+                )}
                 <button
                   onClick={() => { setShowViewModal(false); setShowDistanceBreakdown(false); }}
                   className="w-full bg-gold text-black py-4 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-white transition-all"
