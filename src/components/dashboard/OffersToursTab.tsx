@@ -923,7 +923,7 @@ const OffersToursTab: React.FC<OffersToursTabProps> = ({
                     setPageSizeTours(val === 'All' ? 'All' : Number(val));
                     setCurrentPageTours(1);
                   }}
-                  className="custom-select bg-black text-gold text-[10px] font-mono border border-white/10 rounded-xl px-3 py-1.5 focus:outline-none focus:border-gold font-bold uppercase cursor-pointer"
+                  className="custom-select bg-black text-gold text-[10px] font-mono border border-white/10 rounded-xl pl-3 pr-10 py-1.5 focus:outline-none focus:border-gold font-bold uppercase cursor-pointer"
                 >
                   <option value={12}>12 Tours</option>
                   <option value={24}>24 Tours</option>
@@ -1473,7 +1473,7 @@ const OffersToursTab: React.FC<OffersToursTabProps> = ({
                     setPageSizeOffers(val === 'All' ? 'All' : Number(val));
                     setCurrentPageOffers(1);
                   }}
-                  className="custom-select bg-black text-gold text-[10px] font-mono border border-white/10 rounded-xl px-3 py-1.5 focus:outline-none focus:border-gold font-bold uppercase cursor-pointer"
+                  className="custom-select bg-black text-gold text-[10px] font-mono border border-white/10 rounded-xl pl-3 pr-10 py-1.5 focus:outline-none focus:border-gold font-bold uppercase cursor-pointer"
                 >
                   <option value={12}>12 Offers</option>
                   <option value={24}>24 Offers</option>
@@ -1493,12 +1493,12 @@ const OffersToursTab: React.FC<OffersToursTabProps> = ({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[100] flex items-center justify-center p-6"
+            className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[100] flex items-center justify-center p-3 sm:p-6"
           >
             <motion.div
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
-              className="w-full max-w-2xl glass p-8 rounded-xl border border-gold/20 max-h-[90vh] overflow-y-auto custom-scrollbar"
+              className="w-full max-w-2xl glass p-4 sm:p-8 rounded-xl border border-gold/20 max-h-[90vh] overflow-y-auto custom-scrollbar"
             >
               <div className="flex justify-between items-center mb-6">
                 <div>
@@ -1569,37 +1569,46 @@ const OffersToursTab: React.FC<OffersToursTabProps> = ({
                         ? editingOffer.availability.dateRanges
                         : [{ startDate: editingOffer?.availability?.startDate || '', endDate: editingOffer?.availability?.endDate || '' }];
                       return (
-                        <div key={idx} className="grid grid-cols-[1fr_1fr_auto] gap-3 items-center">
-                          <input
-                            type="date"
-                            value={range.startDate || ""}
-                            onChange={(e) => {
-                              const newRanges = [...base];
-                              newRanges[idx] = { ...range, startDate: e.target.value };
-                              setEditingOffer({ ...editingOffer, availability: { ...editingOffer.availability, dateRanges: newRanges, startDate: '', endDate: '' } });
-                            }}
-                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs outline-none focus:border-gold text-white font-mono"
-                          />
-                          <input
-                            type="date"
-                            value={range.endDate || ""}
-                            onChange={(e) => {
-                              const newRanges = [...base];
-                              newRanges[idx] = { ...range, endDate: e.target.value };
-                              setEditingOffer({ ...editingOffer, availability: { ...editingOffer.availability, dateRanges: newRanges, startDate: '', endDate: '' } });
-                            }}
-                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs outline-none focus:border-gold text-white font-mono"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const newRanges = base.filter((_: any, i: number) => i !== idx);
-                              setEditingOffer({ ...editingOffer, availability: { ...editingOffer.availability, dateRanges: newRanges, startDate: '', endDate: '' } });
-                            }}
-                            className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20 transition-all"
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                        <div key={idx} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 items-end sm:items-center p-3 sm:p-0 border border-white/5 sm:border-0 rounded-xl bg-white/[0.01] sm:bg-transparent">
+                          <div className="w-full">
+                            <span className="text-[9px] uppercase tracking-wider text-white/30 block sm:hidden mb-1">Start Date</span>
+                            <input
+                              type="date"
+                              value={range.startDate || ""}
+                              onChange={(e) => {
+                                const newRanges = [...base];
+                                newRanges[idx] = { ...range, startDate: e.target.value };
+                                setEditingOffer({ ...editingOffer, availability: { ...editingOffer.availability, dateRanges: newRanges, startDate: '', endDate: '' } });
+                              }}
+                              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs outline-none focus:border-gold text-white font-mono"
+                            />
+                          </div>
+                          <div className="w-full">
+                            <span className="text-[9px] uppercase tracking-wider text-white/30 block sm:hidden mb-1">End Date</span>
+                            <input
+                              type="date"
+                              value={range.endDate || ""}
+                              onChange={(e) => {
+                                const newRanges = [...base];
+                                newRanges[idx] = { ...range, endDate: e.target.value };
+                                setEditingOffer({ ...editingOffer, availability: { ...editingOffer.availability, dateRanges: newRanges, startDate: '', endDate: '' } });
+                              }}
+                              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs outline-none focus:border-gold text-white font-mono"
+                            />
+                          </div>
+                          <div className="flex justify-end w-full sm:w-auto">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newRanges = base.filter((_: any, i: number) => i !== idx);
+                                setEditingOffer({ ...editingOffer, availability: { ...editingOffer.availability, dateRanges: newRanges, startDate: '', endDate: '' } });
+                              }}
+                              className="w-full sm:w-auto p-2.5 sm:p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20 transition-all flex items-center justify-center gap-2 text-xs sm:text-inherit"
+                            >
+                              <Trash2 size={14} />
+                              <span className="inline sm:hidden">Remove Window</span>
+                            </button>
+                          </div>
                         </div>
                       );
                     })}
@@ -1913,16 +1922,16 @@ const OffersToursTab: React.FC<OffersToursTabProps> = ({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/95 backdrop-blur-md z-[100] flex items-center justify-center p-4 md:p-6"
+            className="fixed inset-0 bg-black/95 backdrop-blur-md z-[100] flex items-center justify-center p-2 sm:p-4 md:p-6"
           >
             <motion.div
               initial={{ scale: 0.95, y: 20 }}
               animate={{ scale: 1, y: 0 }}
-              className="w-full max-w-5xl glass-heavy p-0 rounded-2xl border border-gold/20 overflow-hidden max-h-[90vh] flex flex-col"
+              className="w-full max-w-5xl glass-heavy p-0 rounded-2xl border border-gold/20 overflow-hidden max-h-[95vh] sm:max-h-[90vh] flex flex-col"
             >
-              <div className="p-6 border-b border-white/5 flex justify-between items-center bg-black/50">
+              <div className="p-4 sm:p-6 border-b border-white/5 flex justify-between items-center bg-black/50">
                 <div>
-                  <h3 className="text-xl font-display text-gold">
+                  <h3 className="text-lg sm:text-xl font-display text-gold">
                     {editingTour.id ? 'Edit Luxury Tour' : 'Create New Collection'}
                   </h3>
                   <p className="text-[8px] uppercase tracking-[0.3em] text-white/30 font-bold mt-1">Refined Sightseeing Management</p>
@@ -1933,7 +1942,7 @@ const OffersToursTab: React.FC<OffersToursTabProps> = ({
               </div>
 
               {/* Tabs Navigation */}
-              <div className="flex bg-black/30 border-b border-white/5 px-6">
+              <div className="flex bg-black/30 border-b border-white/5 px-4 sm:px-6 flex-nowrap justify-between sm:justify-start">
                 {[
                   { id: 'general', label: 'General', icon: Info },
                   { id: 'content', label: 'Content', icon: LayoutGrid },
@@ -1945,17 +1954,18 @@ const OffersToursTab: React.FC<OffersToursTabProps> = ({
                     key={tab.id}
                     onClick={() => setTourActiveTab(tab.id as any)}
                     className={cn(
-                      "flex items-center gap-2 px-4 py-2 text-[10px] uppercase font-bold tracking-widest border-b-2 transition-all shrink-0",
+                      "flex items-center justify-center gap-1 sm:gap-2 px-3.5 sm:px-4 py-3 sm:py-2 text-[10px] uppercase font-bold tracking-widest border-b-2 transition-all shrink-0 flex-1 sm:flex-initial",
                       tourActiveTab === tab.id ? "text-gold border-gold bg-gold/5" : "text-white/30 border-transparent hover:text-white/60"
                     )}
+                    title={tab.label}
                   >
-                    <tab.icon size={14} />
-                    {tab.label}
+                    <tab.icon size={16} className="sm:size-[14px]" />
+                    <span className="hidden sm:inline">{tab.label}</span>
                   </button>
                 ))}
               </div>
 
-              <div className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-[#020202]">
+              <div className="flex-1 overflow-y-auto p-4 sm:p-8 custom-scrollbar bg-[#020202]">
                 <div className="max-w-4xl mx-auto space-y-10">
 
                   {tourActiveTab === 'general' && (
@@ -2050,37 +2060,46 @@ const OffersToursTab: React.FC<OffersToursTabProps> = ({
                               ? editingTour.availability.dateRanges
                               : [{ startDate: editingTour?.availability?.startDate || '', endDate: editingTour?.availability?.endDate || '' }];
                             return (
-                              <div key={idx} className="grid grid-cols-[1fr_1fr_auto] gap-3 items-center">
-                                <input
-                                  type="date"
-                                  value={range.startDate || ""}
-                                  onChange={(e) => {
-                                    const newRanges = [...base];
-                                    newRanges[idx] = { ...range, startDate: e.target.value };
-                                    setEditingTour({ ...editingTour, availability: { ...editingTour.availability, dateRanges: newRanges, startDate: '', endDate: '' } });
-                                  }}
-                                  className="w-full bg-white/5 border border-white/10 rounded-xl px-5 py-4 text-xs outline-none focus:border-gold text-white font-mono"
-                                />
-                                <input
-                                  type="date"
-                                  value={range.endDate || ""}
-                                  onChange={(e) => {
-                                    const newRanges = [...base];
-                                    newRanges[idx] = { ...range, endDate: e.target.value };
-                                    setEditingTour({ ...editingTour, availability: { ...editingTour.availability, dateRanges: newRanges, startDate: '', endDate: '' } });
-                                  }}
-                                  className="w-full bg-white/5 border border-white/10 rounded-xl px-5 py-4 text-xs outline-none focus:border-gold text-white font-mono"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const newRanges = base.filter((_: any, i: number) => i !== idx);
-                                    setEditingTour({ ...editingTour, availability: { ...editingTour.availability, dateRanges: newRanges, startDate: '', endDate: '' } });
-                                  }}
-                                  className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20 transition-all"
-                                >
-                                  <Trash2 size={16} />
-                                </button>
+                              <div key={idx} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 items-end sm:items-center p-3 sm:p-0 border border-white/5 sm:border-0 rounded-xl bg-white/[0.01] sm:bg-transparent">
+                                <div className="w-full">
+                                  <span className="text-[9px] uppercase tracking-wider text-white/30 block sm:hidden mb-1">Start Date</span>
+                                  <input
+                                    type="date"
+                                    value={range.startDate || ""}
+                                    onChange={(e) => {
+                                      const newRanges = [...base];
+                                      newRanges[idx] = { ...range, startDate: e.target.value };
+                                      setEditingTour({ ...editingTour, availability: { ...editingTour.availability, dateRanges: newRanges, startDate: '', endDate: '' } });
+                                    }}
+                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-5 py-4 text-xs outline-none focus:border-gold text-white font-mono"
+                                  />
+                                </div>
+                                <div className="w-full">
+                                  <span className="text-[9px] uppercase tracking-wider text-white/30 block sm:hidden mb-1">End Date</span>
+                                  <input
+                                    type="date"
+                                    value={range.endDate || ""}
+                                    onChange={(e) => {
+                                      const newRanges = [...base];
+                                      newRanges[idx] = { ...range, endDate: e.target.value };
+                                      setEditingTour({ ...editingTour, availability: { ...editingTour.availability, dateRanges: newRanges, startDate: '', endDate: '' } });
+                                    }}
+                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-5 py-4 text-xs outline-none focus:border-gold text-white font-mono"
+                                  />
+                                </div>
+                                <div className="flex justify-end w-full sm:w-auto">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const newRanges = base.filter((_: any, i: number) => i !== idx);
+                                      setEditingTour({ ...editingTour, availability: { ...editingTour.availability, dateRanges: newRanges, startDate: '', endDate: '' } });
+                                    }}
+                                    className="w-full sm:w-auto p-2.5 sm:p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20 transition-all flex items-center justify-center gap-2 text-xs sm:text-inherit"
+                                  >
+                                    <Trash2 size={16} />
+                                    <span className="inline sm:hidden">Remove Window</span>
+                                  </button>
+                                </div>
                               </div>
                             );
                           })}

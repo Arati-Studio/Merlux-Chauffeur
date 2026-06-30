@@ -933,7 +933,7 @@ const DynamicPageTab: React.FC<DynamicPageTabProps> = ({
                 setPageSize(val === 'All' ? 'All' : Number(val));
                 setCurrentPage(1);
               }}
-              className="custom-select bg-black text-gold text-[10px] font-mono border border-white/10 rounded-xl px-3 py-1.5 focus:outline-none focus:border-gold font-bold uppercase cursor-pointer"
+              className="custom-select bg-black text-gold text-[10px] font-mono border border-white/10 rounded-xl pl-3 pr-10 py-1.5 focus:outline-none focus:border-gold font-bold uppercase cursor-pointer"
             >
               <option value={12}>12 Pages</option>
               <option value={24}>24 Pages</option>

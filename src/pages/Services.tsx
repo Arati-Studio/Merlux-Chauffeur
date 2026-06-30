@@ -171,35 +171,25 @@ export default function Services() {
         {/* Categories and Search Controls */}
         {!loading && categories.length > 0 && (
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12 bg-white/[0.02] border border-white/5 p-6 rounded-[2rem]">
-            {/* Category Pills */}
-            <div className="flex items-center gap-3 overflow-x-auto pb-2 md:pb-0 scrollbar-none custom-scrollbar max-w-full">
-              {categories.map((cat) => {
-                const isSelected = selectedCategory.toLowerCase() === cat.toLowerCase();
-                const count = categoryCounts[cat] || 0;
-                return (
-                  <button
-                    key={cat}
-                    onClick={() => {
-                      setSelectedCategory(cat);
-                      setSearchQuery('');
-                    }}
-                    className={cn(
-                      "px-6 py-3 rounded-full text-xs font-bold uppercase tracking-widest transition-all duration-300 whitespace-nowrap border flex items-center gap-2 shrink-0 cursor-pointer",
-                      isSelected
-                        ? "bg-gold text-black border-gold shadow-lg shadow-gold/20"
-                        : "bg-white/5 text-white/60 border-white/10 hover:text-white hover:border-white/30"
-                    )}
-                  >
-                    <span>{cat}</span>
-                    <span className={cn(
-                      "text-[10px] px-2 py-0.5 rounded-full font-mono font-bold",
-                      isSelected ? "bg-black/20 text-black" : "bg-white/10 text-white/40"
-                    )}>
-                      {count}
-                    </span>
-                  </button>
-                );
-              })}
+            {/* Category Dropdown (Fully Responsive: full width on mobile/tablet, beautiful select styling) */}
+            <div className="w-full md:w-72 shrink-0">
+              <select
+                value={selectedCategory}
+                onChange={(e) => {
+                  setSelectedCategory(e.target.value);
+                  setSearchQuery('');
+                }}
+                className="custom-select w-full bg-black/40 border border-white/10 rounded-full pl-5 pr-12 py-3.5 text-xs font-bold uppercase tracking-widest text-gold focus:border-gold outline-none transition-all cursor-pointer h-[50px]"
+              >
+                {categories.map((cat) => {
+                  const count = categoryCounts[cat] || 0;
+                  return (
+                    <option key={cat} value={cat} className="bg-black text-white">
+                      {cat} ({count})
+                    </option>
+                  );
+                })}
+              </select>
             </div>
 
             {/* Search option */}
@@ -395,7 +385,7 @@ export default function Services() {
                       setPageSize(val === 'All' ? 'All' : Number(val));
                       setCurrentPage(1);
                     }}
-                    className="custom-select bg-black text-gold text-[10px] font-mono border border-white/10 rounded-xl px-3 py-1.5 focus:outline-none focus:border-gold font-bold uppercase cursor-pointer"
+                    className="custom-select bg-black text-gold text-[10px] font-mono border border-white/10 rounded-xl pl-3 pr-10 py-1.5 focus:outline-none focus:border-gold font-bold uppercase cursor-pointer"
                   >
                     <option value={6}>6 Entries</option>
                     <option value={12}>12 Entries</option>
