@@ -1021,6 +1021,25 @@ Sitemap: ${SITE_URL}/sitemap_index.xml
     fs.writeFileSync(path.join(DIST_DIR, 'sitemap.html'), sitemapHtmlBody, { encoding: 'utf8' });
     console.log('✨ sitemap.html visual directory successfully compiled in public/ and dist/');
 
+    // Static Site Generation (SSG) approach for the metadata collection
+    console.log('📦 Commencing Static Site Generation (SSG) pre-rendering cache for SEO metadata...');
+    try {
+      const metadataCache: Record<string, any> = {};
+      const metaSnap = await getDocs(collection(db, 'metadata'));
+      metaSnap.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (data.slug) {
+          metadataCache[data.slug] = data;
+        }
+      });
+      const metadataCacheJson = JSON.stringify(metadataCache, null, 2);
+      fs.writeFileSync(path.join(PUBLIC_DIR, 'metadata-cache.json'), metadataCacheJson, 'utf8');
+      fs.writeFileSync(path.join(DIST_DIR, 'metadata-cache.json'), metadataCacheJson, 'utf8');
+      console.log(`✨ metadata-cache.json compiled with ${Object.keys(metadataCache).length} static indexable entries.`);
+    } catch (cacheErr) {
+      console.error('⚠️ Could not generate static metadata cache:', cacheErr);
+    }
+
     const nowISO = new Date().toISOString();
     writeStats(nowISO, nowISO, 'generated');
 

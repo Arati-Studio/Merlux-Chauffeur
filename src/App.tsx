@@ -1,4 +1,4 @@
-import React, { lazy, Suspense } from "react";
+import React, { lazy, Suspense, useState, useEffect } from "react";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
 import Navbar from "./components/layout/Navbar";
@@ -16,6 +16,8 @@ import { Helmet } from "react-helmet-async";
 import { blogsFallback } from "./data/fallback/blogsFallback";
 import { toursFallback } from "./data/fallback/toursFallback";
 import { offersFallback } from "./data/fallback/offersFallback";
+import { db } from "./lib/firebase";
+import { doc, getDoc, collection, query, where, getDocs, limit } from "firebase/firestore";
 
 const Home = lazy(() => import("./pages/Home"));
 const Booking = lazy(() => import("./pages/Booking"));
@@ -39,50 +41,163 @@ function DynamicSEO() {
   const pathname = location.pathname;
   const parts = pathname.split("/").filter(Boolean);
 
-  let title = "";
-  let description = "";
-  let image = "";
+  const [meta, setMeta] = useState<{
+    title: string;
+    description: string;
+    image: string;
+    keywords?: string;
+  } | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  if (parts.length === 2) {
+  useEffect(() => {
+    if (parts.length !== 2) {
+      setMeta(null);
+      return;
+    }
+
     const section = parts[0];
     const slug = parts[1];
-
-    if (section === "blog") {
-      const post = blogsFallback.find((p) => p.slug === slug);
-      if (post) {
-        title = post.metaTitle || `${post.title} | Merlux Journal`;
-        description = post.metaDescription || post.excerpt;
-        image = post.featuredImage;
-      }
-    } else if (section === "tours") {
-      const tour = toursFallback.find((t) => t.slug === slug);
-      if (tour) {
-        title = `${tour.title} | Private Tours Melbourne`;
-        description = tour.shortDescription;
-        image = tour.image;
-      }
-    } else if (section === "offers") {
-      const offer = offersFallback.find((o) => o.slug === slug);
-      if (offer) {
-        title = `${offer.title} | Exclusive Offers`;
-        description = offer.description;
-        image = offer.image;
-      }
+    if (!["blog", "tours", "offers"].includes(section)) {
+      setMeta(null);
+      return;
     }
+
+    let active = true;
+    setLoading(true);
+
+    const fetchMeta = async () => {
+      try {
+        // 1. Try fetching from unified 'metadata' collection using docId: 'section_slug'
+        const docId = `${section}_${slug}`;
+        const metaDocRef = doc(db, "metadata", docId);
+        const metaDocSnap = await getDoc(metaDocRef);
+
+        if (metaDocSnap.exists() && active) {
+          const data = metaDocSnap.data();
+          setMeta({
+            title: data.metaTitle || "",
+            description: data.metaDescription || "",
+            image: data.ogImage || "",
+            keywords: Array.isArray(data.keywords) ? data.keywords.join(", ") : (data.keywords || ""),
+          });
+          setLoading(false);
+          return;
+        }
+
+        // 2. Fall back to base collections
+        let titleVal = "";
+        let descVal = "";
+        let imgVal = "";
+        let kwsVal = "";
+
+        const baseCollName = section === "blog" ? "blogs" : section; // "blog" is stored as "blogs"
+        const q = query(collection(db, baseCollName), where("slug", "==", slug), limit(1));
+        const baseSnap = await getDocs(q);
+
+        if (!baseSnap.empty && active) {
+          const baseData = baseSnap.docs[0].data();
+          titleVal = baseData.metaTitle || baseData.title || "";
+          descVal = baseData.metaDescription || baseData.seoDescription || baseData.description || baseData.shortDescription || "";
+          imgVal = baseData.ogImage || baseData.featuredImage || baseData.image || "";
+          kwsVal = Array.isArray(baseData.keywords) ? baseData.keywords.join(", ") : (baseData.keywords || "");
+        } else {
+          // 3. Last fallback to local hardcoded arrays
+          if (section === "blog") {
+            const post = blogsFallback.find((p) => p.slug === slug);
+            if (post) {
+              titleVal = post.metaTitle || `${post.title} | Merlux Journal`;
+              descVal = post.metaDescription || post.excerpt;
+              imgVal = post.featuredImage;
+            }
+          } else if (section === "tours") {
+            const tour = toursFallback.find((t) => t.slug === slug);
+            if (tour) {
+              titleVal = `${tour.title} | Private Tours Melbourne`;
+              descVal = tour.shortDescription;
+              imgVal = tour.image;
+            }
+          } else if (section === "offers") {
+            const offer = offersFallback.find((o) => o.slug === slug);
+            if (offer) {
+              titleVal = `${offer.title} | Exclusive Offers`;
+              descVal = offer.description;
+              imgVal = offer.image;
+            }
+          }
+        }
+
+        if (active) {
+          setMeta({
+            title: titleVal,
+            description: descVal,
+            image: imgVal,
+            keywords: kwsVal,
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching dynamic SEO metadata:", err);
+        // Fall back to hardcoded data on error
+        let titleVal = "";
+        let descVal = "";
+        let imgVal = "";
+        if (section === "blog") {
+          const post = blogsFallback.find((p) => p.slug === slug);
+          if (post) {
+            titleVal = post.metaTitle || `${post.title} | Merlux Journal`;
+            descVal = post.metaDescription || post.excerpt;
+            imgVal = post.featuredImage;
+          }
+        } else if (section === "tours") {
+          const tour = toursFallback.find((t) => t.slug === slug);
+          if (tour) {
+            titleVal = `${tour.title} | Private Tours Melbourne`;
+            descVal = tour.shortDescription;
+            imgVal = tour.image;
+          }
+        } else if (section === "offers") {
+          const offer = offersFallback.find((o) => o.slug === slug);
+          if (offer) {
+            titleVal = `${offer.title} | Exclusive Offers`;
+            descVal = offer.description;
+            imgVal = offer.image;
+          }
+        }
+        if (active) {
+          setMeta({ title: titleVal, description: descVal, image: imgVal });
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    fetchMeta();
+
+    return () => {
+      active = false;
+    };
+  }, [pathname]);
+
+  if (loading) {
+    return (
+      <Helmet>
+        <title>Loading... | Merlux Chauffeur</title>
+      </Helmet>
+    );
   }
 
-  if (!title) return null;
+  if (!meta || !meta.title) return null;
 
   return (
     <Helmet>
-      <title>{title}</title>
-      <meta name="description" content={description} />
-      <meta property="og:title" content={title} />
-      <meta property="og:description" content={description} />
-      {image && <meta property="og:image" content={image} />}
-      <meta name="twitter:title" content={title} />
-      <meta name="twitter:description" content={description} />
-      {image && <meta name="twitter:image" content={image} />}
+      <title>{meta.title}</title>
+      <meta name="description" content={meta.description} />
+      {meta.keywords && <meta name="keywords" content={meta.keywords} />}
+      <meta property="og:title" content={meta.title} />
+      <meta property="og:description" content={meta.description} />
+      {meta.image && <meta property="og:image" content={meta.image} />}
+      <meta name="twitter:title" content={meta.title} />
+      <meta name="twitter:description" content={meta.description} />
+      {meta.image && <meta name="twitter:image" content={meta.image} />}
     </Helmet>
   );
 }

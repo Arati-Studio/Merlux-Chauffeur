@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Globe, Search, Layout, FileText, BookOpen, Tag, MapPin, Pencil, Ban,
   CheckCircle, XCircle, X, AlertCircle, ExternalLink, Save,
   Loader2, Info, ChevronRight, Eye, EyeOff, Code, FileJson,
   FileSearch, Blocks, Settings, ShieldCheck, Database, Server,
-  ListChecks, Filter
+  ListChecks, Filter, ChevronsLeft, ChevronLeft, ChevronsRight
 } from 'lucide-react';
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, serverTimestamp, addDoc, setDoc } from 'firebase/firestore';
 import { getCachedDocs, clearFsCache } from '../../lib/firestore-cache';
@@ -172,6 +172,12 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showBulkPanel, setShowBulkPanel] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number | 'All'>(10);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, contentTypeFilter, jsonLdFilter, indexingFilter, metaCompletenessFilter]);
   const [bulkForm, setBulkForm] = useState({
     metaTitleAction: 'keep', // 'keep', 'replace', 'prefix', 'suffix', 'append_brand'
     metaTitleValue: '',
@@ -735,6 +741,13 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
 
     return true;
   });
+
+  const totalPages = pageSize === 'All' ? 1 : Math.ceil(filteredContent.length / pageSize);
+  const paginatedContent = useMemo(() => {
+    if (pageSize === 'All') return filteredContent;
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredContent.slice(startIndex, startIndex + pageSize);
+  }, [filteredContent, currentPage, pageSize]);
 
   const [isGeneratingSitemap, setIsGeneratingSitemap] = useState(false);
 
@@ -1357,12 +1370,18 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
                         <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-black text-white/40 w-[50px] text-center">
                           <input
                             type="checkbox"
-                            checked={selectedIds.length === filteredContent.length && filteredContent.length > 0}
+                            checked={paginatedContent.length > 0 && paginatedContent.every(item => selectedIds.includes(`${item.type}-${item.id}`))}
                             onChange={(e) => {
                               if (e.target.checked) {
-                                setSelectedIds(filteredContent.map(item => `${item.type}-${item.id}`));
+                                const newIds = [...selectedIds];
+                                paginatedContent.forEach(item => {
+                                  const key = `${item.type}-${item.id}`;
+                                  if (!newIds.includes(key)) newIds.push(key);
+                                });
+                                setSelectedIds(newIds);
                               } else {
-                                setSelectedIds([]);
+                                const paginatedKeys = paginatedContent.map(item => `${item.type}-${item.id}`);
+                                setSelectedIds(selectedIds.filter(id => !paginatedKeys.includes(id)));
                               }
                             }}
                             className="w-4 h-4 rounded border border-white/10 bg-white/5 text-gold accent-gold focus:ring-1 focus:ring-gold/30 focus:ring-offset-0 cursor-pointer transition-all hover:bg-white/10 hover:border-white/20"
@@ -1404,7 +1423,7 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
                           </td>
                         </tr>
                       ) : (
-                        filteredContent.map((item, idx) => {
+                        paginatedContent.map((item, idx) => {
                           const isItemSelected = selectedIds.includes(`${item.type}-${item.id}`);
                           return (
                             <tr
@@ -1515,6 +1534,109 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
                   </table>
                 </div>
               </div>
+
+              {filteredContent.length > 0 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-6 bg-black/40 p-5 rounded-2xl border border-white/5 mt-8">
+                  {/* Status info */}
+                  <div className="text-[11px] font-mono text-white/50">
+                    Showing <span className="text-gold font-bold">
+                      {filteredContent.length === 0 ? 0 : (pageSize === 'All' ? 1 : (currentPage - 1) * pageSize + 1)}
+                    </span> to <span className="text-gold font-bold">
+                      {pageSize === 'All' ? filteredContent.length : Math.min(currentPage * pageSize, filteredContent.length)}
+                    </span> of <span className="text-white font-bold">{filteredContent.length}</span> entries
+                  </div>
+
+                  {/* Pagination buttons */}
+                  {pageSize !== 'All' && totalPages > 1 && (
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setCurrentPage(1)}
+                        disabled={currentPage === 1}
+                        className="p-2 border border-white/10 rounded-xl bg-white/5 text-white/60 hover:text-gold hover:border-gold/30 disabled:opacity-20 disabled:pointer-events-none transition-all cursor-pointer flex items-center justify-center"
+                        title="First Page"
+                      >
+                        <ChevronsLeft size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                        disabled={currentPage === 1}
+                        className="p-2 border border-white/10 rounded-xl bg-white/5 text-white/60 hover:text-gold hover:border-gold/30 disabled:opacity-20 disabled:pointer-events-none transition-all cursor-pointer flex items-center justify-center"
+                        title="Previous Page"
+                      >
+                        <ChevronLeft size={14} />
+                      </button>
+                      
+                      {(() => {
+                        const pageNumbers = [];
+                        const maxButtons = 5;
+                        let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+                        let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+                        if (endPage - startPage + 1 < maxButtons) {
+                          startPage = Math.max(1, endPage - maxButtons + 1);
+                        }
+                        for (let i = Math.max(1, startPage); i <= endPage; i++) {
+                          pageNumbers.push(i);
+                        }
+                        return pageNumbers.map(num => (
+                          <button
+                            key={`page-btn-${num}`}
+                            type="button"
+                            onClick={() => setCurrentPage(num)}
+                            className={cn(
+                              "w-8 h-8 flex items-center justify-center text-[10px] rounded-xl font-mono transition-all border font-bold cursor-pointer",
+                              currentPage === num
+                                ? "bg-gold text-black border-gold shadow-[0_0_10px_rgba(212,175,55,0.2)]"
+                                : "bg-white/5 text-white/70 border-white/10 hover:border-gold/30 hover:text-gold"
+                            )}
+                          >
+                            {num}
+                          </button>
+                        ));
+                      })()}
+
+                      <button
+                        type="button"
+                        onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                        disabled={currentPage === totalPages}
+                        className="p-2 border border-white/10 rounded-xl bg-white/5 text-white/60 hover:text-gold hover:border-gold/30 disabled:opacity-20 disabled:pointer-events-none transition-all cursor-pointer flex items-center justify-center"
+                        title="Next Page"
+                      >
+                        <ChevronRight size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCurrentPage(totalPages)}
+                        disabled={currentPage === totalPages}
+                        className="p-2 border border-white/10 rounded-xl bg-white/5 text-white/60 hover:text-gold hover:border-gold/30 disabled:opacity-20 disabled:pointer-events-none transition-all cursor-pointer flex items-center justify-center"
+                        title="Last Page"
+                      >
+                        <ChevronsRight size={14} />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Page size dropdown */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] uppercase tracking-wider text-white/40 font-bold font-mono">Page Size:</span>
+                    <select
+                      value={pageSize}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setPageSize(val === 'All' ? 'All' : Number(val));
+                        setCurrentPage(1);
+                      }}
+                      className="custom-select bg-black text-gold text-[10px] font-mono border border-white/10 rounded-xl pl-3 pr-10 py-1.5 focus:outline-none focus:border-gold font-bold uppercase cursor-pointer"
+                    >
+                      <option value={10}>10 Entries</option>
+                      <option value={20}>20 Entries</option>
+                      <option value={50}>50 Entries</option>
+                      <option value="All">All Entries</option>
+                    </select>
+                  </div>
+                </div>
+              )}
             </motion.div>
           )}
 

@@ -51,6 +51,28 @@ if (!admin.apps.length) {
 
 const dbAdmin = admin.firestore();
 
+// Pre-render Static Site Generation (SSG) metadata cache
+let metadataCache: Record<string, any> = {};
+const cachePathPublic = path.resolve('./public/metadata-cache.json');
+const cachePathDist = path.resolve('./dist/metadata-cache.json');
+
+const loadMetadataCache = () => {
+  try {
+    if (fs.existsSync(cachePathDist)) {
+      metadataCache = JSON.parse(fs.readFileSync(cachePathDist, 'utf8'));
+      console.log(`[SSG Cache] Successfully loaded ${Object.keys(metadataCache).length} static metadata entries from dist/metadata-cache.json`);
+    } else if (fs.existsSync(cachePathPublic)) {
+      metadataCache = JSON.parse(fs.readFileSync(cachePathPublic, 'utf8'));
+      console.log(`[SSG Cache] Successfully loaded ${Object.keys(metadataCache).length} static metadata entries from public/metadata-cache.json`);
+    } else {
+      console.log('[SSG Cache] No pre-rendered metadata cache file found. Falling back to dynamic Firestore fetch.');
+    }
+  } catch (err) {
+    console.error('[SSG Cache] Error reading metadata cache file:', err);
+  }
+};
+loadMetadataCache();
+
 let stripeClient: Stripe | null = null;
 function getStripe(): Stripe {
   if (!stripeClient) {
@@ -1059,23 +1081,28 @@ ${sitemapEntries.map(entry => `  <url>
         if (!snap.empty) seoData = snap.docs[0].data();
       }
 
-      // 1. Fetch from the unified metadata collection first to support direct overrides
+      const routeSlug = cleanPath || 'home';
+
+      // 1. Fetch from the unified metadata collection to support direct overrides in real time
       let metadataOverride: any = null;
-      try {
-        const routeSlug = cleanPath || 'home';
-        const docId = routeSlug.replace(/\//g, '_') || 'home';
-        const docSnap = await dbAdmin.collection('metadata').doc(docId).get();
-        if (docSnap.exists) {
-          metadataOverride = docSnap.data();
-        } else {
-          // fallback query by 'slug' field
-          const qSnap = await dbAdmin.collection('metadata').where('slug', '==', routeSlug).limit(1).get();
-          if (!qSnap.empty) {
-            metadataOverride = qSnap.docs[0].data();
+      if (metadataCache && metadataCache[routeSlug]) {
+        metadataOverride = metadataCache[routeSlug];
+      } else {
+        try {
+          const docId = routeSlug.replace(/\//g, '_') || 'home';
+          const docSnap = await dbAdmin.collection('metadata').doc(docId).get();
+          if (docSnap.exists) {
+            metadataOverride = docSnap.data();
+          } else {
+            // fallback query by 'slug' field
+            const qSnap = await dbAdmin.collection('metadata').where('slug', '==', routeSlug).limit(1).get();
+            if (!qSnap.empty) {
+              metadataOverride = qSnap.docs[0].data();
+            }
           }
+        } catch (err) {
+          console.error('Metadata collection fetch failed inside injectSEO:', err);
         }
-      } catch (err) {
-        console.error('Metadata collection fetch failed inside injectSEO:', err);
       }
 
       // Merge native data and metadata overrides
@@ -1142,11 +1169,16 @@ ${sitemapEntries.map(entry => `  <url>
     ${gaScript}
       `;
 
-      // Replace default title and add other tags
-      return html
-        .replace(/<title data-rh="true">.*?<\/title>/, '')
-        .replace(/<title>.*?<\/title>/, '')
-        .replace('</head>', `${seoTags}</head>`);
+      // Clean default tags to prevent duplicate meta and title headers
+      const cleanHtml = html
+        .replace(/<title[^>]*>[\s\S]*?<\/title>/gi, '')
+        .replace(/<meta\s+[^>]*name=["']description["'][^>]*\/?>/gi, '')
+        .replace(/<meta\s+[^>]*name=["']keywords["'][^>]*\/?>/gi, '')
+        .replace(/<meta\s+[^>]*property=["']og:[^"']+["'][^>]*\/?>/gi, '')
+        .replace(/<meta\s+[^>]*name=["']twitter:[^"']+["'][^>]*\/?>/gi, '')
+        .replace(/<link\s+[^>]*rel=["']canonical["'][^>]*\/?>/gi, '');
+
+      return cleanHtml.replace('</head>', `${seoTags}</head>`);
     } catch (error) {
       console.error('SEO Injection Error:', error);
       return html;
