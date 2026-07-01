@@ -297,6 +297,9 @@ export default function DynamicPage() {
           alt={pageData.title}
           className="w-full h-full object-cover"
           referrerPolicy="no-referrer"
+          loading="eager"
+          fetchPriority="high"
+          decoding="async"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
 

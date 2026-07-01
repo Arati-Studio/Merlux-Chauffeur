@@ -1233,6 +1233,10 @@ export default function Tours() {
                           src={getAssetPath(mainImage || selectedTour.image || selectedTour.featuredImage)}
                           alt={selectedTour.title}
                           className="w-full h-full object-cover transition-all duration-700"
+                          referrerPolicy="no-referrer"
+                          loading="eager"
+                          fetchPriority="high"
+                          decoding="async"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
 

@@ -242,7 +242,7 @@ export default function Home() {
       />
       {/* 1. Hero Section with Image Slider */}
       <section className="relative h-screen flex items-center justify-center overflow-hidden">
-        <AnimatePresence mode="wait">
+        <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={currentHero}
             initial={{ opacity: 0, x: "100%" }}
@@ -256,6 +256,9 @@ export default function Home() {
               alt="Luxury Chauffeur"
               className="w-full h-full object-cover"
               referrerPolicy="no-referrer"
+              loading="eager"
+              fetchPriority={currentHero === 0 ? "high" : "auto"}
+              decoding="async"
             />
           </motion.div>
         </AnimatePresence>

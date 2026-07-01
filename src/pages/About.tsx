@@ -36,6 +36,9 @@ export default function About() {
             alt="Luxury Interior"
             className="w-full h-full object-cover opacity-40 scale-105"
             referrerPolicy="no-referrer"
+            loading="eager"
+            fetchPriority="high"
+            decoding="async"
           />
           <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black" />
         </div>
