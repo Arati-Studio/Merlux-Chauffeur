@@ -5,7 +5,7 @@ import {
   CheckCircle, XCircle, X, AlertCircle, ExternalLink, Save,
   Loader2, Info, ChevronRight, Eye, EyeOff, Code, FileJson,
   FileSearch, Blocks, Settings, ShieldCheck, Database, Server,
-  ListChecks, Filter, ChevronsLeft, ChevronLeft, ChevronsRight
+  ListChecks, Filter, ChevronsLeft, ChevronLeft, ChevronsRight, Share2
 } from 'lucide-react';
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, serverTimestamp, addDoc, setDoc } from 'firebase/firestore';
 import { getCachedDocs, clearFsCache } from '../../lib/firestore-cache';
@@ -161,7 +161,11 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
     metaDescription: '',
     keywords: '',
     noindex: false,
-    structuredData: ''
+    structuredData: '',
+    ogTitle: '',
+    ogDescription: '',
+    ogImage: '',
+    ogUrl: ''
   });
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -227,7 +231,11 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
         metaDescription: editingItem.metaDescription || '',
         keywords: Array.isArray(editingItem.keywords) ? editingItem.keywords.join(', ') : (editingItem.keywords || ''),
         noindex: editingItem.noindex || false,
-        structuredData: typeof editingItem.structuredData === 'string' ? editingItem.structuredData : JSON.stringify(editingItem.structuredData || '', null, 2)
+        structuredData: typeof editingItem.structuredData === 'string' ? editingItem.structuredData : JSON.stringify(editingItem.structuredData || '', null, 2),
+        ogTitle: editingItem.ogTitle || '',
+        ogDescription: editingItem.ogDescription || '',
+        ogImage: editingItem.ogImage || '',
+        ogUrl: editingItem.ogUrl || ''
       });
     }
   }, [editingItem]);
@@ -345,6 +353,10 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
         keywords: keywordsArray,
         noindex: editForm.noindex,
         structuredData: structuredDataParsed,
+        ogTitle: editForm.ogTitle,
+        ogDescription: editForm.ogDescription,
+        ogImage: editForm.ogImage,
+        ogUrl: editForm.ogUrl,
         updatedAt: serverTimestamp()
       });
 
@@ -356,6 +368,10 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
           keywords: keywordsArray,
           noindex: editForm.noindex,
           structuredData: structuredDataParsed,
+          ogTitle: editForm.ogTitle,
+          ogDescription: editForm.ogDescription,
+          ogImage: editForm.ogImage,
+          ogUrl: editForm.ogUrl,
           updatedAt: serverTimestamp()
         });
       } else if (editingItem.type === 'Page' && !editingItem.isStaticSystemPage) {
@@ -367,6 +383,10 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
           keywords: keywordsArray,
           noindex: editForm.noindex,
           structuredData: structuredDataParsed,
+          ogTitle: editForm.ogTitle,
+          ogDescription: editForm.ogDescription,
+          ogImage: editForm.ogImage,
+          ogUrl: editForm.ogUrl,
           active: true,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
@@ -556,6 +576,10 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
         keywords: docOverride?.keywords !== undefined ? docOverride.keywords : (p.keywords || []),
         noindex: p.active === false || (docOverride?.noindex !== undefined ? docOverride.noindex : (p.noindex || false)),
         structuredData: docOverride?.structuredData !== undefined ? docOverride.structuredData : (p.structuredData || null),
+        ogTitle: docOverride?.ogTitle !== undefined ? docOverride.ogTitle : (p.ogTitle || ''),
+        ogDescription: docOverride?.ogDescription !== undefined ? docOverride.ogDescription : (p.ogDescription || ''),
+        ogImage: docOverride?.ogImage !== undefined ? docOverride.ogImage : (p.ogImage || p.featuredImage || p.image || ''),
+        ogUrl: docOverride?.ogUrl !== undefined ? docOverride.ogUrl : (p.ogUrl || ''),
         active: p.active !== false,
         updatedAt: docOverride?.updatedAt || p.updatedAt || p.createdAt || null,
         createdAt: p.createdAt || null
@@ -583,6 +607,10 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
           keywords: docOverride?.keywords !== undefined ? docOverride.keywords : [],
           noindex: docOverride?.noindex !== undefined ? docOverride.noindex : false,
           structuredData: docOverride?.structuredData !== undefined ? docOverride.structuredData : null,
+          ogTitle: docOverride?.ogTitle !== undefined ? docOverride.ogTitle : '',
+          ogDescription: docOverride?.ogDescription !== undefined ? docOverride.ogDescription : '',
+          ogImage: docOverride?.ogImage !== undefined ? docOverride.ogImage : '',
+          ogUrl: docOverride?.ogUrl !== undefined ? docOverride.ogUrl : '',
           active: true,
           updatedAt: docOverride?.updatedAt || null,
           createdAt: null
@@ -596,6 +624,12 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
           const docOverride = metadataDocs.find(d => d.slug === routeSlug || d.id === routeSlug.replace(/\//g, '_'));
           if (docOverride?.updatedAt) {
             items[index].updatedAt = docOverride.updatedAt;
+          }
+          if (docOverride) {
+            items[index].ogTitle = docOverride.ogTitle || items[index].ogTitle || '';
+            items[index].ogDescription = docOverride.ogDescription || items[index].ogDescription || '';
+            items[index].ogImage = docOverride.ogImage || items[index].ogImage || '';
+            items[index].ogUrl = docOverride.ogUrl || items[index].ogUrl || '';
           }
         }
       }
@@ -616,6 +650,10 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
         keywords: docOverride?.keywords !== undefined ? docOverride.keywords : (b.keywords || []),
         noindex: b.active === false || (docOverride?.noindex !== undefined ? docOverride.noindex : (b.noindex || false)),
         structuredData: docOverride?.structuredData !== undefined ? docOverride.structuredData : (b.structuredData || null),
+        ogTitle: docOverride?.ogTitle !== undefined ? docOverride.ogTitle : (b.ogTitle || ''),
+        ogDescription: docOverride?.ogDescription !== undefined ? docOverride.ogDescription : (b.ogDescription || ''),
+        ogImage: docOverride?.ogImage !== undefined ? docOverride.ogImage : (b.ogImage || b.featuredImage || b.image || ''),
+        ogUrl: docOverride?.ogUrl !== undefined ? docOverride.ogUrl : (b.ogUrl || ''),
         active: b.active !== false,
         updatedAt: docOverride?.updatedAt || b.updatedAt || b.createdAt || null,
         createdAt: b.createdAt || null
@@ -637,6 +675,10 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
         keywords: docOverride?.keywords !== undefined ? docOverride.keywords : (o.keywords || []),
         noindex: o.active === false || (docOverride?.noindex !== undefined ? docOverride.noindex : (o.noindex || false)),
         structuredData: docOverride?.structuredData !== undefined ? docOverride.structuredData : (o.structuredData || null),
+        ogTitle: docOverride?.ogTitle !== undefined ? docOverride.ogTitle : (o.ogTitle || ''),
+        ogDescription: docOverride?.ogDescription !== undefined ? docOverride.ogDescription : (o.ogDescription || ''),
+        ogImage: docOverride?.ogImage !== undefined ? docOverride.ogImage : (o.ogImage || o.image || ''),
+        ogUrl: docOverride?.ogUrl !== undefined ? docOverride.ogUrl : (o.ogUrl || ''),
         active: o.active !== false,
         updatedAt: docOverride?.updatedAt || o.updatedAt || o.createdAt || null,
         createdAt: o.createdAt || null
@@ -658,6 +700,10 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
         keywords: docOverride?.keywords !== undefined ? docOverride.keywords : (t.keywords || []),
         noindex: t.active === false || (docOverride?.noindex !== undefined ? docOverride.noindex : (t.noindex || false)),
         structuredData: docOverride?.structuredData !== undefined ? docOverride.structuredData : (t.structuredData || null),
+        ogTitle: docOverride?.ogTitle !== undefined ? docOverride.ogTitle : (t.ogTitle || ''),
+        ogDescription: docOverride?.ogDescription !== undefined ? docOverride.ogDescription : (t.ogDescription || ''),
+        ogImage: docOverride?.ogImage !== undefined ? docOverride.ogImage : (t.ogImage || t.image || ''),
+        ogUrl: docOverride?.ogUrl !== undefined ? docOverride.ogUrl : (t.ogUrl || ''),
         active: t.active !== false,
         updatedAt: docOverride?.updatedAt || t.updatedAt || t.createdAt || null,
         createdAt: t.createdAt || null
@@ -2019,6 +2065,61 @@ const IndexTab: React.FC<IndexTabProps> = ({ showDashboardNotice }) => {
                     className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-gold outline-none transition-all min-h-[100px]"
                     placeholder="Provide a compelling summary for search results..."
                   />
+                </div>
+
+                {/* Open Graph Section */}
+                <div className="border-t border-white/5 pt-6 space-y-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Share2 size={16} className="text-gold" />
+                    <h4 className="text-xs uppercase tracking-wider font-bold text-gold">Open Graph Metadata (Social Sharing)</h4>
+                  </div>
+                  <p className="text-[10px] text-white/40 uppercase tracking-wide leading-relaxed">
+                    Customize how this page appears when shared on social platforms like Facebook, Twitter, WhatsApp, and LinkedIn. If left blank, these fields automatically fall back to standard metadata values.
+                  </p>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 ml-1">og:title (Social Title)</label>
+                      <input
+                        type="text"
+                        value={editForm.ogTitle}
+                        onChange={(e) => setEditForm({ ...editForm, ogTitle: e.target.value })}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-gold outline-none transition-all"
+                        placeholder={editForm.metaTitle || editingItem.title || "Merlux Chauffeurs | Luxury Transfers"}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 ml-1">og:url (Share URL)</label>
+                      <input
+                        type="text"
+                        value={editForm.ogUrl}
+                        onChange={(e) => setEditForm({ ...editForm, ogUrl: e.target.value })}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-gold outline-none transition-all"
+                        placeholder={`https://merlux.au${getFullPath(editingItem)}`}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 ml-1">og:image (Social Preview Image URL)</label>
+                    <input
+                      type="text"
+                      value={editForm.ogImage}
+                      onChange={(e) => setEditForm({ ...editForm, ogImage: e.target.value })}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-gold outline-none transition-all"
+                      placeholder={editingItem.ogImage || editingItem.featuredImage || editingItem.image || "https://merlux.au/images/preview.jpg"}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] uppercase tracking-widest font-bold text-white/40 ml-1">og:description (Social Description)</label>
+                    <textarea
+                      value={editForm.ogDescription}
+                      onChange={(e) => setEditForm({ ...editForm, ogDescription: e.target.value })}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-gold outline-none transition-all min-h-[80px]"
+                      placeholder={editForm.metaDescription || "Premium chauffeur services in Melbourne."}
+                    />
+                  </div>
                 </div>
 
                 {/* Live Real-time Interactive Google Search Preview inside the Meta Editor */}

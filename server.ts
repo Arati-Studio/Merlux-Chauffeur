@@ -1112,7 +1112,10 @@ ${sitemapEntries.map(entry => `  <url>
         keywords: metadataOverride?.keywords || seoData?.keywords || [],
         noindex: metadataOverride?.noindex !== undefined ? metadataOverride.noindex : (seoData?.noindex || false),
         schema: metadataOverride?.structuredData || seoData?.schema || seoData?.structuredData || null,
-        ogImage: seoData?.ogImage || seoData?.featuredImage || seoData?.image || null,
+        ogTitle: metadataOverride?.ogTitle || seoData?.ogTitle || '',
+        ogDescription: metadataOverride?.ogDescription || seoData?.ogDescription || '',
+        ogImage: metadataOverride?.ogImage || seoData?.ogImage || seoData?.featuredImage || seoData?.image || null,
+        ogUrl: metadataOverride?.ogUrl || seoData?.ogUrl || null,
         canonicalUrl: seoData?.canonicalUrl || null,
       };
 
@@ -1130,8 +1133,13 @@ ${sitemapEntries.map(entry => `  <url>
       const defaultKeywords = Array.isArray(globalSeo.defaultKeywords) ? globalSeo.defaultKeywords : (typeof globalSeo.defaultKeywords === 'string' ? globalSeo.defaultKeywords.split(',').map((k: string) => k.trim()) : []);
       const keywords = [...seoKeywords, ...defaultKeywords].filter(k => k !== '').join(', ');
       const favicon = globalSeo.favicon ? `<link rel="icon" href="${globalSeo.favicon}" />` : '';
-      const ogImage = finalSeoData.ogImage || globalSeo.ogImage || globalSeo.logo || '';
       const canonical = finalSeoData.canonicalUrl || `${SITE_URL}${url}`;
+      
+      const ogTitle = finalSeoData.ogTitle || title;
+      const ogDesc = finalSeoData.ogDescription || desc || 'Premium chauffeur services in Melbourne.';
+      const ogUrl = finalSeoData.ogUrl || canonical;
+      const ogImage = finalSeoData.ogImage || globalSeo.ogImage || globalSeo.logo || 'https://merlux.au/images/preview.jpg';
+
       const noindex = finalSeoData.noindex ? '<meta name="robots" content="noindex, nofollow">' : '<meta name="robots" content="index, follow">';
 
       const pageSchema = finalSeoData.schema ? `<script type="application/ld+json">${JSON.stringify(finalSeoData.schema)}</script>` : '';
@@ -1158,10 +1166,10 @@ ${sitemapEntries.map(entry => `  <url>
     ${favicon.replace('<link', '<link data-rh="true"')}
     ${noindex.replace('<meta', '<meta data-rh="true"')}
     ${scMeta.replace('<meta', '<meta data-rh="true"')}
-    <meta data-rh="true" property="og:title" content="${title}" />
-    <meta data-rh="true" property="og:description" content="${desc}" />
+    <meta data-rh="true" property="og:title" content="${ogTitle}" />
+    <meta data-rh="true" property="og:description" content="${ogDesc}" />
     <meta data-rh="true" property="og:type" content="website" />
-    <meta data-rh="true" property="og:url" content="${canonical}" />
+    <meta data-rh="true" property="og:url" content="${ogUrl}" />
     <meta data-rh="true" property="og:image" content="${ogImage}" />
     <meta data-rh="true" name="twitter:card" content="summary_large_image" />
     ${orgSchema}
@@ -1170,13 +1178,13 @@ ${sitemapEntries.map(entry => `  <url>
       `;
 
       // Clean default tags to prevent duplicate meta and title headers
-      const cleanHtml = html
-        .replace(/<title[^>]*>[\s\S]*?<\/title>/gi, '')
-        .replace(/<meta\s+[^>]*name=["']description["'][^>]*\/?>/gi, '')
-        .replace(/<meta\s+[^>]*name=["']keywords["'][^>]*\/?>/gi, '')
-        .replace(/<meta\s+[^>]*property=["']og:[^"']+["'][^>]*\/?>/gi, '')
-        .replace(/<meta\s+[^>]*name=["']twitter:[^"']+["'][^>]*\/?>/gi, '')
-        .replace(/<link\s+[^>]*rel=["']canonical["'][^>]*\/?>/gi, '');
+      let cleanHtml = html;
+      cleanHtml = cleanHtml.replace(/<title[^>]*>[\s\S]*?<\/title>/gi, '');
+      cleanHtml = cleanHtml.replace(/<meta[^>]*name=["']description["'][^>]*>/gi, '');
+      cleanHtml = cleanHtml.replace(/<meta[^>]*name=["']keywords["'][^>]*>/gi, '');
+      cleanHtml = cleanHtml.replace(/<meta[^>]*property=["']og:[^"']+["'][^>]*>/gi, '');
+      cleanHtml = cleanHtml.replace(/<meta[^>]*name=["']twitter:[^"']+["'][^>]*>/gi, '');
+      cleanHtml = cleanHtml.replace(/<link[^>]*rel=["']canonical["'][^>]*>/gi, '');
 
       return cleanHtml.replace('</head>', `${seoTags}</head>`);
     } catch (error) {

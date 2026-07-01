@@ -28,6 +28,10 @@ const SEO: React.FC<SEOProps> = ({
     keywords?: string[];
     noindex?: boolean;
     structuredData?: any;
+    ogTitle?: string;
+    ogDescription?: string;
+    ogImage?: string;
+    ogUrl?: string;
   } | null>(null);
 
   useEffect(() => {
@@ -73,6 +77,10 @@ const SEO: React.FC<SEOProps> = ({
         keywords: Array.isArray(matched.keywords) ? matched.keywords : [],
         noindex: matched.noindex || false,
         structuredData: matched.structuredData || null,
+        ogTitle: matched.ogTitle || '',
+        ogDescription: matched.ogDescription || '',
+        ogImage: matched.ogImage || '',
+        ogUrl: matched.ogUrl || '',
       });
     };
 
@@ -97,7 +105,11 @@ const SEO: React.FC<SEOProps> = ({
             metaDescription: docData.metaDescription || '',
             keywords: docData.keywords || [],
             noindex: docData.noindex || false,
-            structuredData: docData.structuredData || null
+            structuredData: docData.structuredData || null,
+            ogTitle: docData.ogTitle || '',
+            ogDescription: docData.ogDescription || '',
+            ogImage: docData.ogImage || '',
+            ogUrl: docData.ogUrl || '',
           });
         } else {
           loadFallback(matchedSlug);
@@ -128,6 +140,12 @@ const SEO: React.FC<SEOProps> = ({
   const seoCanonical = canonical || generateCanonicalUrl(pathname);
   const seoImage = ogImage || `${SEO_CONFIG.siteUrl}${SEO_CONFIG.defaultOGImage}`;
   
+  // Custom Open Graph Fallbacks as requested
+  const finalOgTitle = dbSeo?.ogTitle?.trim() || finalTitle || "Merlux Chauffeurs | Luxury Transfers";
+  const finalOgDescription = dbSeo?.ogDescription?.trim() || finalDescription || "Premium chauffeur services in Melbourne.";
+  const finalOgUrl = dbSeo?.ogUrl?.trim() || seoCanonical || "https://merlux.au";
+  const finalOgImage = dbSeo?.ogImage?.trim() || seoImage || "https://merlux.au/images/preview.jpg";
+
   const finalRobots = robots || (finalNoindex ? "noindex, nofollow" : "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1");
   
   return (
@@ -148,20 +166,20 @@ const SEO: React.FC<SEOProps> = ({
       
       {/* Open Graph / Facebook */}
       <meta property="og:type" content={ogType} />
-      <meta property="og:title" content={seoTitle} />
-      <meta property="og:description" content={seoDescription} />
-      <meta property="og:url" content={seoCanonical} />
+      <meta property="og:title" content={finalOgTitle} />
+      <meta property="og:description" content={finalOgDescription} />
+      <meta property="og:url" content={finalOgUrl} />
       <meta property="og:site_name" content="Merlux Chauffeur Services" />
-      <meta property="og:image" content={seoImage} />
-      <meta property="og:image:alt" content={seoTitle} />
+      <meta property="og:image" content={finalOgImage} />
+      <meta property="og:image:alt" content={finalOgTitle} />
       
       {/* Twitter */}
       <meta name="twitter:card" content="summary_large_image" />
       <meta name="twitter:site" content={SEO_CONFIG.twitterHandle} />
       <meta name="twitter:creator" content={SEO_CONFIG.twitterHandle} />
-      <meta name="twitter:title" content={seoTitle} />
-      <meta name="twitter:description" content={seoDescription} />
-      <meta name="twitter:image" content={seoImage} />
+      <meta name="twitter:title" content={finalOgTitle} />
+      <meta name="twitter:description" content={finalOgDescription} />
+      <meta name="twitter:image" content={finalOgImage} />
 
       {/* Global Site-Wide Schemas */}
       {settings?.schema?.organization && (
