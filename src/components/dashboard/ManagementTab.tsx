@@ -14,7 +14,6 @@ import SettingsTab from './SettingsTab';
 import OffersToursTab from './OffersToursTab';
 import FloatingTab from './FloatingTab';
 import MediaTab from './MediaTab';
-import CampaignsTab from './CampaignsTab';
 
 interface ManagementTabProps {
   isAdmin: boolean;
@@ -65,12 +64,6 @@ const ManagementTab: React.FC<any> = (allProps) => {
             {...allProps}
           />
         );
-      case 'campaigns':
-        return (
-          <CampaignsTab
-            {...allProps}
-          />
-        );
       default:
         return null;
     }
@@ -82,7 +75,6 @@ const ManagementTab: React.FC<any> = (allProps) => {
     { id: 'offers-tours', label: 'Products', icon: Tag },
     { id: 'floatui', label: 'FloatUI', icon: MessageCircle },
     { id: 'media', label: 'Media', icon: ImageIcon },
-    { id: 'campaigns', label: 'Campaigns', icon: MessageCircle },
   ];
 
   return (

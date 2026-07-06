@@ -9,7 +9,6 @@ import {
   setLogLevel
 } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
-import { getMessaging } from 'firebase/messaging';
 
 // Import the Firebase configuration
 import config from '../../firebase-applet-config.json';
@@ -41,15 +40,6 @@ export const db = initializeFirestore(app, {
 setLogLevel('error');
 
 export const storage = getStorage(app);
-
-// Safely initialize Firebase Cloud Messaging with support for environments that lack Push APIs
-let messagingInstance: any = null;
-try {
-  messagingInstance = getMessaging(app);
-} catch (e) {
-  console.warn('Firebase Cloud Messaging is not fully supported in this browser context:', e);
-}
-export const messaging = messagingInstance;
 
 export enum OperationType {
   CREATE = 'create',
