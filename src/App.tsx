@@ -18,6 +18,7 @@ import { toursFallback } from "./data/fallback/toursFallback";
 import { offersFallback } from "./data/fallback/offersFallback";
 import { db } from "./lib/firebase";
 import { doc, getDoc, collection, query, where, getDocs, limit } from "firebase/firestore";
+import { setupForegroundMessageListener } from "./lib/fcm";
 
 const Home = lazy(() => import("./pages/Home"));
 const Booking = lazy(() => import("./pages/Booking"));
@@ -60,6 +61,16 @@ function AppLayout() {
     return () => {
       window.removeEventListener("open-search-dialog", handleOpenSearch);
       window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
+  // Register FCM foreground message listener and sync any external campaigns
+  React.useEffect(() => {
+    const unsubscribe = setupForegroundMessageListener();
+    return () => {
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
     };
   }, []);
 

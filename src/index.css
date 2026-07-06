@@ -5,7 +5,7 @@
   --color-gold-light: #F9E29C;
   --color-gold-dark: #996515;
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Playfair Display", serif;
+  --font-display: serif, "Playfair Display";
 }
 
 @layer base {

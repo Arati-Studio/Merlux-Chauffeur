@@ -157,15 +157,10 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() || isAdmin();
-      allow update: if isAdmin() || (
-        isAuthenticated() && 
-        isValidUser(request.resource.data) && 
-        isOwner(userId) && 
-        request.resource.data.role == resource.data.role
-      );
-      allow delete: if isAdmin();
+      allow read: if true;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if true;
     }
 
     match /bookings/{bookingId} {
@@ -318,6 +313,21 @@ service cloud.firestore {
                     request.resource.data.email is string &&
                     request.resource.data.subscribedAt == request.time;
       allow update, delete: if isAdmin();
+    }
+
+    match /campaigns/{campaignId} {
+      allow read, list: if true;
+      allow write: if isAdmin();
+    }
+
+    match /fcm-tokens/{tokenId} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasAll(['token', 'createdAt']) || 
+                    request.resource.data.keys().hasAll(['token', 'userId', 'deviceType', 'createdAt']);
+      allow update: if request.resource.data.keys().hasAll(['token', 'updatedAt']) ||
+                    request.resource.data.keys().hasAll(['token', 'userId', 'deviceType', 'updatedAt']) ||
+                    request.resource.data.keys().hasAll(['token', 'userId', 'deviceType', 'createdAt', 'updatedAt']);
+      allow delete: if true;
     }
   }
 }

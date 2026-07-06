@@ -482,9 +482,47 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["bookingId", "senderId", "senderName", "senderRole", "message", "createdAt"]
+    },
+    "Campaign": {
+      "title": "Campaign",
+      "description": "A push notification/marketing campaign sent to clients.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "image": { "type": "string" },
+        "url": { "type": "string" },
+        "status": { "type": "string", "enum": ["draft", "sent"] },
+        "targetAudience": { "type": "string", "enum": ["all", "customers", "drivers"] },
+        "sentAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "message", "status", "createdAt"]
+    },
+    "FcmToken": {
+      "title": "FCM Token",
+      "description": "FCM Push Notification registration token for a device.",
+      "type": "object",
+      "properties": {
+        "token": { "type": "string" },
+        "userId": { "type": "string" },
+        "deviceType": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["token", "createdAt"]
     }
   },
   "firestore": {
+    "/campaigns/{campaignId}": {
+      "schema": "Campaign",
+      "description": "Push notification marketing campaigns."
+    },
+    "/fcm-tokens/{tokenId}": {
+      "schema": "FcmToken",
+      "description": "FCM device tokens for push notifications."
+    },
     "/booking-chats/{chatMsgId}": {
       "schema": "BookingChat",
       "description": "Messages exchanged for bookings in real time."

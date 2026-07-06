@@ -9,6 +9,7 @@ import { db, auth } from '../../lib/firebase';
 import { doc, onSnapshot, updateDoc, serverTimestamp, collection, query, where, getDocs, writeBatch, limit } from 'firebase/firestore';
 import { verifyBeforeUpdateEmail } from 'firebase/auth';
 import { motion, AnimatePresence } from 'motion/react';
+import { requestFcmToken } from '../../lib/fcm';
 
 export default function ProfileTab({
   user,
@@ -43,6 +44,39 @@ export default function ProfileTab({
 
   // Google Products Gmail state
   const [googleLinkGmail, setGoogleLinkGmail] = useState('');
+
+  // Push campaigns states & handlers
+  const [isFcmLoading, setIsFcmLoading] = useState(false);
+  const [fcmSubscribed, setFcmSubscribed] = useState(false);
+
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      setFcmSubscribed(true);
+    }
+  }, []);
+
+  const handleSubscribePush = async () => {
+    setIsFcmLoading(true);
+    try {
+      const token = await requestFcmToken();
+      if (token) {
+        setFcmSubscribed(true);
+        if (typeof showDashboardNotice === 'function') {
+          showDashboardNotice('success', 'This device has been successfully subscribed to background campaign push notifications.');
+        }
+      } else {
+        if (typeof showDashboardNotice === 'function') {
+          showDashboardNotice('error', 'Push notification permission was denied or blocked by the browser.');
+        }
+      }
+    } catch (err: any) {
+      if (typeof showDashboardNotice === 'function') {
+        showDashboardNotice('error', err.message || 'Failed to complete push subscription.');
+      }
+    } finally {
+      setIsFcmLoading(false);
+    }
+  };
 
   const currentProfile = localProfile || globalUserProfile;
 
@@ -1101,6 +1135,50 @@ export default function ProfileTab({
           <p className="text-[10px] text-white/30 italic">
             Leave password fields blank if you don't want to change your password.
           </p>
+        </div>
+      </div>
+
+      {/* Divider */}
+      <div className="border-t border-white/5" />
+
+      {/* Campaign Push Notifications */}
+      <div>
+        <h4 className="text-sm font-bold text-gold uppercase tracking-widest mb-6 flex items-center gap-2">
+          <Activity size={16} /> Push Campaigns & Notifications
+        </h4>
+        <div className="bg-[#050510]/50 border border-white/5 rounded-2xl p-5 space-y-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <h5 className="text-xs font-bold text-white uppercase tracking-wider">Background Notifications</h5>
+              <p className="text-[11px] text-white/50 max-w-xl leading-relaxed">
+                Stay updated with Merlux Chauffeurs' exclusive deals, campaign offers, and real-time transit warnings directly on your device, even when your browser is closed or in the background.
+              </p>
+            </div>
+            <button
+              onClick={handleSubscribePush}
+              disabled={isFcmLoading}
+              className={cn(
+                "px-5 py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all duration-300 flex items-center gap-2 shrink-0 cursor-pointer",
+                fcmSubscribed 
+                  ? "bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/20" 
+                  : "bg-gold text-black hover:bg-white shadow-lg shadow-gold/15"
+              )}
+            >
+              {isFcmLoading ? (
+                <>
+                  <Loader2 size={12} className="animate-spin" />
+                  <span>Configuring...</span>
+                </>
+              ) : fcmSubscribed ? (
+                <>
+                  <Check size={12} />
+                  <span>Subscribed</span>
+                </>
+              ) : (
+                <span>Subscribe This Device</span>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 

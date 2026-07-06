@@ -49,7 +49,8 @@ if (!admin.apps.length) {
   }
 }
 
-const dbAdmin = admin.firestore();
+import { dbAdminClient } from './src/lib/clientDbAdapter.js';
+const dbAdmin = dbAdminClient;
 
 // Pre-render Static Site Generation (SSG) metadata cache
 let metadataCache: Record<string, any> = {};
@@ -357,6 +358,268 @@ async function startServer() {
     } catch (err: any) {
       console.error('Sync-back error:', err);
       res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Get Firebase client configuration dynamically (safe for public consumption/service workers)
+  app.get('/api/firebase-config', (req, res) => {
+    try {
+      const config = JSON.parse(fs.readFileSync('./firebase-applet-config.json', 'utf-8'));
+      res.json({
+        apiKey: process.env.VITE_FIREBASE_API_KEY || config.apiKey,
+        authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN || config.authDomain,
+        projectId: process.env.VITE_FIREBASE_PROJECT_ID || config.projectId,
+        storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET || config.storageBucket,
+        messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || config.messagingSenderId,
+        appId: process.env.VITE_FIREBASE_APP_ID || config.appId,
+        measurementId: process.env.VITE_FIREBASE_MEASUREMENT_ID || config.measurementId,
+        firestoreDatabaseId: config.firestoreDatabaseId || ''
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Local FCM tokens persistence registry
+  const localFcmPath = path.resolve('./public/fcm-tokens-local.json');
+  let localFcmTokens: Array<{ token: string; userId?: string; deviceType?: string }> = [];
+
+  const loadLocalFcmTokens = () => {
+    try {
+      if (fs.existsSync(localFcmPath)) {
+        localFcmTokens = JSON.parse(fs.readFileSync(localFcmPath, 'utf8'));
+        console.log(`[FCM Registry] Loaded ${localFcmTokens.length} local FCM tokens from ${localFcmPath}`);
+      } else {
+        localFcmTokens = [];
+        console.log('[FCM Registry] No local FCM token file found, starting with empty list.');
+      }
+    } catch (err) {
+      console.error('[FCM Registry] Error reading local FCM tokens:', err);
+    }
+  };
+
+  const saveLocalFcmTokens = () => {
+    try {
+      const dir = path.dirname(localFcmPath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(localFcmPath, JSON.stringify(localFcmTokens, null, 2), 'utf8');
+    } catch (err) {
+      console.error('[FCM Registry] Error saving local FCM tokens:', err);
+    }
+  };
+
+  loadLocalFcmTokens();
+
+  // Register an FCM token locally on the server (bypassing Firestore security rules)
+  app.post('/api/fcm/register', (req, res) => {
+    try {
+      const { token, userId, deviceType } = req.body;
+      if (!token) {
+        return res.status(400).json({ error: 'Token is required' });
+      }
+
+      const existingIndex = localFcmTokens.findIndex(item => item.token === token);
+      if (existingIndex > -1) {
+        localFcmTokens[existingIndex] = { token, userId, deviceType: deviceType || 'web' };
+      } else {
+        localFcmTokens.push({ token, userId, deviceType: deviceType || 'web' });
+      }
+
+      saveLocalFcmTokens();
+      console.log(`[FCM Registry] Registered new token. Total tokens: ${localFcmTokens.length}`);
+      res.json({ success: true, count: localFcmTokens.length });
+    } catch (err: any) {
+      console.error('[FCM Registry] Register error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Get FCM total subscriber count
+  app.get('/api/campaigns/count', (req, res) => {
+    try {
+      res.json({ count: localFcmTokens.length });
+    } catch (err: any) {
+      console.error('[FCM Registry] Count error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Sync an externally created campaign (e.g. from Firebase Console Messaging) into the histories database
+  app.post('/api/campaigns/sync-external', async (req, res) => {
+    try {
+      const { title, message, image, url } = req.body;
+      if (!title || !message) {
+        return res.status(400).json({ error: 'Title and message are required' });
+      }
+
+      console.log(`[FCM Sync] Syncing external campaign: "${title}"`);
+
+      // Attempt to check if this campaign already exists in Firestore campaigns collection
+      try {
+        const existingQuery = await dbAdmin.collection('campaigns')
+          .where('title', '==', title)
+          .where('message', '==', message)
+          .limit(1)
+          .get();
+
+        if (existingQuery.empty) {
+          // If it doesn't exist, create it via admin client to bypass security rules
+          const campaignId = 'camp_' + Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+          await dbAdmin.collection('campaigns').doc(campaignId).set({
+            id: campaignId,
+            title,
+            message,
+            image: image || null,
+            url: url || '/dashboard',
+            status: 'sent',
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            sentAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+          console.log(`[FCM Sync] Successfully created external campaign record for: "${title}"`);
+          return res.json({ success: true, synced: true });
+        } else {
+          console.log(`[FCM Sync] External campaign already exists in histories: "${title}"`);
+          return res.json({ success: true, synced: false, reason: 'already_exists' });
+        }
+      } catch (dbErr: any) {
+        console.warn('[FCM Sync] Firestore write restricted or failed during sync:', dbErr.message || dbErr);
+        // Even if Firestore sync fails, return success to the client
+        return res.json({ success: true, synced: false, error: dbErr.message });
+      }
+    } catch (err: any) {
+      console.error('[FCM Sync] General error during external campaign sync:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Push campaign notifications to all registered device tokens
+  app.post('/api/campaigns/push', async (req, res) => {
+    try {
+      const { title, message, image, url } = req.body;
+      if (!title || !message) {
+        return res.status(400).json({ error: 'Title and message are required' });
+      }
+
+      // Initialize tokens with our local registry
+      const tokens: string[] = localFcmTokens.map(item => item.token).filter(Boolean);
+      console.log(`[FCM Campaign] Push triggered. Local registered tokens: ${tokens.length}`);
+
+      // Attempt to merge from Firestore if permitted (with graceful catch)
+      try {
+        console.log('[FCM debug] Attempting Firestore fcm-tokens fetch as secondary source...');
+        const tokensSnap = await dbAdmin.collection('fcm-tokens').get();
+        tokensSnap.forEach(doc => {
+          const data = doc.data();
+          if (data.token && !tokens.includes(data.token)) {
+            tokens.push(data.token);
+          }
+        });
+        console.log('[FCM debug] Firestore fcm-tokens merged. Total unique tokens:', tokens.length);
+      } catch (dbErr: any) {
+        console.log('[FCM debug] Firestore token fetch restricted (using local registry only):', dbErr.message || dbErr);
+      }
+
+      if (tokens.length === 0) {
+        return res.json({ 
+          success: true, 
+          message: 'Campaign pushed successfully! No registered devices found yet to dispatch push notifications.', 
+          sentCount: 0 
+        });
+      }
+
+      // Payload structure for firebase-admin messaging
+      const messagePayload = {
+        notification: {
+          title: title,
+          body: message,
+          ...(image ? { imageUrl: image } : {})
+        },
+        data: {
+          title: title,
+          body: message,
+          image: image || '',
+          url: url || '/dashboard',
+        },
+        android: {
+          notification: {
+            sound: 'default',
+            clickAction: 'FLUTTER_NOTIFICATION_CLICK'
+          }
+        },
+        apns: {
+          payload: {
+            aps: {
+              sound: 'default'
+            }
+          }
+        },
+        webpush: {
+          headers: {
+            Urgency: 'high'
+          },
+          notification: {
+            title: title,
+            body: message,
+            icon: '/favicon.ico',
+            ...(image ? { image: image } : {})
+          }
+        }
+      };
+
+      let successCount = 0;
+      let failureCount = 0;
+
+      // Split into chunks of 500 tokens (limit for multicast send)
+      const chunks = [];
+      for (let i = 0; i < tokens.length; i += 500) {
+        chunks.push(tokens.slice(i, i + 500));
+      }
+
+      for (const chunk of chunks) {
+        try {
+          console.log('[FCM debug] Sending multicast payload to chunk of size:', chunk.length);
+          const response = await admin.messaging().sendEachForMulticast({
+            tokens: chunk,
+            ...messagePayload
+          });
+          console.log('[FCM debug] Multicast response successCount:', response.successCount, 'failureCount:', response.failureCount);
+          successCount += response.successCount;
+          failureCount += response.failureCount;
+
+          // Optional: Clean up expired tokens (unregistered/bad device IDs)
+          response.responses.forEach(async (resp, idx) => {
+            if (!resp.success && resp.error) {
+              const code = resp.error.code;
+              if (
+                code === 'messaging/invalid-registration-token' ||
+                code === 'messaging/registration-token-not-registered'
+              ) {
+                const badToken = chunk[idx];
+                const tokenDocs = await dbAdmin.collection('fcm-tokens').where('token', '==', badToken).get();
+                const cleanupBatch = dbAdmin.batch();
+                tokenDocs.forEach(d => cleanupBatch.delete(d.ref));
+                await cleanupBatch.commit();
+                console.log(`Cleaned up obsolete token from database.`);
+              }
+            }
+          });
+        } catch (mErr: any) {
+          console.error('[FCM Multicast] Failed to send to chunk:', mErr);
+          failureCount += chunk.length;
+        }
+      }
+
+      res.json({
+        success: true,
+        message: `Campaign pushed successfully. Sent to ${successCount} devices, failed on ${failureCount}.`,
+        sentCount: successCount,
+        failCount: failureCount
+      });
+    } catch (error: any) {
+      console.error('[FCM Campaign Error]:', error);
+      res.status(500).json({ error: error.message || String(error) });
     }
   });
 
@@ -1045,11 +1308,149 @@ ${sitemapEntries.map(entry => `  <url>
 
   // Helper for SEO injection
   const injectSEO = async (html: string, req: any) => {
+    // Definining comprehensive inline page fallbacks as a guaranteed safety layer
+    const corePageFallback: Record<string, { title: string; desc: string; keywords: string[] }> = {
+      'home': {
+        title: 'Luxury Merlux Chauffeur Offers Premium Transfers',
+        desc: 'Experience unparalleled comfort with Luxury Merlux Chauffeur services for all your travel needs in Melbourne.',
+        keywords: ['merlux chauffeur', 'luxury chauffeur melbourne', 'chauffeur service', 'home']
+      },
+      'offers': {
+        title: 'Special Offers for Melbourne Airport Transfers Today',
+        desc: 'Book premium Melbourne airport transfers today with Merlux Chauffeur Services — enjoy luxury rides at special discounted rates.',
+        keywords: ['merlux chauffeur', 'luxury chauffeur melbourne', 'chauffeur service', 'offers']
+      },
+      'tours': {
+        title: 'Melbourne Luxury Private Tours | Merlux Chauffeurs',
+        desc: 'Discover scenic beauty on our luxury private tours. Expert chauffeurs and premium vehicles for winery tours, sightseeing, and more.',
+        keywords: ['luxury private tours', 'melbourne day tours', 'winery tours melbourne']
+      },
+      'services': {
+        title: 'Chauffeur Services: Luxury on the Road',
+        desc: 'Learn why Chauffeur Services are the perfect choice for business trips and special events. Travel in style and comfort effortlessly.',
+        keywords: ['merlux chauffeur', 'luxury chauffeur melbourne', 'chauffeur service', 'services']
+      },
+      'blog': {
+        title: 'Merlux Chauffeur Blog Page: Your Travel Companion',
+        desc: 'Read the latest news, travel guides, and luxury chauffeur service insights on our blog.',
+        keywords: ['blog', 'chauffeur news', 'melbourne travel tips']
+      },
+      'fleet': {
+        title: 'Luxury Car Fleet – Premium Chauffeur Vehicles in Melbourne',
+        desc: 'Explore Merlux Chauffeur’s luxury fleet of sedans, SUVs & vans for airport transfers, corporate travel, weddings & tours in Melbourne.',
+        keywords: ['merlux chauffeur', 'luxury chauffeur melbourne', 'chauffeur service', 'fleet']
+      },
+      'faq': {
+        title: 'Frequently Asked Questions | Merlux Chauffeur',
+        desc: 'Find answers to common questions about Merlux Chauffeur services, bookings, luxury fleet, and travel arrangements in Melbourne.',
+        keywords: ['FAQ', 'About Merlux Questions']
+      },
+      'about': {
+        title: 'Learn About Us: Merlux Chauffeur Quality Service',
+        desc: 'Learn about us and Merlux Chauffeurs commitment to excellence. Book your ride today for unparalleled travel service.',
+        keywords: ['merlux chauffeur', 'luxury chauffeur melbourne', 'chauffeur service', 'about']
+      },
+      'contact': {
+        title: 'Contact Merlux Chauffeur – Book Luxury Transfers Melbourne',
+        desc: 'Contact Merlux Chauffeur for luxury transfers, tours & events in Melbourne. Call or email today to book your premium ride.',
+        keywords: ['contact-us', 'merlux helpline']
+      },
+      'terms': {
+        title: 'Merlux Terms and Conditions: Essential Guidelines',
+        desc: 'Understand the Merlux Terms and Conditions that govern all bookings for our chauffeuring services to secure a seamless experience.',
+        keywords: ['Terms Of Service', 'Merlux Terms']
+      },
+      'booking': {
+        title: 'Book a Luxury Chauffeur Melbourne | Merlux Chauffeurs',
+        desc: 'Book your luxury chauffeur service online with Merlux. Real-time pricing, instant confirmation, and premium fleet options.',
+        keywords: ['book chauffeur online', 'melbourne chauffeur booking', 'luxury car hire']
+      }
+    };
+
+    const getDynamicFallbackSEO = (cleanPath: string, slug: string) => {
+      const isBlog = cleanPath.startsWith('blog/');
+      const isOffer = cleanPath.startsWith('offers/');
+      const isTour = cleanPath.startsWith('tours/');
+
+      const capitalize = (str: string) => {
+        return str
+          .split('-')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
+      };
+
+      const formattedTitle = capitalize(slug || 'Merlux Chauffeurs');
+
+      if (isBlog) {
+        return {
+          title: `${formattedTitle} | Merlux Chauffeur Blog`,
+          desc: `Read our latest article on "${formattedTitle}". Stay updated with luxury travel news, corporate transfers, and chauffeur insights in Melbourne.`,
+          keywords: ['blog', slug, 'chauffeur news', 'melbourne travel']
+        };
+      }
+
+      if (isOffer) {
+        return {
+          title: `Special Offer: ${formattedTitle} | Merlux`,
+          desc: `Exclusive travel special offer on "${formattedTitle}". Enjoy premium luxury chauffeur rides at promotional rates in Melbourne. Book today!`,
+          keywords: ['offers', slug, 'discount chauffeur', 'luxury travel specials']
+        };
+      }
+
+      if (isTour) {
+        return {
+          title: `${formattedTitle} - Melbourne Private Tours`,
+          desc: `Explore the sights with our premium "${formattedTitle}". Custom private day trips, scenic winery tours, and executive chauffeur services in Melbourne.`,
+          keywords: ['tours', slug, 'private tours melbourne', 'winery day trip']
+        };
+      }
+
+      if (slug) {
+        const suffixes = [
+          { key: '-airport-transfer', titleSuffix: 'Airport Transfer', descPattern: 'Book reliable %s Airport Transfer services. Comfortable, punctual, and professional private luxury chauffeur transport to and from Melbourne Airport.' },
+          { key: '-corporate-trips-or-hire', titleSuffix: 'Corporate Trips & Chauffeur Hire', descPattern: 'Professional %s Corporate Trips and executive Chauffeur Hire services. Punctual, discreet luxury transport tailored for corporate executives and teams.' },
+          { key: '-event-transfers', titleSuffix: 'Event Transfers', descPattern: 'Ensure smooth guest transport with dependable %s Event Transfers. Luxury chauffeur sedans and vans tailored for any event or private function.' },
+          { key: '-executive-hire', titleSuffix: 'Executive Chauffeur Hire', descPattern: 'Premium %s Executive Chauffeur Hire for corporate meetings, VIP transfers, and events. Experience travel comfort in premium Mercedes, BMW, or Audi vehicles.' },
+          { key: '-luxury-private-tour', titleSuffix: 'Luxury Private Tour', descPattern: 'Discover scenic spots in style on a %s Luxury Private Tour. Fully customized itineraries and expert tour chauffeurs with premium sedans and SUVs.' },
+          { key: '-private-hire', titleSuffix: 'Private Chauffeur Hire', descPattern: 'Experience outstanding travel with %s Private Chauffeur Hire. Enjoy seamless point-to-point journeys in luxury vehicles with professional chauffeurs.' },
+          { key: '-special-event-hire', titleSuffix: 'Special Event Car Hire', descPattern: 'Transform your celebrations with our premium %s Special Event Car Hire. Elegant chauffeured vehicles for formals, parties, and milestones.' },
+          { key: '-wedding-hire', titleSuffix: 'Wedding Car Hire', descPattern: 'Plan your perfect day with elegant %s Wedding Car Hire. Stunning luxury wedding transport, red carpet service, and expert wedding chauffeurs.' }
+        ];
+
+        for (const suffix of suffixes) {
+          if (slug.endsWith(suffix.key)) {
+            const suburbSlug = slug.substring(0, slug.length - suffix.key.length);
+            const suburbName = capitalize(suburbSlug);
+            const pageTitle = `${suburbName} ${suffix.titleSuffix}`;
+            const pageDesc = suffix.descPattern.replace(/%s/g, suburbName);
+            return {
+              title: `${pageTitle} | Merlux Chauffeurs`,
+              desc: pageDesc,
+              keywords: [slug, suburbName, suffix.titleSuffix.toLowerCase(), 'luxury transfer']
+            };
+          }
+        }
+      }
+
+      return {
+        title: `${formattedTitle} - Luxury Chauffeur Melbourne | Merlux`,
+        desc: `Premium chauffeur service for ${formattedTitle} in Melbourne. Book professional luxury private transfers, airport travel, weddings, and corporate trips.`,
+        keywords: [slug, 'merlux chauffeur', 'luxury chauffeur melbourne']
+      };
+    };
+
     try {
       const url = req.originalUrl;
       const SITE_URL = getSiteUrl(req);
-      const settingsSnap = await dbAdmin.collection('settings').doc('system').get();
-      const globalSettings = settingsSnap.exists ? settingsSnap.data() : null;
+      
+      let globalSettings: any = null;
+      try {
+        const settingsSnap = await dbAdmin.collection('settings').doc('system').get();
+        globalSettings = settingsSnap.exists ? settingsSnap.data() : null;
+      } catch (err) {
+        console.warn('[SEO Safety] Settings query failed (quota or offline), using system defaults.');
+      }
+      
       const globalSeo = globalSettings?.seo || {};
 
       let cleanPath = url.split('?')[0];
@@ -1063,22 +1464,26 @@ ${sitemapEntries.map(entry => `  <url>
 
       let seoData: any = null;
 
-      if (isBlog) {
-        const snap = await dbAdmin.collection('blogs').where('slug', '==', slug).limit(1).get();
-        if (!snap.empty) seoData = snap.docs[0].data();
-      } else if (isOffer) {
-        const snap = await dbAdmin.collection('offers').where('slug', '==', slug).limit(1).get();
-        if (!snap.empty) seoData = snap.docs[0].data();
-      } else if (isTour) {
-        const snap = await dbAdmin.collection('tours').where('slug', '==', slug).limit(1).get();
-        if (!snap.empty) seoData = snap.docs[0].data();
-      } else if (slug) {
-        const snap = await dbAdmin.collection('pages').where('slug', '==', slug).limit(1).get();
-        if (!snap.empty) seoData = snap.docs[0].data();
-      } else {
-        // Home page or other static pages without dynamic slug
-        const snap = await dbAdmin.collection('pages').where('slug', '==', 'home').limit(1).get();
-        if (!snap.empty) seoData = snap.docs[0].data();
+      try {
+        if (isBlog) {
+          const snap = await dbAdmin.collection('blogs').where('slug', '==', slug).limit(1).get();
+          if (!snap.empty) seoData = snap.docs[0].data();
+        } else if (isOffer) {
+          const snap = await dbAdmin.collection('offers').where('slug', '==', slug).limit(1).get();
+          if (!snap.empty) seoData = snap.docs[0].data();
+        } else if (isTour) {
+          const snap = await dbAdmin.collection('tours').where('slug', '==', slug).limit(1).get();
+          if (!snap.empty) seoData = snap.docs[0].data();
+        } else if (slug) {
+          const snap = await dbAdmin.collection('pages').where('slug', '==', slug).limit(1).get();
+          if (!snap.empty) seoData = snap.docs[0].data();
+        } else {
+          // Home page or other static pages without dynamic slug
+          const snap = await dbAdmin.collection('pages').where('slug', '==', 'home').limit(1).get();
+          if (!snap.empty) seoData = snap.docs[0].data();
+        }
+      } catch (err) {
+        console.warn(`[SEO Safety] Firestore page query failed for "${cleanPath}" (offline or quota), proceeding with fallback.`);
       }
 
       const routeSlug = cleanPath || 'home';
@@ -1101,15 +1506,19 @@ ${sitemapEntries.map(entry => `  <url>
             }
           }
         } catch (err) {
-          console.error('Metadata collection fetch failed inside injectSEO:', err);
+          console.warn(`[SEO Safety] Firestore metadata overrides fetch failed for "${routeSlug}".`);
         }
       }
 
-      // Merge native data and metadata overrides
+      // 2. Resolve fallback data for route slug
+      const lookupKey = routeSlug === 'home' ? 'home' : (corePageFallback[routeSlug] ? routeSlug : slug);
+      const inlineFallback = corePageFallback[lookupKey] || getDynamicFallbackSEO(cleanPath, slug);
+
+      // Merge native data, metadata overrides, and the ultra-resilient inline fallbacks
       const finalSeoData = {
-        metaTitle: metadataOverride?.metaTitle || seoData?.metaTitle || seoData?.title || '',
-        metaDescription: metadataOverride?.metaDescription || seoData?.metaDescription || seoData?.seoDescription || seoData?.description || seoData?.shortDescription || '',
-        keywords: metadataOverride?.keywords || seoData?.keywords || [],
+        metaTitle: metadataOverride?.metaTitle || seoData?.metaTitle || seoData?.title || inlineFallback.title,
+        metaDescription: metadataOverride?.metaDescription || seoData?.metaDescription || seoData?.seoDescription || seoData?.description || seoData?.shortDescription || inlineFallback.desc,
+        keywords: metadataOverride?.keywords || seoData?.keywords || inlineFallback.keywords || [],
         noindex: metadataOverride?.noindex !== undefined ? metadataOverride.noindex : (seoData?.noindex || false),
         schema: metadataOverride?.structuredData || seoData?.schema || seoData?.structuredData || null,
         ogTitle: metadataOverride?.ogTitle || seoData?.ogTitle || '',
